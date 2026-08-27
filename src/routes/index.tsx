@@ -75,7 +75,7 @@ function LandingScreen() {
       <div className="flex-1 min-h-[120px] sm:min-h-[160px]" />
 
       {/* ══════════════════════════════════════════════════════════════════════════════
-          LAYER 4: Foreground Content & Professional Action Button
+          LAYER 4: Foreground Content & Subtle Bent Rectangle Action Button
           ══════════════════════════════════════════════════════════════════════════════ */}
       <main className="relative z-30 px-6 pb-6 pt-2 mx-auto max-w-lg w-full flex flex-col gap-4">
         
@@ -105,15 +105,17 @@ function LandingScreen() {
           </p>
         </div>
 
-        {/* ── Clean Professional CTA Button ────────────────────────────────────── */}
+        {/* ── Translucent Dark Rectangle with Slightly Bent (Subtly Curved) Corners ─ */}
         <div className="pt-2">
           <Link
             to="/home"
-            className="tap group w-full h-13 sm:h-14 rounded-xl bg-[#D9A928] hover:bg-[#E5B537] active:bg-[#C2941E] text-[#111111] font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-[0_4px_20px_rgba(217,169,40,0.35)] transition-all duration-150 active:scale-[0.99]"
+            className="tap group w-full h-14 rounded-xl bg-black/50 hover:bg-black/75 active:bg-black/90 border border-white/20 hover:border-[#D9A928]/70 backdrop-blur-md text-white font-extrabold text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-3 px-6 shadow-[0_8px_20px_rgba(0,0,0,0.45)] transition-all duration-150 active:scale-[0.99]"
           >
-            <Trophy className="h-4 w-4 stroke-[2.5]" />
-            <span>Enter Scorer Console</span>
-            <ArrowRight className="h-4 w-4 stroke-[2.5] transition-transform group-hover:translate-x-1" />
+            <Trophy className="h-4 w-4 text-[#D9A928] stroke-[2.5]" />
+            <span className="text-white font-extrabold tracking-wide">
+              ENTER SCORER CONSOLE
+            </span>
+            <ArrowRight className="h-4 w-4 text-[#D9A928] stroke-[2.5] transition-transform group-hover:translate-x-1" />
           </Link>
         </div>
 
