@@ -15,12 +15,12 @@ export function TplBottomDock() {
   const currentPath = routerState.location.pathname;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[95vw] pointer-events-auto">
+    <div className="fixed bottom-3 sm:bottom-4 inset-x-0 mx-auto w-fit z-50 pointer-events-auto flex justify-center px-3 max-w-full">
       <Dock
-        panelHeight={56}
-        magnification={70}
-        distance={120}
-        className="bg-white/90 backdrop-blur-xl border border-black/10 shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:bg-black/90 dark:border-white/15 px-3 py-1.5 rounded-full items-center"
+        panelHeight={52}
+        magnification={66}
+        distance={110}
+        className="bg-white/95 backdrop-blur-xl border border-black/10 shadow-[0_8px_30px_rgba(0,0,0,0.15)] dark:bg-black/90 dark:border-white/15 px-2.5 sm:px-3.5 py-1 rounded-full items-center"
       >
         {navItems.map((item) => {
           const isActive = currentPath === item.to || (item.to === "/home" && currentPath === "/");
@@ -44,9 +44,9 @@ export function TplBottomDock() {
                   className="flex h-full w-full items-center justify-center relative"
                   aria-label={item.label}
                 >
-                  <Icon className={`h-5 w-5 ${isActive ? "text-black" : "text-current"}`} />
+                  <Icon className={`h-4.5 w-4.5 sm:h-5 sm:w-5 ${isActive ? "text-black" : "text-current"}`} />
                   {item.isLive && !isActive && (
-                    <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                    <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
                   )}
                 </Link>
               </DockIcon>

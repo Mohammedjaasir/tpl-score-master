@@ -96,7 +96,7 @@ function Dock({
         height: height,
         scrollbarWidth: 'none',
       }}
-      className='mx-2 flex max-w-full items-end overflow-x-auto'
+      className='flex max-w-full items-end justify-center'
     >
       <motion.div
         onMouseMove={({ pageX }) => {
@@ -108,7 +108,7 @@ function Dock({
           mouseX.set(Infinity);
         }}
         className={cn(
-          'mx-auto flex w-fit gap-4 rounded-2xl bg-gray-50 px-4 dark:bg-neutral-900',
+          'mx-auto flex w-fit gap-2 sm:gap-4 rounded-2xl bg-gray-50 px-3 sm:px-4 dark:bg-neutral-900',
           className
         )}
         style={{ height: panelHeight }}
