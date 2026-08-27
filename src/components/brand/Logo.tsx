@@ -1,30 +1,25 @@
-export function Logo({ compact = false }: { compact?: boolean }) {
+interface LogoProps {
+  compact?: boolean;
+  className?: string;
+  size?: "sm" | "md" | "lg" | "xl";
+}
+
+export function Logo({ className = "", size = "md" }: LogoProps) {
+  const sizeClasses = {
+    sm: "h-9",
+    md: "h-11",
+    lg: "h-16",
+    xl: "h-24",
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <svg
-        viewBox="0 0 32 32"
-        aria-hidden="true"
-        className="h-8 w-8 shrink-0 text-primary"
-        fill="none"
-      >
-        <path d="M4 26 L20 6" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-        <path
-          d="M7 29 L11 25"
-          stroke="currentColor"
-          strokeWidth="4"
-          strokeLinecap="round"
-          opacity="0.5"
-        />
-        <circle cx="25" cy="24" r="5" fill="currentColor" />
-      </svg>
-      <div className="leading-none">
-        <span className="display-xl block text-xl font-extrabold text-foreground">TPL</span>
-        {!compact && (
-          <span className="block text-[10px] font-bold tracking-[0.28em] text-muted-foreground">
-            CRICKET
-          </span>
-        )}
-      </div>
+    <div className={`flex items-center shrink-0 ${className}`}>
+      <img
+        src="/tpl-logo.png"
+        alt="TPL 2026 - Thunduwa Premier League"
+        className={`${sizeClasses[size]} w-auto object-contain shrink-0 filter drop-shadow-sm select-none`}
+        loading="eager"
+      />
     </div>
   );
 }

@@ -1391,23 +1391,19 @@ Create a functional scoring application with a clean separation between UI, scor
 
 Start by implementing the responsive UI and mock-data scoring engine. After that, ensure all scoring interactions work correctly across mobile and desktop.
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c6863ed4-bdd1-4ecc-9d42-33bdd940e084).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Run locally:
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+npm install
 npm run dev
 ```
+
+Build for production:
+
+```sh
+npm run build
+npm run preview
+```
+

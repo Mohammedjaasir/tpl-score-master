@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 
 const navItems = [
-  { to: "/", label: "Home", icon: Home },
+  { to: "/home", label: "Home", icon: Home },
   { to: "/matches", label: "Matches", icon: ListChecks },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/scorecards", label: "Scores", icon: ClipboardList },
@@ -15,10 +15,12 @@ export function AppShell({
   children,
   title,
   hideNav = false,
+  fullBleedTop = false,
 }: {
   children: ReactNode;
   title?: string;
   hideNav?: boolean;
+  fullBleedTop?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-surface">
@@ -33,9 +35,15 @@ export function AppShell({
         </div>
       </header>
 
-      <main className={`mx-auto max-w-6xl px-4 pt-4 ${hideNav ? "pb-8" : "pb-24"} md:pb-10`}>
-        {children}
-      </main>
+      {fullBleedTop ? (
+        <main className={`${hideNav ? "pb-8" : "pb-24"} md:pb-10`}>
+          {children}
+        </main>
+      ) : (
+        <main className={`mx-auto max-w-6xl px-4 pt-4 ${hideNav ? "pb-8" : "pb-24"} md:pb-10`}>
+          {children}
+        </main>
+      )}
 
       {!hideNav && (
         <nav

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -6,16 +7,6 @@
 
 /*
  * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
  */
 
 @theme inline {
@@ -205,3 +196,116 @@
 @utility animate-score {
   animation: score-pop 320ms ease-out;
 }
+
+@keyframes boundary-flash {
+  0%   { background-color: oklch(0.76 0.15 75 / 0); }
+  25%  { background-color: oklch(0.76 0.15 75 / 0.25); }
+  100% { background-color: oklch(0.76 0.15 75 / 0); }
+}
+
+@keyframes six-flash {
+  0%   { background-color: oklch(0.62 0.15 155 / 0); }
+  25%  { background-color: oklch(0.62 0.15 155 / 0.3); }
+  100% { background-color: oklch(0.62 0.15 155 / 0); }
+}
+
+@keyframes wicket-flash {
+  0%   { background-color: oklch(0.577 0.245 27 / 0); }
+  25%  { background-color: oklch(0.577 0.245 27 / 0.2); }
+  100% { background-color: oklch(0.577 0.245 27 / 0); }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-boundary { animation: boundary-flash 600ms ease-out; }
+@utility animate-six       { animation: six-flash 600ms ease-out; }
+@utility animate-wicket    { animation: wicket-flash 600ms ease-out; }
+@utility animate-slide-up  { animation: slide-up 250ms cubic-bezier(0.16,1,0.3,1); }
+@utility animate-fade-in   { animation: fade-in 200ms ease-out; }
+
+/* scoring button base */
+@utility btn-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.5rem;
+  border-radius: var(--radius-xl);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  transition: transform 100ms ease, box-shadow 100ms ease, background-color 100ms ease;
+  cursor: pointer;
+  user-select: none;
+  &:active { transform: scale(0.93); }
+}
+
+/* ball chip */
+@utility chip-ball {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* glass overlay for modals */
+@utility glass-overlay {
+  background-color: oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* Continuous moving cricket filmstrip (LEFT -> RIGHT) */
+@keyframes marquee-ltr {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+
+.animate-marquee-ltr {
+  animation: marquee-ltr 60s linear infinite !important;
+  will-change: transform;
+}
+
+/* Subtle slow cinematic Ken Burns pan + zoom */
+@keyframes ken-burns-pan {
+  0% {
+    transform: scale(1.02) translate3d(-2%, 0, 0);
+  }
+  50% {
+    transform: scale(1.07) translate3d(2%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.02) translate3d(-2%, 0, 0);
+  }
+}
+
+.animate-ken-burns {
+  animation: ken-burns-pan 60s ease-in-out infinite alternate !important;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee-ltr,
+  .animate-ken-burns {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+

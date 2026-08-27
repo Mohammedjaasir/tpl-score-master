@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HomeRouteImport } from './routes/home'
+import { Route as LiveRouteImport } from './routes/live'
+import { Route as MatchesRouteImport } from './routes/matches'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as ScorecardsRouteImport } from './routes/scorecards'
+import { Route as MatchMatchIdRouteImport } from './routes/match/$matchId'
+import { Route as ScorecardMatchIdRouteImport } from './routes/scorecard/$matchId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiveRoute = LiveRouteImport.update({
+  id: '/live',
+  path: '/live',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MatchesRoute = MatchesRouteImport.update({
+  id: '/matches',
+  path: '/matches',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScorecardsRoute = ScorecardsRouteImport.update({
+  id: '/scorecards',
+  path: '/scorecards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
+  id: '/match/$matchId',
+  path: '/match/$matchId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScorecardMatchIdRoute = ScorecardMatchIdRouteImport.update({
+  id: '/scorecard/$matchId',
+  path: '/scorecard/$matchId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
+  '/live': typeof LiveRoute
+  '/matches': typeof MatchesRoute
+  '/profile': typeof ProfileRoute
+  '/scorecards': typeof ScorecardsRoute
+  '/match/$matchId': typeof MatchMatchIdRoute
+  '/scorecard/$matchId': typeof ScorecardMatchIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
+  '/live': typeof LiveRoute
+  '/matches': typeof MatchesRoute
+  '/profile': typeof ProfileRoute
+  '/scorecards': typeof ScorecardsRoute
+  '/match/$matchId': typeof MatchMatchIdRoute
+  '/scorecard/$matchId': typeof ScorecardMatchIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
+  '/live': typeof LiveRoute
+  '/matches': typeof MatchesRoute
+  '/profile': typeof ProfileRoute
+  '/scorecards': typeof ScorecardsRoute
+  '/match/$matchId': typeof MatchMatchIdRoute
+  '/scorecard/$matchId': typeof ScorecardMatchIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/home'
+    | '/live'
+    | '/matches'
+    | '/profile'
+    | '/scorecards'
+    | '/match/$matchId'
+    | '/scorecard/$matchId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/home'
+    | '/live'
+    | '/matches'
+    | '/profile'
+    | '/scorecards'
+    | '/match/$matchId'
+    | '/scorecard/$matchId'
+  id:
+    | '__root__'
+    | '/'
+    | '/home'
+    | '/live'
+    | '/matches'
+    | '/profile'
+    | '/scorecards'
+    | '/match/$matchId'
+    | '/scorecard/$matchId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HomeRoute: typeof HomeRoute
+  LiveRoute: typeof LiveRoute
+  MatchesRoute: typeof MatchesRoute
+  ProfileRoute: typeof ProfileRoute
+  ScorecardsRoute: typeof ScorecardsRoute
+  MatchMatchIdRoute: typeof MatchMatchIdRoute
+  ScorecardMatchIdRoute: typeof ScorecardMatchIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +143,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/live': {
+      id: '/live'
+      path: '/live'
+      fullPath: '/live'
+      preLoaderRoute: typeof LiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matches': {
+      id: '/matches'
+      path: '/matches'
+      fullPath: '/matches'
+      preLoaderRoute: typeof MatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scorecards': {
+      id: '/scorecards'
+      path: '/scorecards'
+      fullPath: '/scorecards'
+      preLoaderRoute: typeof ScorecardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/match/$matchId': {
+      id: '/match/$matchId'
+      path: '/match/$matchId'
+      fullPath: '/match/$matchId'
+      preLoaderRoute: typeof MatchMatchIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scorecard/$matchId': {
+      id: '/scorecard/$matchId'
+      path: '/scorecard/$matchId'
+      fullPath: '/scorecard/$matchId'
+      preLoaderRoute: typeof ScorecardMatchIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HomeRoute: HomeRoute,
+  LiveRoute: LiveRoute,
+  MatchesRoute: MatchesRoute,
+  ProfileRoute: ProfileRoute,
+  ScorecardsRoute: ScorecardsRoute,
+  MatchMatchIdRoute: MatchMatchIdRoute,
+  ScorecardMatchIdRoute: ScorecardMatchIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
