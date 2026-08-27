@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   ArrowRight,
   Radio,
@@ -9,6 +10,7 @@ import {
   Users,
   Star,
   AlignJustify,
+  X,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 
@@ -34,60 +36,111 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function LandingScreen() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { label: "FIXTURES", href: "#fixtures" },
+    { label: "STANDINGS", href: "#standings" },
+    { label: "RESULTS", href: "#results" },
+    { label: "TEAMS", href: "#teams" },
+  ];
   return (
     <div className="min-h-screen w-full bg-white text-[#0A0A0A] font-sans selection:bg-[#D9A928] selection:text-black overflow-x-hidden">
 
       {/* ══════════════════════════════════════════════════════════════════════
           1. NAVIGATION
           ══════════════════════════════════════════════════════════════════════ */}
-      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-black/[0.06]">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8 h-[68px] flex items-center justify-between gap-4">
+      <header className="absolute top-0 z-50 w-full bg-transparent">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 h-[68px] flex items-center justify-between">
 
           <div className="flex items-center gap-2.5 shrink-0">
             <Logo size="md" />
             <div className="hidden sm:block leading-none">
               <span className="block text-[11px] font-black tracking-[0.22em] text-[#D9A928] uppercase">TPL 2026</span>
-              <span className="block text-[9px] text-black/40 tracking-wider font-semibold uppercase">Premier League</span>
+              <span className="block text-[9px] text-white/40 tracking-wider font-semibold uppercase">Premier League</span>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-7">
-            {[
-              { label: "FIXTURES", href: "#fixtures" },
-              { label: "STANDINGS", href: "#standings" },
-              { label: "RESULTS", href: "#results" },
-              { label: "TEAMS", href: "#teams" },
-            ].map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                className="text-[11px] font-bold uppercase tracking-widest text-black/60 hover:text-black transition-colors"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/live"
-              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#D9A928]/50 text-[#D9A928] font-black text-[10px] uppercase tracking-wider hover:bg-[#D9A928] hover:text-black transition-all"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928] animate-pulse" />
-              LIVE SCORES
-            </Link>
-            <Link
-              to="/home"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0A0A0A] hover:bg-[#D9A928] text-white hover:text-black font-black text-[11px] uppercase tracking-wider transition-all duration-200"
-            >
-              SCORER CONSOLE
-            </Link>
-            <button className="md:hidden h-9 w-9 flex items-center justify-center rounded-full hover:bg-black/[0.05]">
-              <AlignJustify className="h-4 w-4 text-black/60" />
-            </button>
-          </div>
         </div>
+
       </header>
+
+      {/* ── Mobile full-screen nav overlay ─────────────────────────────────── */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-[60] flex"
+          style={{ animation: "mobileNavFadeIn 0.2s ease" }}
+        >
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+
+          {/* Panel — slides in from left */}
+          <div
+            className="relative mr-auto h-full w-[min(85vw,320px)] bg-[#0A0A0A] flex flex-col shadow-2xl"
+            style={{ animation: "mobileNavSlideIn 0.25s cubic-bezier(0.32,0.72,0,1)" }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-6 h-[68px] border-b border-white/[0.07]">
+              <div className="flex items-center gap-2.5">
+                <Logo size="md" />
+                <div className="leading-none">
+                  <span className="block text-[11px] font-black tracking-[0.22em] text-[#D9A928] uppercase">TPL 2026</span>
+                  <span className="block text-[9px] text-white/30 tracking-wider font-semibold uppercase">Premier League</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-white/[0.08] transition-colors"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4 text-white/60" />
+              </button>
+            </div>
+
+            {/* Gold accent line */}
+            <div className="h-[2px] w-10 mx-6 mt-8 mb-1 bg-[#D9A928] rounded-full" />
+
+            {/* Nav links */}
+            <nav className="flex flex-col px-4 mt-2">
+              {navLinks.map((item, i) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="group flex items-center gap-4 px-2 py-4 border-b border-white/[0.06] last:border-0"
+                >
+                  <span className="text-[10px] font-black text-[#D9A928]/50 tabular-nums w-4">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-[13px] font-black tracking-[0.2em] text-white/70 group-hover:text-white transition-colors uppercase">
+                    {item.label}
+                  </span>
+                  <ArrowRight className="h-3 w-3 text-[#D9A928] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </nav>
+
+            {/* Footer branding */}
+            <div className="mt-auto px-6 py-6 border-t border-white/[0.06]">
+              <p className="text-[9px] font-bold tracking-[0.25em] text-white/20 uppercase">TPL 2026 Season</p>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes mobileNavFadeIn {
+              from { opacity: 0; }
+              to   { opacity: 1; }
+            }
+            @keyframes mobileNavSlideIn {
+              from { transform: translateX(-100%); }
+              to   { transform: translateX(0); }
+            }
+          `}</style>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           2. HERO — full-screen video background
@@ -490,8 +543,14 @@ function LandingScreen() {
       {/* ══════════════════════════════════════════════════════════════════════
           10. MATCH CENTRE OVERVIEW
           ══════════════════════════════════════════════════════════════════════ */}
-      <section id="results" className="py-20 lg:py-28 bg-[#0A0A0A]">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+      <section
+        id="results"
+        className="relative py-20 lg:py-28 overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: "url('/match-centre-bg.jpg')" }}
+      >
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-[#0A0A0A]/85 pointer-events-none" />
+        <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8">
           <div className="text-center mb-14">
             <SectionLabel>MATCH CENTRE</SectionLabel>
             <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.9] tracking-tight text-white">
@@ -507,21 +566,66 @@ function LandingScreen() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             {[
-              { icon: <Radio className="h-6 w-6" />, title: "LIVE MATCHES", desc: "Real-time scorecards and match updates.", link: "/live" },
-              { icon: <Trophy className="h-6 w-6" />, title: "RESULTS", desc: "Review completed matches and final scores.", link: "/scorecards" },
-              { icon: <Calendar className="h-6 w-6" />, title: "FIXTURES", desc: "Explore upcoming games and tournament schedule.", link: "/matches" },
-              { icon: <Users className="h-6 w-6" />, title: "TEAMS", desc: "Meet the squads competing for the TPL 2026 title.", link: "/matches" },
+              {
+                icon: <Radio className="h-5 w-5" />,
+                title: "LIVE MATCHES",
+                desc: "Real-time scorecards and match updates.",
+                link: "/live",
+                img: "/card-live.jpg",
+              },
+              {
+                icon: <Trophy className="h-5 w-5" />,
+                title: "RESULTS",
+                desc: "Review completed matches and final scores.",
+                link: "/scorecards",
+                img: "/card-results.jpg",
+              },
+              {
+                icon: <Calendar className="h-5 w-5" />,
+                title: "FIXTURES",
+                desc: "Explore upcoming games and tournament schedule.",
+                link: "/matches",
+                img: "/card-fixtures.jpg",
+              },
+              {
+                icon: <Users className="h-5 w-5" />,
+                title: "TEAMS",
+                desc: "Meet the squads competing for the TPL 2026 title.",
+                link: "/matches",
+                img: "/card-teams.jpg",
+              },
             ].map((item) => (
               <Link
                 key={item.title}
                 to={item.link}
-                className="rounded-2xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] hover:border-[#D9A928]/30 p-6 transition-all group"
+                className="group relative overflow-hidden rounded-xl border border-white/[0.08] hover:border-[#D9A928]/40 transition-all"
+                style={{ minHeight: "220px" }}
               >
-                <div className="h-11 w-11 rounded-xl bg-[#D9A928]/10 grid place-items-center text-[#D9A928] mb-4 group-hover:bg-[#D9A928]/20 transition-all">
-                  {item.icon}
+                {/* Photo background */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                  style={{ backgroundImage: `url('${item.img}')` }}
+                />
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-[#0A0A0A]/75 group-hover:bg-[#0A0A0A]/65 transition-colors" />
+
+                {/* Content */}
+                <div className="relative z-10 flex flex-col justify-between h-full p-5">
+                  {/* Icon */}
+                  <div className="h-10 w-10 rounded-lg bg-[#D9A928]/15 border border-[#D9A928]/25 grid place-items-center text-[#D9A928]">
+                    {item.icon}
+                  </div>
+
+                  {/* Text + arrow */}
+                  <div className="mt-12">
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white mb-1.5">{item.title}</p>
+                    <p className="text-[12px] text-white/50 leading-relaxed">{item.desc}</p>
+                    <div className="mt-3 flex items-center gap-1 text-[#D9A928] opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] font-black uppercase tracking-wider">View</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] font-black uppercase tracking-wider text-white mb-2">{item.title}</p>
-                <p className="text-[12px] text-white/40 leading-relaxed">{item.desc}</p>
               </Link>
             ))}
           </div>
@@ -538,45 +642,6 @@ function LandingScreen() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          11. SCORER CONSOLE CTA
-          ══════════════════════════════════════════════════════════════════════ */}
-      <section
-        className="relative py-24 lg:py-36 overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #0A0A0A 0%, #1a1400 50%, #0A0A0A 100%)" }}
-      >
-        <div
-          className="absolute inset-0 pointer-events-none opacity-30"
-          style={{ backgroundImage: "radial-gradient(circle at 60% 50%, rgba(217,169,40,0.25) 0%, transparent 65%)" }}
-          aria-hidden="true"
-        />
-        <div className="relative z-10 max-w-4xl mx-auto px-5 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#D9A928]/30 bg-[#D9A928]/10 mb-8">
-            <Zap className="h-3.5 w-3.5 text-[#D9A928]" />
-            <span className="text-[10px] font-black tracking-[0.28em] text-[#D9A928] uppercase">SCORER CONSOLE</span>
-          </div>
-          <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.88] tracking-tight text-white">
-            YOU SCORE IT.<br />
-            <span style={{ background: "linear-gradient(135deg, #F4C542 0%, #D9A928 60%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              WE KEEP IT LIVE.
-            </span>
-          </h2>
-          <p className="mt-7 text-sm sm:text-base text-white/55 max-w-lg mx-auto leading-relaxed">
-            Power every TPL 2026 match with fast, reliable, ball-by-ball scoring.
-            Record runs, wickets, extras, overs, partnerships, and match events
-            directly from the scorer console.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              to="/home"
-              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-xs uppercase tracking-widest transition-all shadow-[0_4px_32px_rgba(217,169,40,0.5)] active:scale-95"
-            >
-              ENTER SCORER CONSOLE
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
           12. FINAL CTA
