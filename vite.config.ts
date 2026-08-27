@@ -16,6 +16,8 @@ export default defineConfig({
     viteReact(),
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
-    nitro({ preset: "cloudflare-module" }),
+    nitro({
+      preset: process.env.NITRO_PRESET || (process.env.VERCEL ? "vercel" : undefined),
+    }),
   ],
 });
