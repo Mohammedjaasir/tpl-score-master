@@ -62,8 +62,8 @@ const roleOrder: PlayerRole[] = [
 
 function buildSquad(team: Team, seed: number): Player[] {
   return roleOrder.map((role, i) => {
-    const first = firstNames[(seed + i * 3) % firstNames.length];
-    const last = lastNames[(seed * 2 + i * 5) % lastNames.length];
+    const first = firstNames[(seed + i * 3) % firstNames.length]!;
+    const last = lastNames[(seed * 2 + i * 5) % lastNames.length]!;
     const name = `${first} ${last}`;
     return {
       id: `${team.id}-p${i + 1}`,
