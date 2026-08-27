@@ -3,6 +3,7 @@ import type { ExtraType, InningsState, WicketInfo } from "@/types/cricket";
 import type { DeliveryInput } from "@/lib/scoring/store";
 import { WicketModal } from "@/components/scoring/WicketModal";
 import { ExtraModal } from "@/components/scoring/ExtraModal";
+import { TplButton } from "@/components/ui/tpl-button";
 
 type ExtraMode = Exclude<ExtraType, null>;
 
@@ -13,21 +14,21 @@ interface Props {
   disabled?: boolean;
 }
 
-// Run buttons config
+// Run buttons config with official TPL palette
 const RUN_BUTTONS = [
-  { runs: 0, label: "0", cls: "bg-secondary text-foreground" },
-  { runs: 1, label: "1", cls: "bg-secondary text-foreground" },
-  { runs: 2, label: "2", cls: "bg-secondary text-foreground" },
-  { runs: 3, label: "3", cls: "bg-secondary text-foreground" },
-  { runs: 4, label: "4", cls: "bg-warning/15 text-amber-800 border border-warning/30" },
-  { runs: 6, label: "6", cls: "bg-success/15 text-green-800 border border-success/30" },
+  { runs: 0, label: "0", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { runs: 1, label: "1", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { runs: 2, label: "2", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { runs: 3, label: "3", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { runs: 4, label: "4", cls: "bg-[#D9A928]/15 hover:bg-[#D9A928]/25 text-[#9A6A05] border-2 border-[#D9A928] shadow-sm font-black" },
+  { runs: 6, label: "6", cls: "bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] shadow-[0_4px_16px_rgba(217,169,40,0.3)] font-black" },
 ];
 
 const EXTRA_BUTTONS: { mode: ExtraMode; label: string; cls: string }[] = [
-  { mode: "wide", label: "WD", cls: "bg-blue-50 text-blue-700 border border-blue-200" },
-  { mode: "noball", label: "NB", cls: "bg-orange-50 text-orange-700 border border-orange-200" },
-  { mode: "bye", label: "BYE", cls: "bg-purple-50 text-purple-700 border border-purple-200" },
-  { mode: "legbye", label: "LB", cls: "bg-indigo-50 text-indigo-700 border border-indigo-200" },
+  { mode: "wide", label: "WD", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { mode: "noball", label: "NB", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { mode: "bye", label: "BYE", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
+  { mode: "legbye", label: "LB", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
 ];
 
 export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props) {
@@ -49,8 +50,8 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
 
   if (disabled) {
     return (
-      <div className="rounded-2xl bg-muted/60 px-4 py-6 text-center">
-        <p className="text-sm font-bold text-muted-foreground">
+      <div className="rounded-2xl bg-white border border-[#E5E5E5] px-4 py-6 text-center shadow-sm">
+        <p className="text-sm font-extrabold text-[#5F6368]">
           Select a bowler to continue scoring
         </p>
       </div>
@@ -66,7 +67,7 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
             <button
               key={b.runs}
               onClick={() => handleRun(b.runs)}
-              className={`btn-score ${b.cls} min-h-16 text-3xl`}
+              className={`btn-score ${b.cls} min-h-16 text-3xl rounded-2xl`}
               aria-label={`${b.label} run${b.runs !== 1 ? "s" : ""}`}
             >
               {b.label}
@@ -74,14 +75,17 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
           ))}
         </div>
 
-        {/* Wicket button — prominent */}
-        <button
+        {/* Wicket button — Official TPL Danger Button */}
+        <TplButton
+          variant="danger"
+          size="lg"
+          fullWidth
           onClick={() => setShowWicket(true)}
-          className="btn-score w-full min-h-16 bg-primary text-primary-foreground shadow-[var(--shadow-pop)] text-3xl rounded-2xl"
+          className="min-h-16 text-2xl font-black rounded-2xl"
           aria-label="Wicket"
         >
-          W
-        </button>
+          WICKET
+        </TplButton>
 
         {/* Extras row */}
         <div className="grid grid-cols-4 gap-2">
@@ -89,7 +93,7 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
             <button
               key={b.mode}
               onClick={() => setExtraMode(b.mode)}
-              className={`btn-score ${b.cls} min-h-12 text-lg rounded-2xl`}
+              className={`btn-score ${b.cls} min-h-12 text-sm font-extrabold rounded-xl`}
               aria-label={b.label}
             >
               {b.label}
