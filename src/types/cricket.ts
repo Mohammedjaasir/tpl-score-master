@@ -13,12 +13,75 @@ export interface Player {
   role: PlayerRole;
   teamId: string;
   avatar?: string | undefined;
+  referenceId?: string | undefined;
+  soldPrice?: number | undefined;
+  teamRole?: string | null | undefined;
+  auctionStatus?: string | undefined;
+  phone?: string | undefined;
+  dateOfBirth?: string | undefined;
 }
 
 export interface Team {
   id: string;
   name: string;
   shortName: string;
+  logoUrl?: string | undefined;
+  ownerName?: string | undefined;
+  groupName?: string | undefined;
+  purseBalance?: number | undefined;
+  slug?: string | undefined;
+}
+
+export interface SupabaseTeam {
+  id: string;
+  name: string;
+  slug?: string | null;
+  owner_name?: string | null;
+  logo_url?: string | null;
+  group_name?: string | null;
+  purse_balance?: number | null;
+  passcode?: string | null;
+  created_at?: string;
+}
+
+export interface SupabaseRegistration {
+  id: string;
+  reference_id?: string | null;
+  player_name: string;
+  player_phone?: string | null;
+  status?: string | null;
+  profile_photo_url?: string | null;
+  date_of_birth?: string | null;
+  team_id?: string | null;
+  player_role?: string | null;
+  team_role?: string | null;
+  slug?: string | null;
+  base_price?: number | null;
+  sold_price?: number | null;
+  auction_status?: string | null;
+  attendance_status?: string | null;
+  normalized_phone?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupabaseMatch {
+  id: string;
+  stage_id?: string | null;
+  group_id?: string | null;
+  team_a_id: string;
+  team_b_id: string;
+  start_time: string;
+  status: "scheduled" | "live" | "completed" | "abandoned";
+  total_overs: number;
+  balls_per_over?: number;
+  scorer_pin?: string | null;
+  toss_winner_id?: string | null;
+  toss_decision?: "bat" | "bowl" | null;
+  man_of_the_match_id?: string | null;
+  winner_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type MatchStatus = "UPCOMING" | "READY" | "LIVE" | "COMPLETED";

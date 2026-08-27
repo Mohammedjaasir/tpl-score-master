@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Delivery, ExtraType, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
+import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
 import { buildMatchState, setTeamNameResolver } from "@/lib/scoring/engine";
-import { lookup } from "@/lib/repositories";
+import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
 
 setTeamNameResolver((id) => lookup.team(id)?.name ?? id);
 
@@ -47,14 +47,39 @@ export interface DeliveryInput {
   wicket?: WicketInfo;
 }
 
-export function useMatchStore(matchId: string) {
+export function useMatchStore(matchId: string, initialMatch?: Match) {
   const [doc, setDoc] = useState<MatchDoc>(() => emptyDoc(matchId));
   const [hydrated, setHydrated] = useState(false);
+  const [matchData, setMatchData] = useState<Match | undefined>(
+    () => initialMatch ?? lookup.match(matchId),
+  );
 
   useEffect(() => {
     setDoc(load(matchId));
     setHydrated(true);
   }, [matchId]);
+
+  useEffect(() => {
+    if (initialMatch) {
+      setMatchData(initialMatch);
+      return;
+    }
+    const cached = lookup.match(matchId);
+    if (cached) {
+      setMatchData(cached);
+    } else {
+      matchRepository.get(matchId).then((m) => {
+        if (m) {
+          setMatchData(m);
+          // Also preload teams and team players for seamless lookups
+          teamRepository.get(m.teamAId);
+          teamRepository.get(m.teamBId);
+          playerRepository.listByTeam(m.teamAId);
+          playerRepository.listByTeam(m.teamBId);
+        }
+      });
+    }
+  }, [matchId, initialMatch]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -65,7 +90,7 @@ export function useMatchStore(matchId: string) {
     }
   }, [doc, matchId, hydrated]);
 
-  const match = lookup.match(matchId);
+  const match = matchData ?? lookup.match(matchId);
 
   const state: MatchState | undefined = useMemo(() => {
     if (!match) return undefined;

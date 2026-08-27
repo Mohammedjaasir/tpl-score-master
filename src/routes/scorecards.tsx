@@ -1,15 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
+import { useMatches, useTeams } from "@/hooks/useCricketData";
 import { lookup } from "@/lib/repositories";
 import { StatusPill } from "@/components/match/MatchCard";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, RefreshCw, AlertCircle } from "lucide-react";
 
 export const Route = createFileRoute("/scorecards")({
   component: Scorecards,
 });
 
 function Scorecards() {
-  const matches = lookup.matches().filter((m) => m.status === "COMPLETED");
+  const { data: allMatches = [], isLoading, isError, error, refetch } = useMatches();
+  useTeams();
+
+  const completedMatches = allMatches.filter((m) => m.status === "COMPLETED");
 
   return (
     <AppShell title="Scorecards">
@@ -18,16 +22,40 @@ function Scorecards() {
           Scorecards
         </h1>
 
-        {matches.length === 0 ? (
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <RefreshCw className="h-6 w-6 text-primary animate-spin" />
+            <p className="text-sm font-bold text-muted-foreground">Loading completed scorecards...</p>
+          </div>
+        )}
+
+        {isError && (
+          <div className="card-surface p-6 flex flex-col items-center justify-center text-center gap-3 border border-destructive/30">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <p className="text-sm font-extrabold text-foreground">Unable to load scorecards</p>
+            <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : "Network error"}</p>
+            <button
+              onClick={() => refetch()}
+              className="tap mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !isError && completedMatches.length === 0 && (
           <div className="card-surface px-6 py-12 text-center">
             <ClipboardList className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm font-bold text-muted-foreground">
               No completed matches yet.
             </p>
           </div>
-        ) : (
+        )}
+
+        {!isLoading && !isError && completedMatches.length > 0 && (
           <div className="flex flex-col gap-3">
-            {matches.map((m) => {
+            {completedMatches.map((m) => {
               const teamA = lookup.team(m.teamAId);
               const teamB = lookup.team(m.teamBId);
               return (

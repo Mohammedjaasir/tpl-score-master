@@ -1,18 +1,184 @@
-import type { Match, Player, Team } from "@/types/cricket";
-import { matches as mockMatches, players as mockPlayers, teams as mockTeams } from "@/lib/mock-data";
+import type {
+  Match,
+  MatchStatus,
+  Player,
+  PlayerRole,
+  SupabaseMatch,
+  SupabaseRegistration,
+  SupabaseTeam,
+  Team,
+} from "@/types/cricket";
+import { supabase } from "@/lib/supabase";
+
+export const TOURNAMENT_NAME = "TPL 2026";
 
 /**
- * Data access contracts. Swap MockXRepository for SupabaseXRepository later
- * without touching the scoring engine or any UI component.
+ * Generate a concise short name / abbreviation for a team name.
  */
+function deriveTeamShortName(name: string, slug?: string | null): string {
+  if (slug) {
+    const parts = slug.split("-").filter(Boolean);
+    if (parts.length >= 2) {
+      return parts.map((p) => p[0]?.toUpperCase()).join("");
+    }
+  }
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0]!.slice(0, 3).toUpperCase();
+  if (words.length === 2) return (words[0]![0]! + words[1]!.slice(0, 2)).toUpperCase();
+  return words.map((w) => w[0]!.toUpperCase()).join("").slice(0, 4);
+}
+
+/**
+ * Generate a short display name for a player (e.g. "Mohamed Imran" -> "M. Imran").
+ */
+function derivePlayerShortName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return fullName.trim();
+  const last = parts[parts.length - 1];
+  const initial = parts[0]![0]?.toUpperCase();
+  return `${initial}. ${last}`;
+}
+
+export function toTeam(row: SupabaseTeam): Team {
+  return {
+    id: row.id,
+    name: row.name,
+    shortName: deriveTeamShortName(row.name, row.slug),
+    logoUrl: row.logo_url ?? undefined,
+    ownerName: row.owner_name ?? undefined,
+    groupName: row.group_name ?? undefined,
+    purseBalance: row.purse_balance ?? undefined,
+    slug: row.slug ?? undefined,
+  };
+}
+
+export function toPlayer(row: SupabaseRegistration): Player {
+  const rawRole = (row.player_role || "").toLowerCase();
+  let role: PlayerRole = "All-rounder";
+  if (rawRole.includes("bat")) role = "Batsman";
+  else if (rawRole.includes("bowl")) role = "Bowler";
+  else if (rawRole.includes("keep")) role = "Wicketkeeper";
+
+  return {
+    id: row.id,
+    name: row.player_name?.trim() || "Unknown Player",
+    shortName: derivePlayerShortName(row.player_name || "Unknown Player"),
+    role,
+    teamId: row.team_id || "",
+    avatar: row.profile_photo_url || undefined,
+    referenceId: row.reference_id || undefined,
+    soldPrice: row.sold_price || undefined,
+    teamRole: row.team_role || undefined,
+    auctionStatus: row.auction_status || undefined,
+    phone: row.player_phone || undefined,
+    dateOfBirth: row.date_of_birth || undefined,
+  };
+}
+
+export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
+  let status: MatchStatus = "UPCOMING";
+  const raw = row.status?.toLowerCase();
+  if (raw === "live") status = "LIVE";
+  else if (raw === "completed") status = "COMPLETED";
+  else if (raw === "scheduled") {
+    // If within next 2 hours or passed start time, mark as READY
+    const start = new Date(row.start_time).getTime();
+    const now = Date.now();
+    if (now >= start - 2 * 60 * 60 * 1000) {
+      status = "READY";
+    } else {
+      status = "UPCOMING";
+    }
+  }
+
+  return {
+    id: row.id,
+    tournament: TOURNAMENT_NAME,
+    matchNumber,
+    teamAId: row.team_a_id,
+    teamBId: row.team_b_id,
+    venue: "TPL Cricket Ground",
+    overs: row.total_overs || 5,
+    scheduledAt: row.start_time,
+    status,
+    resultText: undefined,
+  };
+}
+
+// ── In-Memory Lookup Cache ──────────────────────────────────────────────────
+class LookupCache {
+  private teamsMap = new Map<string, Team>();
+  private playersMap = new Map<string, Player>();
+  private matchesMap = new Map<string, Match>();
+  private initialHydrated = false;
+
+  setTeams(teams: Team[]) {
+    teams.forEach((t) => this.teamsMap.set(t.id, t));
+  }
+
+  setPlayers(players: Player[]) {
+    players.forEach((p) => this.playersMap.set(p.id, p));
+  }
+
+  setMatches(matches: Match[]) {
+    matches.forEach((m) => this.matchesMap.set(m.id, m));
+  }
+
+  team(id?: string): Team | undefined {
+    if (!id) return undefined;
+    return this.teamsMap.get(id);
+  }
+
+  player(id?: string): Player | undefined {
+    if (!id) return undefined;
+    return this.playersMap.get(id);
+  }
+
+  playersOf(teamId: string): Player[] {
+    return Array.from(this.playersMap.values()).filter((p) => p.teamId === teamId);
+  }
+
+  match(id: string): Match | undefined {
+    return this.matchesMap.get(id);
+  }
+
+  matches(): Match[] {
+    return Array.from(this.matchesMap.values()).sort(
+      (a, b) => a.matchNumber - b.matchNumber,
+    );
+  }
+
+  teams(): Team[] {
+    return Array.from(this.teamsMap.values());
+  }
+
+  players(): Player[] {
+    return Array.from(this.playersMap.values());
+  }
+
+  isHydrated(): boolean {
+    return this.initialHydrated;
+  }
+
+  markHydrated() {
+    this.initialHydrated = true;
+  }
+}
+
+export const lookup = new LookupCache();
+
+// ── Repository Contracts ─────────────────────────────────────────────────────
+
 export interface TeamRepository {
   list(): Promise<Team[]>;
   get(id: string): Promise<Team | undefined>;
 }
 
 export interface PlayerRepository {
+  list(): Promise<Player[]>;
   listByTeam(teamId: string): Promise<Player[]>;
   get(id: string): Promise<Player | undefined>;
+  search(query: string): Promise<Player[]>;
 }
 
 export interface MatchRepository {
@@ -20,42 +186,178 @@ export interface MatchRepository {
   get(id: string): Promise<Match | undefined>;
 }
 
-export class MockTeamRepository implements TeamRepository {
-  async list() {
-    return mockTeams;
+// ── Supabase Repositories ────────────────────────────────────────────────────
+
+export class SupabaseTeamRepository implements TeamRepository {
+  async list(): Promise<Team[]> {
+    const { data, error } = await supabase
+      .from("teams")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("[SupabaseTeamRepository] list error:", error);
+      throw new Error(`Failed to load teams: ${error.message}`);
+    }
+
+    const domainTeams = (data as SupabaseTeam[] || []).map(toTeam);
+    lookup.setTeams(domainTeams);
+    return domainTeams;
   }
-  async get(id: string) {
-    return mockTeams.find((t) => t.id === id);
+
+  async get(id: string): Promise<Team | undefined> {
+    const cached = lookup.team(id);
+    if (cached) return cached;
+
+    const { data, error } = await supabase
+      .from("teams")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) {
+      return undefined;
+    }
+
+    const team = toTeam(data as SupabaseTeam);
+    lookup.setTeams([team]);
+    return team;
   }
 }
 
-export class MockPlayerRepository implements PlayerRepository {
-  async listByTeam(teamId: string) {
-    return mockPlayers.filter((p) => p.teamId === teamId);
+export class SupabasePlayerRepository implements PlayerRepository {
+  async list(): Promise<Player[]> {
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .order("player_name", { ascending: true });
+
+    if (error) {
+      console.error("[SupabasePlayerRepository] list error:", error);
+      throw new Error(`Failed to load players: ${error.message}`);
+    }
+
+    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+    lookup.setPlayers(domainPlayers);
+    return domainPlayers;
   }
-  async get(id: string) {
-    return mockPlayers.find((p) => p.id === id);
+
+  async listByTeam(teamId: string): Promise<Player[]> {
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .eq("team_id", teamId)
+      .order("player_name", { ascending: true });
+
+    if (error) {
+      console.error("[SupabasePlayerRepository] listByTeam error:", error);
+      throw new Error(`Failed to load players for team: ${error.message}`);
+    }
+
+    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+    lookup.setPlayers(domainPlayers);
+    return domainPlayers;
+  }
+
+  async get(id: string): Promise<Player | undefined> {
+    const cached = lookup.player(id);
+    if (cached) return cached;
+
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) {
+      return undefined;
+    }
+
+    const player = toPlayer(data as SupabaseRegistration);
+    lookup.setPlayers([player]);
+    return player;
+  }
+
+  async search(query: string): Promise<Player[]> {
+    const trimmed = query.trim();
+    if (!trimmed) return this.list();
+
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .or(`player_name.ilike.%${trimmed}%,reference_id.ilike.%${trimmed}%`)
+      .order("player_name", { ascending: true })
+      .limit(50);
+
+    if (error) {
+      console.error("[SupabasePlayerRepository] search error:", error);
+      throw new Error(`Failed to search players: ${error.message}`);
+    }
+
+    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+    lookup.setPlayers(domainPlayers);
+    return domainPlayers;
   }
 }
 
-export class MockMatchRepository implements MatchRepository {
-  async list() {
-    return mockMatches;
+export class SupabaseMatchRepository implements MatchRepository {
+  async list(): Promise<Match[]> {
+    const { data, error } = await supabase
+      .from("matches")
+      .select("*")
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      console.error("[SupabaseMatchRepository] list error:", error);
+      throw new Error(`Failed to load matches: ${error.message}`);
+    }
+
+    const domainMatches = (data as SupabaseMatch[] || []).map((m, idx) =>
+      toMatch(m, idx + 1),
+    );
+    lookup.setMatches(domainMatches);
+    return domainMatches;
   }
-  async get(id: string) {
-    return mockMatches.find((m) => m.id === id);
+
+  async get(id: string): Promise<Match | undefined> {
+    const cached = lookup.match(id);
+    if (cached) return cached;
+
+    const { data, error } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) {
+      return undefined;
+    }
+
+    // Determine match index if possible
+    const matches = await this.list();
+    return matches.find((m) => m.id === id);
   }
 }
 
-export const teamRepository: TeamRepository = new MockTeamRepository();
-export const playerRepository: PlayerRepository = new MockPlayerRepository();
-export const matchRepository: MatchRepository = new MockMatchRepository();
+export const teamRepository: TeamRepository = new SupabaseTeamRepository();
+export const playerRepository: PlayerRepository = new SupabasePlayerRepository();
+export const matchRepository: MatchRepository = new SupabaseMatchRepository();
 
-/** Synchronous lookups for render-time convenience (mock source). */
-export const lookup = {
-  team: (id?: string) => mockTeams.find((t) => t.id === id),
-  player: (id?: string) => mockPlayers.find((p) => p.id === id),
-  playersOf: (teamId: string) => mockPlayers.filter((p) => p.teamId === teamId),
-  match: (id: string) => mockMatches.find((m) => m.id === id),
-  matches: () => mockMatches,
-};
+/**
+ * Preloads all baseline metadata (teams, assigned players, matches) into the lookup cache.
+ */
+export async function prefetchCricketMetadata(): Promise<void> {
+  try {
+    const [teams, players, matches] = await Promise.all([
+      teamRepository.list(),
+      playerRepository.list(),
+      matchRepository.list(),
+    ]);
+    lookup.setTeams(teams);
+    lookup.setPlayers(players);
+    lookup.setMatches(matches);
+    lookup.markHydrated();
+  } catch (err) {
+    console.error("Error prefetching cricket metadata:", err);
+  }
+}

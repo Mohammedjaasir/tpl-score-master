@@ -11,6 +11,8 @@ import {
   AlignJustify,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { useMatches, usePrefetchCricketData, useTeams, useTournamentStats } from "@/hooks/useCricketData";
+import { lookup } from "@/lib/repositories";
 
 export const Route = createFileRoute("/")({
   component: LandingScreen,
@@ -34,6 +36,19 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function LandingScreen() {
+  usePrefetchCricketData();
+  const stats = useTournamentStats();
+  const { data: matches = [] } = useMatches();
+  const { data: teams = [] } = useTeams();
+
+  const featuredMatch = matches.find((m) => m.status === "LIVE") || matches[0];
+  const featuredTeamA = featuredMatch ? lookup.team(featuredMatch.teamAId) : undefined;
+  const featuredTeamB = featuredMatch ? lookup.team(featuredMatch.teamBId) : undefined;
+
+  const nextMatch = matches.find((m) => m.status === "READY" || m.status === "UPCOMING") || matches[1];
+  const nextTeamA = nextMatch ? lookup.team(nextMatch.teamAId) : undefined;
+  const nextTeamB = nextMatch ? lookup.team(nextMatch.teamBId) : undefined;
+
   return (
     <div className="min-h-screen w-full bg-white text-[#0A0A0A] font-sans selection:bg-[#D9A928] selection:text-black overflow-x-hidden">
 
@@ -190,106 +205,124 @@ function LandingScreen() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          3. LIVE MATCH
+          3. LIVE MATCH / FEATURED MATCH
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-16 lg:py-24 bg-[#0A0A0A]">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="flex items-center gap-3 mb-10">
-            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-            <span className="text-[10px] font-black tracking-[0.28em] text-rose-400 uppercase">LIVE NOW</span>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            <div>
-              <h2 className="font-display font-black text-4xl sm:text-5xl uppercase leading-[0.9] tracking-tight text-white">
-                FOLLOW THE ACTION
-              </h2>
-              <p className="mt-4 text-sm text-white/50 max-w-sm leading-relaxed">
-                Stay connected to every match as it happens.
-              </p>
+      {featuredMatch && (
+        <section className="py-16 lg:py-24 bg-[#0A0A0A]">
+          <div className="max-w-7xl mx-auto px-5 lg:px-8">
+            <div className="flex items-center gap-3 mb-10">
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+              <span className="text-[10px] font-black tracking-[0.28em] text-rose-400 uppercase">
+                {featuredMatch.status === "LIVE" ? "LIVE NOW" : "FEATURED MATCH"}
+              </span>
             </div>
 
-            {/* Live scorecard */}
-            <div className="rounded-3xl border border-[#D9A928]/30 bg-[#111] p-6 sm:p-8">
-              <div className="flex items-center justify-between mb-6">
-                <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
-                  LIVE
-                </span>
-                <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">TPL 2026</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+              <div>
+                <h2 className="font-display font-black text-4xl sm:text-5xl uppercase leading-[0.9] tracking-tight text-white">
+                  FOLLOW THE ACTION
+                </h2>
+                <p className="mt-4 text-sm text-white/50 max-w-sm leading-relaxed">
+                  Stay connected to every match as it happens in TPL 2026.
+                </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">BATTING</p>
-                  <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">THUNDER XI</p>
-                  <p className="text-3xl sm:text-4xl font-black text-white mt-2">142<span className="text-white/40 text-xl">/4</span></p>
-                  <p className="text-[11px] text-white/40 mt-1">17.2 Overs</p>
+              {/* Live scorecard card */}
+              <div className="rounded-3xl border border-[#D9A928]/30 bg-[#111] p-6 sm:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                    {featuredMatch.status}
+                  </span>
+                  <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">
+                    Match #{featuredMatch.matchNumber} · TPL 2026
+                  </span>
                 </div>
-                <div className="text-center">
-                  <span className="inline-block px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-black">VS</span>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">YET TO BAT</p>
-                  <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">TPL WARRIORS</p>
-                  <p className="text-xl font-black text-white/40 mt-2">— —</p>
-                </div>
-              </div>
 
-              <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40">
-                <span>CRR 8.19</span>
-                <span className="text-[#D9A928] font-bold">Partnership 48 (32)</span>
-              </div>
+                <div className="grid grid-cols-3 gap-4 items-center">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">TEAM A</p>
+                    <p className="text-lg sm:text-xl font-black text-white uppercase leading-tight">
+                      {featuredTeamA?.shortName || featuredTeamA?.name || "Team A"}
+                    </p>
+                    <p className="text-xs text-white/50 mt-1">{featuredTeamA?.name}</p>
+                  </div>
+                  <div className="text-center">
+                    <span className="inline-block px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-black">VS</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">TEAM B</p>
+                    <p className="text-lg sm:text-xl font-black text-white uppercase leading-tight">
+                      {featuredTeamB?.shortName || featuredTeamB?.name || "Team B"}
+                    </p>
+                    <p className="text-xs text-white/50 mt-1">{featuredTeamB?.name}</p>
+                  </div>
+                </div>
 
-              <Link
-                to="/live"
-                className="mt-5 w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[11px] uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all"
-              >
-                VIEW LIVE SCORECARD
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+                <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40">
+                  <span>{featuredMatch.overs} Overs Match</span>
+                  <span className="text-[#D9A928] font-bold">{featuredMatch.venue}</span>
+                </div>
+
+                <Link
+                  to="/match/$matchId"
+                  params={{ matchId: featuredMatch.id }}
+                  className="mt-5 w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[11px] uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all"
+                >
+                  ENTER MATCH SCORER / LIVE VIEW
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           4. NEXT MATCH
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-14 bg-[#D9A928]">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div>
-              <p className="text-[10px] font-black tracking-[0.28em] text-black/60 uppercase mb-2">NEXT MATCH</p>
-              <h2 className="font-display font-black text-3xl sm:text-4xl uppercase leading-tight text-black">
-                THE NEXT BATTLE STARTS SOON
-              </h2>
+      {nextMatch && (
+        <section className="py-14 bg-[#D9A928]">
+          <div className="max-w-7xl mx-auto px-5 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+              <div>
+                <p className="text-[10px] font-black tracking-[0.28em] text-black/60 uppercase mb-2">NEXT MATCH</p>
+                <h2 className="font-display font-black text-3xl sm:text-4xl uppercase leading-tight text-black">
+                  THE NEXT BATTLE STARTS SOON
+                </h2>
+              </div>
+              <div className="flex items-center gap-6 sm:gap-10">
+                <div className="text-center">
+                  <p className="text-xl sm:text-2xl font-black text-black uppercase">
+                    {nextTeamA?.shortName || nextTeamA?.name}
+                  </p>
+                  <p className="text-[10px] text-black/50 font-bold mt-1">HOME</p>
+                </div>
+                <div className="text-center">
+                  <span className="inline-block px-4 py-2 rounded-xl bg-black/15 text-black text-base font-black">VS</span>
+                  <p className="text-[9px] text-black/50 font-black mt-2 uppercase tracking-wider">
+                    {new Date(nextMatch.scheduledAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </p>
+                  <p className="text-[9px] text-black/40 font-bold uppercase">TPL 2026 · Match #{nextMatch.matchNumber}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl sm:text-2xl font-black text-black uppercase">
+                    {nextTeamB?.shortName || nextTeamB?.name}
+                  </p>
+                  <p className="text-[10px] text-black/50 font-bold mt-1">AWAY</p>
+                </div>
+              </div>
+              <Link
+                to="/matches"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-[#0A0A0A] text-white font-black text-xs uppercase tracking-wider transition-all shrink-0"
+              >
+                VIEW MATCH CENTRE
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
-            <div className="flex items-center gap-6 sm:gap-10">
-              <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-black text-black uppercase">Thunder XI</p>
-                <p className="text-[10px] text-black/50 font-bold mt-1">HOME</p>
-              </div>
-              <div className="text-center">
-                <span className="inline-block px-4 py-2 rounded-xl bg-black/15 text-black text-base font-black">VS</span>
-                <p className="text-[9px] text-black/50 font-black mt-2 uppercase tracking-wider">Today · 7:30 PM</p>
-                <p className="text-[9px] text-black/40 font-bold uppercase">TPL 2026 · Match 12</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-black text-black uppercase">Kings XI</p>
-                <p className="text-[10px] text-black/50 font-bold mt-1">AWAY</p>
-              </div>
-            </div>
-            <Link
-              to="/matches"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-[#0A0A0A] text-white font-black text-xs uppercase tracking-wider transition-all shrink-0"
-            >
-              VIEW MATCH CENTRE
-              <ArrowRight className="h-4 w-4" />
-            </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           5. TOURNAMENT OVERVIEW
@@ -339,10 +372,10 @@ function LandingScreen() {
           <p className="text-center text-[10px] font-black tracking-[0.3em] text-[#D9A928] uppercase mb-12">TPL 2026 BY THE NUMBERS</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8">
             {[
-              { val: "24", label: "Matches" },
-              { val: "12", label: "Teams" },
-              { val: "1,200+", label: "Runs Scored" },
-              { val: "80+", label: "Wickets" },
+              { val: stats.totalMatches.toString(), label: "Matches" },
+              { val: stats.totalTeams.toString(), label: "Teams" },
+              { val: `${stats.totalPlayers}+`, label: "Registered Players" },
+              { val: stats.liveMatchesCount.toString(), label: "Live Matches" },
             ].map((s) => (
               <div key={s.label} className="text-center">
                 <p className="font-black text-5xl sm:text-6xl text-white leading-none">{s.val}</p>
@@ -371,25 +404,28 @@ function LandingScreen() {
           </div>
 
           <div className="space-y-3">
-            {[
-              { match: "MATCH 13", teams: "Thunder XI vs Kings XI", time: "Tomorrow · 3:30 PM" },
-              { match: "MATCH 14", teams: "Warriors CC vs Super Strikers", time: "Tomorrow · 7:30 PM" },
-              { match: "MATCH 15", teams: "Royal Challengers vs Thunder XI", time: "28 AUG · 3:30 PM" },
-            ].map((f, i) => (
-              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-black/[0.07] bg-white px-6 py-5 hover:border-[#D9A928]/40 hover:shadow-sm transition-all">
-                <div className="flex items-center gap-5">
-                  <span className="text-[10px] font-black tracking-widest text-[#D9A928] uppercase shrink-0">{f.match}</span>
-                  <span className="h-4 w-px bg-black/10 hidden sm:block" />
-                  <p className="font-black text-base uppercase text-[#0A0A0A]">{f.teams}</p>
+            {matches.slice(0, 4).map((f) => {
+              const ta = lookup.team(f.teamAId);
+              const tb = lookup.team(f.teamBId);
+              const timeStr = new Date(f.scheduledAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+              return (
+                <div key={f.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-black/[0.07] bg-white px-6 py-5 hover:border-[#D9A928]/40 hover:shadow-sm transition-all">
+                  <div className="flex items-center gap-5">
+                    <span className="text-[10px] font-black tracking-widest text-[#D9A928] uppercase shrink-0">MATCH #{f.matchNumber}</span>
+                    <span className="h-4 w-px bg-black/10 hidden sm:block" />
+                    <p className="font-black text-base uppercase text-[#0A0A0A]">
+                      {ta?.name || "Team A"} vs {tb?.name || "Team B"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[11px] font-bold text-black/40 uppercase tracking-wider">{timeStr}</span>
+                    <Link to="/match/$matchId" params={{ matchId: f.id }} className="shrink-0 px-4 py-2 rounded-full bg-[#0A0A0A] hover:bg-[#D9A928] text-white hover:text-black font-black text-[10px] uppercase tracking-wider transition-all">
+                      DETAILS
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-[11px] font-bold text-black/40 uppercase tracking-wider">{f.time}</span>
-                  <Link to="/matches" className="shrink-0 px-4 py-2 rounded-full bg-[#0A0A0A] hover:bg-[#D9A928] text-white hover:text-black font-black text-[10px] uppercase tracking-wider transition-all">
-                    DETAILS
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -422,22 +458,26 @@ function LandingScreen() {
               <span className="text-center">L</span>
               <span className="text-right">PTS</span>
             </div>
-            {[
-              { pos: "01", team: "Thunder XI", p: 5, w: 4, l: 1, pts: 8, top: true },
-              { pos: "02", team: "Warriors CC", p: 5, w: 4, l: 1, pts: 8, top: false },
-              { pos: "03", team: "Kings XI", p: 5, w: 3, l: 2, pts: 6, top: false },
-              { pos: "04", team: "Super Strikers", p: 5, w: 3, l: 2, pts: 6, top: false },
-            ].map((row, i) => (
+            {teams.map((team, i) => (
               <div
-                key={i}
-                className={`grid grid-cols-[3rem_1fr_2.5rem_2.5rem_2.5rem_3rem] gap-2 px-5 py-4 items-center border-b border-black/[0.06] last:border-0 ${row.top ? "bg-[#D9A928]/5" : "bg-white"}`}
+                key={team.id}
+                className={`grid grid-cols-[3rem_1fr_2.5rem_2.5rem_2.5rem_3rem] gap-2 px-5 py-4 items-center border-b border-black/[0.06] last:border-0 ${i === 0 ? "bg-[#D9A928]/5" : "bg-white"}`}
               >
-                <span className={`text-[11px] font-black ${row.top ? "text-[#D9A928]" : "text-black/30"}`}>{row.pos}</span>
-                <span className={`font-black text-sm uppercase ${row.top ? "text-[#0A0A0A]" : "text-[#0A0A0A]"}`}>{row.team}</span>
-                <span className="text-center text-sm text-black/50">{row.p}</span>
-                <span className="text-center text-sm font-bold text-black">{row.w}</span>
-                <span className="text-center text-sm text-black/40">{row.l}</span>
-                <span className={`text-right text-sm font-black ${row.top ? "text-[#D9A928]" : "text-[#0A0A0A]"}`}>{row.pts}</span>
+                <span className={`text-[11px] font-black ${i === 0 ? "text-[#D9A928]" : "text-black/30"}`}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="flex items-center gap-2">
+                  {team.logoUrl && (
+                    <img src={team.logoUrl} alt={team.name} className="h-5 w-5 rounded-full object-cover" />
+                  )}
+                  <span className={`font-black text-sm uppercase ${i === 0 ? "text-[#0A0A0A]" : "text-[#0A0A0A]"}`}>
+                    {team.name}
+                  </span>
+                </div>
+                <span className="text-center text-sm text-black/50">0</span>
+                <span className="text-center text-sm font-bold text-black">0</span>
+                <span className="text-center text-sm text-black/40">0</span>
+                <span className={`text-right text-sm font-black ${i === 0 ? "text-[#D9A928]" : "text-[#0A0A0A]"}`}>0</span>
               </div>
             ))}
           </div>
