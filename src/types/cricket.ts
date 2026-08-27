@@ -50,7 +50,7 @@ export interface MatchSetup {
   decision?: TossDecision | undefined;
   battingFirstId?: string | undefined;
   playingXI: Record<string, PlayingXI>;
-  openers?: { strikerId: string | undefined; nonStrikerId: string };
+  openers?: { strikerId: string; nonStrikerId: string } | undefined;
   openingBowlerId?: string | undefined;
 }
 
