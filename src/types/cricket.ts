@@ -12,7 +12,7 @@ export interface Player {
   shortName: string;
   role: PlayerRole;
   teamId: string;
-  avatar?: string;
+  avatar?: string | undefined;
 }
 
 export interface Team {
@@ -39,19 +39,19 @@ export interface Match {
 export interface PlayingXI {
   teamId: string;
   playerIds: string[];
-  captainId?: string;
-  keeperId?: string;
+  captainId?: string | undefined;
+  keeperId?: string | undefined;
 }
 
 export type TossDecision = "bat" | "bowl";
 
 export interface MatchSetup {
-  tossWinnerId?: string;
-  decision?: TossDecision;
-  battingFirstId?: string;
+  tossWinnerId?: string | undefined;
+  decision?: TossDecision | undefined;
+  battingFirstId?: string | undefined;
   playingXI: Record<string, PlayingXI>;
-  openers?: { strikerId: string; nonStrikerId: string };
-  openingBowlerId?: string;
+  openers?: { strikerId: string | undefined; nonStrikerId: string };
+  openingBowlerId?: string | undefined;
 }
 
 export type ExtraType = "wide" | "noball" | "bye" | "legbye" | null;
@@ -71,9 +71,9 @@ export type DismissalType =
 export interface WicketInfo {
   type: DismissalType;
   batterOutId: string;
-  fielderId?: string;
+  fielderId?: string | undefined;
   /** Batter walking in (undefined when innings ends on this ball). */
-  newBatterId?: string;
+  newBatterId?: string | undefined;
 }
 
 /** The single source of truth for all match state. */
@@ -88,7 +88,7 @@ export interface Delivery {
   /** For wide: 1 + extra runs run. For bye/legbye: runs run. For noball: 1. */
   extraRuns: number;
   extraType: ExtraType;
-  wicket?: WicketInfo;
+  wicket?: WicketInfo | undefined;
   timestamp: number;
 }
 
@@ -99,7 +99,7 @@ export interface BatterStat {
   fours: number;
   sixes: number;
   out: boolean;
-  dismissal?: string;
+  dismissal?: string | undefined;
   strikeRate: number;
   battingPosition: number;
 }
@@ -155,10 +155,10 @@ export interface InningsState {
   oversText: string;
   oversFloat: number;
   crr: number;
-  strikerId?: string;
-  nonStrikerId?: string;
-  currentBowlerId?: string;
-  previousBowlerId?: string;
+  strikerId?: string | undefined;
+  nonStrikerId?: string | undefined;
+  currentBowlerId?: string | undefined;
+  previousBowlerId?: string | undefined;
   batters: BatterStat[];
   bowlers: BowlerStat[];
   fallOfWickets: FallOfWicket[];
@@ -168,10 +168,10 @@ export interface InningsState {
   isComplete: boolean;
   needsBowler: boolean;
   yetToBat: string[];
-  target?: number;
-  runsNeeded?: number;
-  ballsRemaining?: number;
-  requiredRunRate?: number;
+  target?: number | undefined;
+  runsNeeded?: number | undefined;
+  ballsRemaining?: number | undefined;
+  requiredRunRate?: number | undefined;
 }
 
 export interface MatchState {
