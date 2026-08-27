@@ -101,7 +101,7 @@ export interface InningsConfig {
   bowlingTeamId: string;
   battingXI: string[];
   bowlingXI: string[];
-  openers?: { strikerId: string; nonStrikerId: string };
+  openers?: { strikerId: string; nonStrikerId: string } | undefined;
   maxOvers: number;
   target?: number;
 }

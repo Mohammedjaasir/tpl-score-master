@@ -33,7 +33,7 @@ export interface Match {
   overs: number;
   scheduledAt: string;
   status: MatchStatus;
-  resultText?: string;
+  resultText?: string | undefined;
 }
 
 export interface PlayingXI {
@@ -140,8 +140,8 @@ export interface OverGroup {
 export interface Partnership {
   runs: number;
   balls: number;
-  batterAId?: string;
-  batterBId?: string;
+  batterAId?: string | undefined;
+  batterBId?: string | undefined;
 }
 
 export interface InningsState {
@@ -180,5 +180,5 @@ export interface MatchState {
   innings: InningsState[];
   currentInningsIndex: 0 | 1;
   phase: "setup" | "innings1" | "break" | "innings2" | "complete";
-  resultText?: string;
+  resultText?: string | undefined;
 }
