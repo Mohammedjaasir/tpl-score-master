@@ -275,6 +275,9 @@ export interface PlayerRepository {
 export interface MatchRepository {
   list(): Promise<Match[]>;
   get(id: string): Promise<Match | undefined>;
+  saveSchedule(matches: Match[]): Promise<Match[]>;
+  resetSchedule(): Promise<void>;
+  createMatch(match: Match): Promise<Match>;
 }
 
 // ── Supabase Repositories with Explicit Diagnostics & Timeouts ───────────────
@@ -431,13 +434,7 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
-    // If the tournament match state has been set/managed by the application (including explicit reset to 0 matches)
-    if (lookup.isMatchesManaged()) {
-      return lookup.matches();
-    }
-
     const startTime = Date.now();
-    console.log("[MATCH_FETCH_START] Initiating match query from Supabase...");
 
     try {
       const response = await withTimeout(
@@ -450,25 +447,15 @@ export class SupabaseMatchRepository implements MatchRepository {
       const { data, error, status } = response;
 
       if (error) {
-        console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — HTTP ${status}: ${error.message}`);
+        console.warn(`[MATCH_FETCH_NOTICE] — ${duration}ms — HTTP ${status}: ${error.message}`);
         return lookup.matches();
       }
 
-      const rawList = (data as SupabaseMatch[] || []);
-      console.log(`[MATCH_FETCH_SUCCESS] — ${duration}ms — ${rawList.length} matches received`);
-
+      const rawList = ((data as SupabaseMatch[]) || []);
       const domainMatches = rawList.map((m, idx) => toMatch(m, idx + 1));
-      if (domainMatches.length > 0) {
-        lookup.setMatches(domainMatches);
-      }
+      lookup.setMatches(domainMatches);
       return domainMatches;
     } catch (err: any) {
-      const duration = Date.now() - startTime;
-      if (err?.message?.includes("timed out")) {
-        console.warn(`[MATCH_FETCH_TIMEOUT] — ${duration}ms — Request exceeded limit`);
-      } else {
-        console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — ${err?.message || err}`);
-      }
       return lookup.matches();
     }
   }
@@ -486,11 +473,188 @@ export class SupabaseMatchRepository implements MatchRepository {
       const { data, error } = response;
       if (error || !data) return undefined;
 
-      const matches = await this.list();
-      return matches.find((m) => m.id === id);
+      const m = toMatch(data as SupabaseMatch);
+      lookup.updateMatch(m.id, m);
+      return m;
     } catch {
       return lookup.match(id);
     }
+  }
+
+  async saveSchedule(fixtures: Match[]): Promise<Match[]> {
+    // 1. Fetch current database state to ensure we protect live/completed records
+    const { data: existingData, error: fetchError } = await supabase
+      .from("matches")
+      .select("*");
+
+    if (fetchError) {
+      console.error("[SupabaseMatchRepository] saveSchedule fetch error:", fetchError.message);
+      throw new Error(`Unable to load existing matches from database: ${fetchError.message}`);
+    }
+
+    const existingRows = (existingData as SupabaseMatch[]) || [];
+
+    // Separate into protected (LIVE, COMPLETED, ABANDONED) and scheduled fixtures
+    const protectedMatches = existingRows.filter((m) => {
+      const s = (m.status || "").toLowerCase().trim();
+      return s === "live" || s === "completed" || s === "abandoned";
+    });
+
+    const scheduledRows = existingRows.filter((m) => {
+      const s = (m.status || "").toLowerCase().trim();
+      return s === "scheduled" || s === "ready" || s === "upcoming";
+    });
+
+    // Helper to generate a match identity key considering team pairings and start time
+    const getFixtureKey = (teamA: string, teamB: string, startTime?: string) => {
+      const timeKey = startTime ? new Date(startTime).toISOString().slice(0, 16) : "";
+      return `${teamA}__${teamB}__${timeKey}`;
+    };
+
+    // Track existing scheduled fixtures by key
+    const existingScheduledByKey = new Map<string, SupabaseMatch>();
+    scheduledRows.forEach((row) => {
+      const key = getFixtureKey(row.team_a_id, row.team_b_id, row.start_time);
+      existingScheduledByKey.set(key, row);
+    });
+
+    const matchedExistingIds = new Set<string>();
+    const rowsToInsert: any[] = [];
+    const updatesToPerform: { id: string; patch: Partial<SupabaseMatch> }[] = [];
+
+    // 2. Reconcile incoming fixtures against existing database records
+    for (const fixture of fixtures) {
+      const key = getFixtureKey(fixture.teamAId, fixture.teamBId, fixture.scheduledAt);
+      const existingMatch = existingScheduledByKey.get(key);
+
+      if (existingMatch) {
+        // UNCHANGED: Exact match found -> PRESERVE CANONICAL DATABASE ID!
+        matchedExistingIds.add(existingMatch.id);
+
+        if (existingMatch.total_overs !== (fixture.overs || 5)) {
+          updatesToPerform.push({
+            id: existingMatch.id,
+            patch: { total_overs: fixture.overs || 5 },
+          });
+        }
+      } else {
+        // Check if there is an existing scheduled match with same teams but changed time/overs
+        const pairingMatch = scheduledRows.find(
+          (m) =>
+            m.team_a_id === fixture.teamAId &&
+            m.team_b_id === fixture.teamBId &&
+            !matchedExistingIds.has(m.id),
+        );
+
+        if (pairingMatch) {
+          // CHANGED: Same pairing, updated time/overs -> UPDATE in place and PRESERVE CANONICAL ID!
+          matchedExistingIds.add(pairingMatch.id);
+          updatesToPerform.push({
+            id: pairingMatch.id,
+            patch: {
+              start_time: fixture.scheduledAt,
+              total_overs: fixture.overs || 5,
+            },
+          });
+        } else {
+          // NEW FIXTURE: Genuinely new fixture to insert
+          rowsToInsert.push({
+            team_a_id: fixture.teamAId,
+            team_b_id: fixture.teamBId,
+            start_time: fixture.scheduledAt,
+            status: "scheduled",
+            total_overs: fixture.overs || 5,
+            balls_per_over: 6,
+          });
+        }
+      }
+    }
+
+    // 3. Execute updates for CHANGED fixtures (preserving IDs)
+    for (const update of updatesToPerform) {
+      const { error: updateError } = await supabase
+        .from("matches")
+        .update(update.patch)
+        .eq("id", update.id);
+
+      if (updateError) {
+        console.error("[SupabaseMatchRepository] saveSchedule update error:", updateError.message);
+        throw new Error(`Failed to update fixture ${update.id}: ${updateError.message}`);
+      }
+    }
+
+    // 4. Insert NEW fixtures
+    if (rowsToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from("matches")
+        .insert(rowsToInsert);
+
+      if (insertError) {
+        console.error("[SupabaseMatchRepository] saveSchedule insert error:", insertError.message);
+        throw new Error(`Failed to persist new fixtures: ${insertError.message}`);
+      }
+    }
+
+    // 5. Remove any old scheduled fixtures that are no longer part of the generated schedule
+    const unneededScheduledIds = scheduledRows
+      .filter((m) => !matchedExistingIds.has(m.id))
+      .map((m) => m.id);
+
+    if (unneededScheduledIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("matches")
+        .delete()
+        .in("id", unneededScheduledIds);
+
+      if (deleteError) {
+        console.warn("[SupabaseMatchRepository] saveSchedule delete obsolete fixtures notice:", deleteError.message);
+      }
+    }
+
+    // 6. Return fresh authoritative state with canonical IDs
+    return await this.list();
+  }
+
+  async resetSchedule(): Promise<void> {
+    // 1. Target ONLY eligible scheduled/upcoming fixtures.
+    // Live, Completed, and Abandoned records are strictly protected!
+    const { error } = await supabase
+      .from("matches")
+      .delete()
+      .in("status", ["scheduled", "ready", "upcoming"]);
+
+    if (error) {
+      console.error("[SupabaseMatchRepository] resetSchedule error:", error.message);
+      throw new Error(`Failed to reset upcoming fixtures: ${error.message}`);
+    }
+
+    // 2. Fetch the remaining protected authoritative records (live, completed, etc.)
+    await this.list();
+  }
+
+  async createMatch(match: Match): Promise<Match> {
+    const row = {
+      team_a_id: match.teamAId,
+      team_b_id: match.teamBId,
+      start_time: match.scheduledAt,
+      status: (match.status || "scheduled").toLowerCase(),
+      total_overs: match.overs || 5,
+      balls_per_over: 6,
+    };
+    const { data, error } = await supabase
+      .from("matches")
+      .insert([row])
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      console.error("[SupabaseMatchRepository] createMatch error:", error?.message);
+      throw new Error(`Failed to create match: ${error?.message || "Unknown error"}`);
+    }
+
+    const created = toMatch(data as SupabaseMatch, match.matchNumber);
+    lookup.updateMatch(created.id, created);
+    return created;
   }
 }
 

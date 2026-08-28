@@ -106,6 +106,10 @@ function AdminPortalPage() {
   const [knockoutTime, setKnockoutTime] = useState("16:00");
   const [knockoutDate, setKnockoutDate] = useState("2026-08-30");
 
+  // Schedule action status state
+  const [scheduleActionError, setScheduleActionError] = useState<string | null>(null);
+  const [isScheduleActionLoading, setIsScheduleActionLoading] = useState(false);
+
   // Report modal state
   const [activeReportModal, setActiveReportModal] = useState<string | null>(null);
 
@@ -128,7 +132,8 @@ function AdminPortalPage() {
         const q = playerSearch.toLowerCase();
         const matchesName = p.name.toLowerCase().includes(q);
         const matchesRef = p.referenceId?.toLowerCase().includes(q);
-        if (!matchesName && !matchesRef) return false;
+        const matchesTeam = lookup.team(p.teamId)?.name.toLowerCase().includes(q);
+        if (!matchesName && !matchesRef && !matchesTeam) return false;
       }
       if (roleFilter !== "all" && p.role !== roleFilter) return false;
       if (teamFilter !== "all" && p.teamId !== teamFilter) return false;
@@ -175,92 +180,120 @@ function AdminPortalPage() {
   // ── AUTO-GENERATE SCHEDULE HANDLER ────────────────────────────────────────
   const handleAutoGenerateSchedule = async () => {
     if (teams.length < 2) return;
-    let group1 = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
-    let group2 = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
 
-    if (group1.length === 0 || group2.length === 0) {
-      const half = Math.ceil(teams.length / 2);
-      group1 = teams.slice(0, half);
-      group2 = teams.slice(half);
-    }
+    try {
+      let group1 = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
+      let group2 = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
 
-    const fixtures: Match[] = [];
-    const baseTime = new Date();
-    baseTime.setHours(9, 0, 0, 0);
-    let matchNum = 1;
-
-    for (let i = 0; i < group1.length; i++) {
-      for (let j = 0; j < group2.length; j++) {
-        const scheduledDate = new Date(baseTime.getTime() + (matchNum - 1) * 45 * 60 * 1000);
-        const teamA = group1[(i + j) % group1.length];
-        const teamB = group2[j];
-
-        fixtures.push({
-          id: `tpl-fixture-${matchNum}`,
-          tournament: TOURNAMENT_NAME,
-          matchNumber: matchNum,
-          teamAId: teamA.id,
-          teamBId: teamB.id,
-          venue: "TPL Cricket Ground",
-          overs: 5,
-          scheduledAt: scheduledDate.toISOString(),
-          status: "UPCOMING",
-          resultText: undefined,
-        });
-        matchNum++;
+      if (group1.length === 0 || group2.length === 0) {
+        const half = Math.ceil(teams.length / 2);
+        group1 = teams.slice(0, half);
+        group2 = teams.slice(half);
       }
-    }
 
-    lookup.setMatches(fixtures);
-    queryClient.setQueryData(["matches"], fixtures);
-    broadcastTournamentUpdate();
-    await refetchMatches();
+      const fixtures: Match[] = [];
+      const baseTime = new Date();
+      baseTime.setHours(9, 0, 0, 0);
+      let matchNum = 1;
+
+      for (let i = 0; i < group1.length; i++) {
+        for (let j = 0; j < group2.length; j++) {
+          const scheduledDate = new Date(baseTime.getTime() + (matchNum - 1) * 45 * 60 * 1000);
+          const teamA = group1[(i + j) % group1.length];
+          const teamB = group2[j];
+
+          fixtures.push({
+            id: `tpl-fixture-${matchNum}`,
+            tournament: TOURNAMENT_NAME,
+            matchNumber: matchNum,
+            teamAId: teamA.id,
+            teamBId: teamB.id,
+            venue: "TPL Cricket Ground",
+            overs: 5,
+            scheduledAt: scheduledDate.toISOString(),
+            status: "UPCOMING",
+            resultText: undefined,
+          });
+          matchNum++;
+        }
+      }
+
+      const savedMatches = await matchRepository.saveSchedule(fixtures);
+      queryClient.setQueryData(["matches"], savedMatches);
+      broadcastTournamentUpdate();
+      await refetchMatches();
+    } catch (err: any) {
+      console.error("[handleAutoGenerateSchedule] Error:", err);
+      setScheduleActionError(err?.message || "Unable to save match schedule. Please try again.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
   };
 
   // ── RESET MATCHES HANDLER ────────────────────────────────────────────────
-  const handleResetMatches = () => {
-    // Clear matches from local storage cache
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem("tpl_cache_matches");
-        // Clear scoring docs
-        matches.forEach((m) => {
-          window.localStorage.removeItem("tpl-scoring:" + m.id);
-        });
-      } catch {}
+  const handleResetMatches = async () => {
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
+
+    try {
+      // Clear scoring docs for upcoming matches
+      if (typeof window !== "undefined") {
+        try {
+          matches.filter((m) => m.status === "UPCOMING" || m.status === "READY").forEach((m) => {
+            window.localStorage.removeItem("tpl-scoring:" + m.id);
+          });
+        } catch {}
+      }
+      await matchRepository.resetSchedule();
+      const remainingMatches = await matchRepository.list();
+      queryClient.setQueryData(["matches"], remainingMatches);
+      broadcastTournamentUpdate();
+      setShowResetConfirm(false);
+    } catch (err: any) {
+      console.error("[handleResetMatches] Error:", err);
+      setScheduleActionError(err?.message || "Unable to reset upcoming fixtures. Please try again.");
+    } finally {
+      setIsScheduleActionLoading(false);
     }
-    lookup.setMatches([]);
-    queryClient.setQueryData(["matches"], []);
-    broadcastTournamentUpdate();
-    setShowResetConfirm(false);
   };
 
   // ── SCHEDULE KNOCKOUT HANDLER ─────────────────────────────────────────────
   const handleScheduleKnockout = async () => {
     if (!knockoutTeamA || !knockoutTeamB) return;
-    const nextMatchNum = matches.length + 1;
-    const scheduledDateTime = new Date(`${knockoutDate}T${knockoutTime}:00`);
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
 
-    const newMatch: Match = {
-      id: `tpl-knockout-${nextMatchNum}`,
-      tournament: `${TOURNAMENT_NAME} - ${knockoutStage}`,
-      matchNumber: nextMatchNum,
-      teamAId: knockoutTeamA,
-      teamBId: knockoutTeamB,
-      venue: "TPL Cricket Ground",
-      overs: 5,
-      scheduledAt: scheduledDateTime.toISOString(),
-      status: "UPCOMING",
-      resultText: undefined,
-    };
+    try {
+      const nextMatchNum = matches.length + 1;
+      const scheduledDateTime = new Date(`${knockoutDate}T${knockoutTime}:00`);
 
-    const existing = lookup.matches();
-    const updated = [...existing, newMatch];
-    lookup.setMatches(updated);
-    queryClient.setQueryData(["matches"], updated);
-    broadcastTournamentUpdate();
-    await refetchMatches();
-    setShowKnockoutModal(false);
+      const newMatch: Match = {
+        id: `tpl-knockout-${nextMatchNum}`,
+        tournament: `${TOURNAMENT_NAME} - ${knockoutStage}`,
+        matchNumber: nextMatchNum,
+        teamAId: knockoutTeamA,
+        teamBId: knockoutTeamB,
+        venue: "TPL Cricket Ground",
+        overs: 5,
+        scheduledAt: scheduledDateTime.toISOString(),
+        status: "UPCOMING",
+        resultText: undefined,
+      };
+
+      const created = await matchRepository.createMatch(newMatch);
+      const updated = [...matches, created];
+      queryClient.setQueryData(["matches"], updated);
+      broadcastTournamentUpdate();
+      await refetchMatches();
+      setShowKnockoutModal(false);
+    } catch (err: any) {
+      console.error("[handleScheduleKnockout] Error:", err);
+      setScheduleActionError(err?.message || "Unable to schedule knockout match. Please try again.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
   };
 
   // ── State 1: Verification Loading Screen (Clean Light TPL Design) ───────────
@@ -879,6 +912,21 @@ function AdminPortalPage() {
         {/* ── SECTION 4: TOURNAMENT CONTROL ──────────────────────────────── */}
         {activeSection === "tournament" && (
           <div className="flex flex-col gap-6">
+            {scheduleActionError && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-between gap-3 text-xs font-bold shadow-sm">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                  <span>{scheduleActionError}</span>
+                </div>
+                <button
+                  onClick={() => setScheduleActionError(null)}
+                  className="text-red-500 hover:text-red-800 text-[10px] uppercase font-black px-2 py-1 bg-white rounded-lg border border-red-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Control Actions Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm">
               <div>
@@ -890,24 +938,33 @@ function AdminPortalPage() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => setShowResetConfirm(true)}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-red-300 text-red-600 hover:bg-red-50 text-xs font-black uppercase tracking-wider transition-all"
+                  onClick={() => {
+                    setScheduleActionError(null);
+                    setShowResetConfirm(true);
+                  }}
+                  disabled={isScheduleActionLoading}
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Reset Matches</span>
+                  <span>Reset Upcoming Fixtures</span>
                 </button>
 
                 <button
                   onClick={handleAutoGenerateSchedule}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all"
+                  disabled={isScheduleActionLoading}
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className={`h-3.5 w-3.5 ${isScheduleActionLoading ? "animate-spin" : ""}`} />
                   <span>Auto-Generate Schedule</span>
                 </button>
 
                 <button
-                  onClick={() => setShowKnockoutModal(true)}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all"
+                  onClick={() => {
+                    setScheduleActionError(null);
+                    setShowKnockoutModal(true);
+                  }}
+                  disabled={isScheduleActionLoading}
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Schedule Knockout</span>
@@ -1191,23 +1248,40 @@ function AdminPortalPage() {
           <div className="w-full max-w-md bg-white border border-red-200 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl">
             <div className="flex items-center gap-3 text-red-600">
               <AlertCircle className="h-6 w-6 shrink-0" />
-              <h3 className="text-base font-black uppercase text-[#111827]">Reset Tournament Schedule?</h3>
+              <h3 className="text-base font-black uppercase text-[#111827]">Reset Upcoming Fixtures?</h3>
             </div>
             <p className="text-xs text-[#4B5563] leading-relaxed">
-              This action will reset the tournament schedule to the clean 9 cross-group fixtures and clear all in-progress matches.
+              This will clear scheduled fixtures that have not started. <span className="font-bold text-[#111827]">LIVE</span> and <span className="font-bold text-[#111827]">COMPLETED</span> matches will not be affected.
             </p>
+            {scheduleActionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
+                {scheduleActionError}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
-                onClick={() => setShowResetConfirm(false)}
-                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#111827] font-bold text-xs uppercase transition-colors"
+                onClick={() => {
+                  setScheduleActionError(null);
+                  setShowResetConfirm(false);
+                }}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResetMatches}
-                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase shadow-md transition-colors"
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2"
               >
-                Confirm Reset
+                {isScheduleActionLoading ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Resetting...</span>
+                  </>
+                ) : (
+                  <span>Confirm Reset</span>
+                )}
               </button>
             </div>
           </div>
