@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { MatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
 import { ScoreHeader } from "@/components/scoring/ScoreHeader";
@@ -17,6 +18,7 @@ interface Props {
 
 export function LiveScoringScreen({ store }: Props) {
   const { state, innings, match, doc, activeBowlerId, record, undo, setBowler } = store;
+  const [manualBowlerModal, setManualBowlerModal] = useState(false);
 
   if (!state || !innings || !match) return null;
 
@@ -28,8 +30,11 @@ export function LiveScoringScreen({ store }: Props) {
   const bowlingXI =
     state.setup.playingXI[bowlingTeamId]?.playerIds ?? lookup.playersOf(bowlingTeamId).map((p) => p.id);
 
-  // Needs bowler selection
+  // Needs bowler selection: required if over ended or opening over and no bowler selected
   const needsBowlerModal = innings.needsBowler && !activeBowlerId;
+  const isModalOpen = needsBowlerModal || manualBowlerModal;
+  const isOverStart = innings.legalBalls % 6 === 0;
+  const canChangeBowler = !innings.isComplete && isOverStart;
 
   const canScore = !!activeBowlerId && !!innings.strikerId && !!innings.nonStrikerId && !innings.isComplete;
   const canUndo = doc.deliveries.filter((d) => d.inningsIndex === state.currentInningsIndex).length > 0;
@@ -69,7 +74,12 @@ export function LiveScoringScreen({ store }: Props) {
             />
 
             {/* Bowler */}
-            <BowlerPanel bowlerId={activeBowlerId} bowlers={innings.bowlers} />
+            <BowlerPanel
+              bowlerId={activeBowlerId}
+              bowlers={innings.bowlers}
+              canChangeBowler={canChangeBowler}
+              onChangeBowler={() => setManualBowlerModal(true)}
+            />
 
             {/* Recent balls (mobile only — desktop shows in right column) */}
             <div className="lg:hidden">
@@ -118,13 +128,17 @@ export function LiveScoringScreen({ store }: Props) {
       </div>
 
       {/* Bowler selection modal */}
-      {needsBowlerModal && (
+      {isModalOpen && (
         <BowlerModal
           bowlingXI={bowlingXI}
           bowlers={innings.bowlers}
           previousBowlerId={innings.previousBowlerId}
           currentBowlerId={activeBowlerId ?? undefined}
-          onSelect={(id) => setBowler(id)}
+          onSelect={(id) => {
+            setBowler(id);
+            setManualBowlerModal(false);
+          }}
+          onClose={activeBowlerId ? () => setManualBowlerModal(false) : undefined}
           isOverEnd={innings.overGroups.length > 0}
         />
       )}

@@ -121,6 +121,7 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
     scheduledAt: row.start_time,
     status,
     resultText: undefined,
+    manOfTheMatchId: row.man_of_the_match_id ?? undefined,
   };
 }
 
@@ -184,6 +185,24 @@ class LookupCache {
         window.localStorage.setItem(CACHE_MATCHES_KEY, JSON.stringify(matches));
       } catch {}
     }
+  }
+
+  updateMatch(id: string, patch: Partial<Match>) {
+    const existing = this.matchesMap.get(id);
+    if (existing) {
+      const updated: Match = { ...existing, ...patch };
+      this.matchesMap.set(id, updated);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            CACHE_MATCHES_KEY,
+            JSON.stringify(Array.from(this.matchesMap.values())),
+          );
+        } catch {}
+      }
+      return updated;
+    }
+    return undefined;
   }
 
   team(id?: string): Team | undefined {

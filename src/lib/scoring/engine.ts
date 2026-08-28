@@ -50,47 +50,56 @@ export function oversText(legalBalls: number): string {
   return `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`;
 }
 
-export function ballLabel(d: Delivery): { label: string; kind: BallSummary["kind"] } {
+export function ballLabel(d?: Delivery | null): { label: string; kind: BallSummary["kind"] } {
+  if (!d) return { label: "", kind: "dot" };
   if (d.wicket) return { label: "W", kind: "wicket" };
+  const extraRuns = d.extraRuns ?? 0;
+  const batterRuns = d.batterRuns ?? 0;
   switch (d.extraType) {
     case "wide":
-      return { label: d.extraRuns > 1 ? `${d.extraRuns - 1}wd` : "wd", kind: "extra" };
+      return { label: extraRuns > 1 ? `${extraRuns - 1}wd` : "wd", kind: "extra" };
     case "noball":
-      return { label: d.batterRuns > 0 ? `${d.batterRuns}nb` : "nb", kind: "extra" };
+      return { label: batterRuns > 0 ? `${batterRuns}nb` : "nb", kind: "extra" };
     case "bye":
-      return { label: `${d.extraRuns}b`, kind: "extra" };
+      return { label: `${extraRuns}b`, kind: "extra" };
     case "legbye":
-      return { label: `${d.extraRuns}lb`, kind: "extra" };
+      return { label: `${extraRuns}lb`, kind: "extra" };
     default:
-      if (d.batterRuns === 4 || d.batterRuns === 6)
-        return { label: String(d.batterRuns), kind: "boundary" };
-      return { label: String(d.batterRuns), kind: d.batterRuns === 0 ? "dot" : "run" };
+      if (batterRuns === 4 || batterRuns === 6)
+        return { label: String(batterRuns), kind: "boundary" };
+      return { label: String(batterRuns), kind: batterRuns === 0 ? "dot" : "run" };
   }
 }
 
-export function describeDelivery(d: Delivery): string {
+export function describeDelivery(d?: Delivery | null): string {
+  if (!d) return "";
   const parts: string[] = [];
-  if (d.wicket) parts.push(`WICKET (${d.wicket.type})`);
+  if (d.wicket) {
+    const wicketType = d.wicket.type || "Out";
+    parts.push(`WICKET (${wicketType})`);
+  }
+  const extraRuns = d.extraRuns ?? 0;
+  const batterRuns = d.batterRuns ?? 0;
   switch (d.extraType) {
     case "wide":
-      parts.push(d.extraRuns > 1 ? `WIDE + ${d.extraRuns - 1}` : "WIDE");
+      parts.push(extraRuns > 1 ? `WIDE + ${extraRuns - 1}` : "WIDE");
       break;
     case "noball":
-      parts.push(d.batterRuns > 0 ? `NO BALL + ${d.batterRuns}` : "NO BALL");
+      parts.push(batterRuns > 0 ? `NO BALL + ${batterRuns}` : "NO BALL");
       break;
     case "bye":
-      parts.push(`${d.extraRuns} BYE${d.extraRuns > 1 ? "S" : ""}`);
+      parts.push(`${extraRuns} BYE${extraRuns > 1 ? "S" : ""}`);
       break;
     case "legbye":
-      parts.push(`${d.extraRuns} LEG BYE${d.extraRuns > 1 ? "S" : ""}`);
+      parts.push(`${extraRuns} LEG BYE${extraRuns > 1 ? "S" : ""}`);
       break;
     default:
-      if (d.batterRuns === 4) parts.push("FOUR");
-      else if (d.batterRuns === 6) parts.push("SIX");
-      else if (d.batterRuns === 0) parts.push("DOT BALL");
-      else parts.push(`${d.batterRuns} RUN${d.batterRuns > 1 ? "S" : ""}`);
+      if (batterRuns === 4) parts.push("FOUR");
+      else if (batterRuns === 6) parts.push("SIX");
+      else if (batterRuns === 0 && !d.wicket) parts.push("DOT BALL");
+      else if (batterRuns > 0) parts.push(`${batterRuns} RUN${batterRuns > 1 ? "S" : ""}`);
   }
-  return parts.join(" · ");
+  return parts.join(" · ") || "0 RUNS";
 }
 
 /** ---------- innings reduction ---------- */
@@ -127,6 +136,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   const batters = new Map<string, BatterStat>();
   const bowlers = new Map<string, BowlerStat>();
   const fallOfWickets: FallOfWicket[] = [];
+  const completedPartnerships: import("@/types/cricket").CompletedPartnership[] = [];
   const overGroups: OverGroup[] = [];
   const recent: BallSummary[] = [];
 
@@ -233,6 +243,16 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
           oversText: ballOversText,
           batterOutId: outId,
         });
+        // Preserve completed partnership in history before resetting
+        completedPartnerships.push({
+          wicketNumber: wickets,
+          runs: partnershipRuns,
+          balls: partnershipBalls,
+          batterAId: strikerId || "",
+          batterBId: nonStrikerId || "",
+          batterOutId: outId,
+          oversText: ballOversText,
+        });
       } else if (outBatter) {
         outBatter.dismissal = "Retired Hurt";
       }
@@ -298,6 +318,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     batters: battersList,
     bowlers: bowlersList,
     fallOfWickets,
+    partnerships: completedPartnerships,
     overGroups,
     recentBalls: recent.slice(-12),
     partnership: {

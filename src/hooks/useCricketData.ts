@@ -78,15 +78,43 @@ export function usePlayerSearch(query: string) {
   });
 }
 
+function getEffectiveMatch(m: Match): Match {
+  if (typeof window === "undefined") return m;
+  try {
+    const raw = window.localStorage.getItem("tpl-scoring:" + m.id);
+    if (raw) {
+      const doc = JSON.parse(raw);
+      if (doc.isCompleted) {
+        return {
+          ...m,
+          status: "COMPLETED",
+          manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
+        };
+      }
+      if (doc.deliveries && doc.deliveries.length > 0) {
+        return {
+          ...m,
+          status: m.status === "COMPLETED" ? "COMPLETED" : "LIVE",
+          manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
+        };
+      }
+    }
+  } catch {}
+  return m;
+}
+
 export function useMatches() {
   return useQuery<Match[]>({
     queryKey: ["matches"],
-    queryFn: () => matchRepository.list(),
+    queryFn: async () => {
+      const list = await matchRepository.list();
+      return list.map(getEffectiveMatch);
+    },
     initialData: () => {
       const cached = lookup.matches();
-      return cached.length > 0 ? cached : undefined;
+      return cached.length > 0 ? cached.map(getEffectiveMatch) : undefined;
     },
-    staleTime: 1000 * 30, // 30 seconds for matches
+    staleTime: 1000 * 5, // 5 seconds for live matches
     retry: 1,
     retryDelay: 1000,
   });
@@ -95,10 +123,18 @@ export function useMatches() {
 export function useMatch(matchId?: string) {
   return useQuery<Match | undefined>({
     queryKey: ["match", matchId],
-    queryFn: () => (matchId ? matchRepository.get(matchId) : Promise.resolve(undefined)),
-    initialData: () => (matchId ? lookup.match(matchId) : undefined),
+    queryFn: async () => {
+      if (!matchId) return undefined;
+      const m = await matchRepository.get(matchId);
+      return m ? getEffectiveMatch(m) : undefined;
+    },
+    initialData: () => {
+      if (!matchId) return undefined;
+      const m = lookup.match(matchId);
+      return m ? getEffectiveMatch(m) : undefined;
+    },
     enabled: !!matchId,
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 5,
     retry: 1,
   });
 }

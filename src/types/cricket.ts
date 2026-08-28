@@ -97,6 +97,7 @@ export interface Match {
   scheduledAt: string;
   status: MatchStatus;
   resultText?: string | undefined;
+  manOfTheMatchId?: string | undefined;
 }
 
 export interface PlayingXI {
@@ -207,6 +208,16 @@ export interface Partnership {
   batterBId?: string | undefined;
 }
 
+export interface CompletedPartnership {
+  wicketNumber: number;
+  runs: number;
+  balls: number;
+  batterAId: string;
+  batterBId: string;
+  batterOutId: string;
+  oversText: string;
+}
+
 export interface InningsState {
   index: 0 | 1;
   battingTeamId: string;
@@ -225,6 +236,7 @@ export interface InningsState {
   batters: BatterStat[];
   bowlers: BowlerStat[];
   fallOfWickets: FallOfWicket[];
+  partnerships: CompletedPartnership[];
   overGroups: OverGroup[];
   recentBalls: BallSummary[];
   partnership: Partnership;

@@ -13,6 +13,8 @@ export interface MatchDoc {
   secondInningsStarted: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
   pendingBowlerIds: [string | null, string | null];
+  playerOfTheMatchId?: string;
+  isCompleted?: boolean;
   syncQueue: string[];
 }
 
@@ -187,7 +189,10 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const currentInningsIndex: 0 | 1 = state?.currentInningsIndex ?? 0;
   const innings = state?.innings[currentInningsIndex];
   const pendingBowlerId = doc.pendingBowlerIds[currentInningsIndex];
-  const activeBowlerId = innings?.currentBowlerId ?? pendingBowlerId ?? undefined;
+  const activeBowlerId =
+    innings?.currentBowlerId ??
+    pendingBowlerId ??
+    (innings?.legalBalls === 0 && currentInningsIndex === 0 ? doc.setup.openingBowlerId : undefined);
 
   const updateSetup = useCallback(
     (patch: Partial<MatchSetup>) => {
@@ -229,8 +234,22 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         const idx = built.currentInningsIndex;
         const inn = built.innings[idx];
         if (!inn || inn.isComplete) return d;
-        const bowlerId = inn.currentBowlerId ?? d.pendingBowlerIds[idx] ?? undefined;
+        const bowlerId =
+          inn.currentBowlerId ??
+          d.pendingBowlerIds[idx] ??
+          (inn.legalBalls === 0 && idx === 0 ? d.setup.openingBowlerId : undefined);
         if (!bowlerId || !inn.strikerId || !inn.nonStrikerId) return d;
+
+        // Disallow consecutive overs by the same bowler
+        if (
+          inn.needsBowler &&
+          inn.previousBowlerId &&
+          bowlerId === inn.previousBowlerId &&
+          inn.overGroups.length > 0
+        ) {
+          return d;
+        }
+
         const delivery: Delivery = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           inningsIndex: idx,
@@ -243,8 +262,22 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           ...(input.wicket ? { wicket: input.wicket } : {}),
           timestamp: Date.now(),
         };
+
+        const isLegalBall = input.extraType !== "wide" && input.extraType !== "noball";
+        const willCompleteOver = isLegalBall && (inn.legalBalls + 1) % 6 === 0;
+
+        // When over completes, clear pendingBowlerId so next over forces bowler change
+        const nextPending: [string | null, string | null] = [...d.pendingBowlerIds] as [
+          string | null,
+          string | null,
+        ];
+        if (willCompleteOver) {
+          nextPending[idx] = null;
+        }
+
         const next = {
           ...d,
+          pendingBowlerIds: nextPending,
           deliveries: [...d.deliveries, delivery],
           syncQueue: [...d.syncQueue, delivery.id],
         };
@@ -284,6 +317,34 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     [broadcastDoc],
   );
 
+  const setPlayerOfTheMatch = useCallback(
+    (playerId: string) => {
+      setDoc((d) => {
+        const next = { ...d, playerOfTheMatchId: playerId };
+        broadcastDoc(next);
+        lookup.updateMatch(matchId, { manOfTheMatchId: playerId });
+        return next;
+      });
+    },
+    [matchId, broadcastDoc],
+  );
+
+  const completeMatch = useCallback(
+    (resultText?: string) => {
+      setDoc((d) => {
+        const next = { ...d, isCompleted: true };
+        broadcastDoc(next);
+        lookup.updateMatch(matchId, {
+          status: "COMPLETED",
+          resultText: resultText ?? state?.resultText,
+          manOfTheMatchId: d.playerOfTheMatchId,
+        });
+        return next;
+      });
+    },
+    [matchId, state?.resultText, broadcastDoc],
+  );
+
   const startSecondInnings = useCallback(
     (openers: { strikerId: string; nonStrikerId: string }) => {
       setDoc((d) => {
@@ -301,6 +362,17 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     broadcastDoc(empty);
   }, [matchId, broadcastDoc]);
 
+  // Keep lookup cache synchronized with completed state
+  useEffect(() => {
+    if (state?.phase === "complete" || doc.isCompleted) {
+      lookup.updateMatch(matchId, {
+        status: "COMPLETED",
+        resultText: state?.resultText,
+        manOfTheMatchId: doc.playerOfTheMatchId,
+      });
+    }
+  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId]);
+
   return {
     doc,
     hydrated,
@@ -314,6 +386,8 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     undo,
     editDelivery,
     startSecondInnings,
+    setPlayerOfTheMatch,
+    completeMatch,
     reset,
   };
 }
