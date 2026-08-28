@@ -14,7 +14,7 @@ export const TOURNAMENT_NAME = "TPL 2026";
 const REQUEST_TIMEOUT_MS = 6000; // 6 seconds maximum
 
 /**
- * Strict timeout wrapper preventing infinite network hangs on mobile devices.
+ * Strict timeout wrapper preventing infinite network hangs.
  */
 async function withTimeout<T>(
   promise: PromiseLike<T>,
@@ -248,7 +248,7 @@ export interface MatchRepository {
   get(id: string): Promise<Match | undefined>;
 }
 
-// ── Supabase Repositories with Strict Timeout & Resilient Fallbacks ─────────
+// ── Supabase Repositories with Explicit Diagnostics & Timeouts ───────────────
 
 export class SupabaseTeamRepository implements TeamRepository {
   async list(): Promise<Team[]> {
@@ -261,7 +261,7 @@ export class SupabaseTeamRepository implements TeamRepository {
 
       const { data, error } = response;
       if (error) {
-        console.warn("[SupabaseTeamRepository] list warning:", error.message);
+        console.warn("[SupabaseTeamRepository] list notice:", error.message);
         if (lookup.teams().length > 0) return lookup.teams();
         throw new Error(`Failed to load teams: ${error.message}`);
       }
@@ -310,7 +310,7 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
       const { data, error } = response;
       if (error) {
-        console.warn("[SupabasePlayerRepository] list warning:", error.message);
+        console.warn("[SupabasePlayerRepository] list notice:", error.message);
         if (lookup.players().length > 0) return lookup.players();
         throw new Error(`Failed to load players: ${error.message}`);
       }
@@ -402,6 +402,9 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
+    const startTime = Date.now();
+    console.log("[MATCH_FETCH_START] Initiating match query from Supabase...");
+
     try {
       const response = await withTimeout(
         supabase.from("matches").select("*").order("start_time", { ascending: true }),
@@ -409,19 +412,28 @@ export class SupabaseMatchRepository implements MatchRepository {
         "Matches load timed out",
       );
 
-      const { data, error } = response;
+      const duration = Date.now() - startTime;
+      const { data, error, status } = response;
+
       if (error) {
-        console.warn("[SupabaseMatchRepository] list warning:", error.message);
+        console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — HTTP ${status}: ${error.message}`);
         if (lookup.matches().length > 0) return lookup.matches();
         throw new Error(`Failed to load matches: ${error.message}`);
       }
 
-      const domainMatches = (data as SupabaseMatch[] || []).map((m, idx) =>
-        toMatch(m, idx + 1),
-      );
+      const rawList = (data as SupabaseMatch[] || []);
+      console.log(`[MATCH_FETCH_SUCCESS] — ${duration}ms — ${rawList.length} matches received`);
+
+      const domainMatches = rawList.map((m, idx) => toMatch(m, idx + 1));
       lookup.setMatches(domainMatches);
       return domainMatches;
-    } catch (err) {
+    } catch (err: any) {
+      const duration = Date.now() - startTime;
+      if (err?.message?.includes("timed out")) {
+        console.warn(`[MATCH_FETCH_TIMEOUT] — ${duration}ms — Request exceeded limit`);
+      } else {
+        console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — ${err?.message || err}`);
+      }
       if (lookup.matches().length > 0) {
         return lookup.matches();
       }

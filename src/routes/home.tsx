@@ -15,23 +15,26 @@ function PublicHome() {
   const { data: allMatches = [], isLoading: queryLoading, isError: queryError, error, refetch } = useMatches();
   useTeams();
 
-  const [timedOut, setTimedOut] = useState(false);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
+    // Independent component-level timeout enforcing a strict 5s maximum on loading state
     const timer = setTimeout(() => {
-      setTimedOut(true);
-    }, 5000); // 5 seconds hard cap
+      setLoadingTimedOut(true);
+    }, 5000);
+
     return () => clearTimeout(timer);
   }, []);
 
   const liveMatches = allMatches.filter((m) => m.status === "LIVE");
   const displayMatches = liveMatches.length > 0 ? liveMatches : allMatches.slice(0, 3);
 
-  const isLoading = queryLoading && !timedOut;
-  const isError = queryError || (timedOut && displayMatches.length === 0);
+  // Loading state strictly terminates if query finishes OR 5s timer expires OR data is present
+  const isLoading = queryLoading && !loadingTimedOut && displayMatches.length === 0;
+  const isError = (queryError || (loadingTimedOut && allMatches.length === 0)) && displayMatches.length === 0;
 
   const handleRetry = () => {
-    setTimedOut(false);
+    setLoadingTimedOut(false);
     refetch();
   };
 
@@ -71,7 +74,7 @@ function PublicHome() {
           )}
 
           {/* Loading Skeleton (Only shown for max 5 seconds if zero data exists) */}
-          {isLoading && displayMatches.length === 0 && (
+          {isLoading && (
             <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-2xl">
               <RefreshCw className="h-6 w-6 text-[#D9A928] animate-spin" />
               <p className="text-xs font-bold text-[#5F6368]">Loading live match fixtures...</p>
@@ -79,7 +82,7 @@ function PublicHome() {
           )}
 
           {/* Error / Timeout State with Retry */}
-          {isError && displayMatches.length === 0 && (
+          {isError && !isLoading && (
             <div className="card-surface p-6 sm:p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-2xl">
               <AlertCircle className="h-8 w-8 text-[#D9A928]" />
               <p className="text-sm font-black text-[#111111] uppercase tracking-wide">
