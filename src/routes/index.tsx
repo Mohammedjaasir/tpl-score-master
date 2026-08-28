@@ -3,16 +3,19 @@ import { useState } from "react";
 import {
   ArrowRight,
   Radio,
+  ClipboardCheck,
   Trophy,
   Zap,
   BarChart2,
   Calendar,
-  Users,
+  CalendarDays,
+  UsersRound,
   Star,
   AlignJustify,
   X,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import SocialCards from "@/components/ui/card-fan-carousel";
 
 export const Route = createFileRoute("/")({
   component: LandingScreen,
@@ -146,10 +149,8 @@ function LandingScreen() {
           2. HERO — full-screen video background
           ══════════════════════════════════════════════════════════════════════ */}
       <section
-        className="relative overflow-hidden flex items-center w-full"
+        className="relative overflow-hidden flex flex-col md:flex-row md:items-center w-full h-auto min-h-0 md:h-[100dvh] md:min-h-[600px]"
         style={{
-          height: "100dvh",
-          minHeight: "600px",
           backgroundImage: "url('/hero-cricket-1.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -176,7 +177,7 @@ function LandingScreen() {
           aria-hidden="true"
         />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 w-full py-24 sm:py-28 lg:py-36">
+        <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 w-full pt-20 pb-16 md:py-28 lg:py-36">
           <div className="max-w-3xl">
             {/* Season badge */}
             <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-[#D9A928]/40 bg-[#D9A928]/10">
@@ -517,23 +518,101 @@ function LandingScreen() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {[
-              { rank: "01", category: "TOP RUN SCORER", stat: "286 Runs", icon: <Trophy className="h-5 w-5" />, color: "#D9A928" },
-              { rank: "02", category: "TOP WICKET TAKER", stat: "14 Wickets", icon: <Zap className="h-5 w-5" />, color: "#0A0A0A" },
+              {
+                rank: "01",
+                category: "TOP RUN SCORER",
+                stat: "286 Runs",
+                icon: (
+                  <>
+                    <svg width="0" height="0" className="absolute pointer-events-none" style={{ position: "absolute" }}>
+                      <defs>
+                        <filter id="erode-bat">
+                          <feMorphology operator="erode" radius="0.08" in="SourceGraphic" />
+                        </filter>
+                      </defs>
+                    </svg>
+                    <img
+                      src="/cricket-bat-icon.png"
+                      alt="Bat Icon"
+                      className="h-5 w-5 object-contain"
+                      style={{
+                        mixBlendMode: "multiply",
+                        filter: "url(#erode-bat)"
+                      }}
+                    />
+                  </>
+                ),
+                color: "#D9A928"
+              },
+              {
+                rank: "02",
+                category: "TOP WICKET TAKER",
+                stat: "14 Wickets",
+                icon: (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 3c-2.5 4.5-2.5 13.5 0 18" strokeDasharray="2.5 2" />
+                  </svg>
+                ),
+                color: "#D9A928"
+              },
               { rank: "03", category: "PLAYER OF TOURNAMENT", stat: "Leading Performer", icon: <Star className="h-5 w-5" />, color: "#D9A928" },
             ].map((p) => (
-              <div key={p.rank} className="rounded-3xl border border-black/[0.08] bg-white p-6 hover:border-[#D9A928]/40 hover:-translate-y-1 transition-all">
-                <div className="flex items-center justify-between mb-5">
+              <div key={p.rank} className="relative overflow-hidden rounded-3xl border border-black/[0.08] bg-white p-6 hover:border-[#D9A928]/40 hover:-translate-y-1 transition-all">
+                {p.rank === "01" && (
+                  <>
+                    <div
+                      className="absolute inset-0 pointer-events-none z-0"
+                      style={{
+                        backgroundImage: "url('/hero-batsman-top-scorer.png')",
+                        backgroundSize: "contain",
+                        backgroundPosition: "right bottom",
+                        backgroundRepeat: "no-repeat",
+                        opacity: 0.9,
+                        mixBlendMode: "multiply",
+                      }}
+                    />
+                    <div className="absolute inset-0 pointer-events-none z-0 bg-white/20" />
+                  </>
+                )}
+                {p.rank === "02" && (
                   <div
-                    className="h-10 w-10 rounded-xl grid place-items-center text-black"
-                    style={{ background: p.color === "#D9A928" ? "linear-gradient(135deg, #F4C542, #D9A928)" : "#0A0A0A" }}
-                  >
-                    <span style={{ color: p.color === "#D9A928" ? "#000" : "#D9A928" }}>{p.icon}</span>
+                    className="absolute inset-0 pointer-events-none z-0"
+                    style={{
+                      backgroundImage: "url('/hero-bowler-top-wicket-clean.png')",
+                      backgroundSize: "contain",
+                      backgroundPosition: "right bottom",
+                      backgroundRepeat: "no-repeat",
+                      opacity: 1.0,
+                    }}
+                  />
+                )}
+                {p.rank === "03" && (
+                  <div
+                    className="absolute inset-0 pointer-events-none z-0"
+                    style={{
+                      backgroundImage: "url('/hero-helmet-player-of-tournament-clean.png')",
+                      backgroundSize: "contain",
+                      backgroundPosition: "right bottom",
+                      backgroundRepeat: "no-repeat",
+                      opacity: 1.0,
+                    }}
+                  />
+                )}
+                <div className="relative z-10 flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-5">
+                    <div
+                      className="h-10 w-10 rounded-xl grid place-items-center text-black"
+                      style={{ background: p.color === "#D9A928" ? "linear-gradient(135deg, #F4C542, #D9A928)" : "#0A0A0A" }}
+                    >
+                      <span style={{ color: p.color === "#D9A928" ? "#000" : "#D9A928" }}>{p.icon}</span>
+                    </div>
+                    <span className="text-2xl font-black text-black/10">{p.rank}</span>
                   </div>
-                  <span className="text-2xl font-black text-black/10">{p.rank}</span>
+                  <p className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase mb-2">{p.category}</p>
+                  <p className="font-display font-black text-2xl uppercase text-[#0A0A0A] leading-none">PLAYER NAME</p>
+                  <p className="mt-2 text-base font-black text-[#0A0A0A]/60">{p.stat}</p>
                 </div>
-                <p className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase mb-2">{p.category}</p>
-                <p className="font-display font-black text-2xl uppercase text-[#0A0A0A] leading-none">PLAYER NAME</p>
-                <p className="mt-2 text-base font-black text-[#0A0A0A]/60">{p.stat}</p>
               </div>
             ))}
           </div>
@@ -545,13 +624,18 @@ function LandingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       <section
         id="results"
-        className="relative py-20 lg:py-28 overflow-hidden bg-cover bg-center"
-        style={{ backgroundImage: "url('/match-centre-bg.jpg')" }}
+        className="relative pt-2 pb-12 md:py-20 lg:py-28 overflow-hidden"
+        style={{
+          backgroundImage: "url('/match-centre-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center center",
+        }}
       >
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-[#0A0A0A]/85 pointer-events-none" />
         <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="text-center mb-14">
+          <div className="text-center mb-8 md:mb-14">
             <SectionLabel>MATCH CENTRE</SectionLabel>
             <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.9] tracking-tight text-white">
               EVERYTHING<br />
@@ -564,70 +648,52 @@ function LandingScreen() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-            {[
-              {
-                icon: <Radio className="h-5 w-5" />,
-                title: "LIVE MATCHES",
-                desc: "Real-time scorecards and match updates.",
-                link: "/live",
-                img: "/card-live.jpg",
-              },
-              {
-                icon: <Trophy className="h-5 w-5" />,
-                title: "RESULTS",
-                desc: "Review completed matches and final scores.",
-                link: "/scorecards",
-                img: "/card-results.jpg",
-              },
-              {
-                icon: <Calendar className="h-5 w-5" />,
-                title: "FIXTURES",
-                desc: "Explore upcoming games and tournament schedule.",
-                link: "/matches",
-                img: "/card-fixtures.jpg",
-              },
-              {
-                icon: <Users className="h-5 w-5" />,
-                title: "TEAMS",
-                desc: "Meet the squads competing for the TPL 2026 title.",
-                link: "/matches",
-                img: "/card-teams.jpg",
-              },
-            ].map((item) => (
-              <Link
-                key={item.title}
-                to={item.link}
-                className="group relative overflow-hidden rounded-xl border border-white/[0.08] hover:border-[#D9A928]/40 transition-all"
-                style={{ minHeight: "220px" }}
-              >
-                {/* Photo background */}
-                <div
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                  style={{ backgroundImage: `url('${item.img}')` }}
-                />
-                {/* Dark overlay */}
-                <div className="absolute inset-0 bg-[#0A0A0A]/75 group-hover:bg-[#0A0A0A]/65 transition-colors" />
-
-                {/* Content */}
-                <div className="relative z-10 flex flex-col justify-between h-full p-5">
-                  {/* Icon */}
-                  <div className="h-10 w-10 rounded-lg bg-[#D9A928]/15 border border-[#D9A928]/25 grid place-items-center text-[#D9A928]">
-                    {item.icon}
-                  </div>
-
-                  {/* Text + arrow */}
-                  <div className="mt-12">
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white mb-1.5">{item.title}</p>
-                    <p className="text-[12px] text-white/50 leading-relaxed">{item.desc}</p>
-                    <div className="mt-3 flex items-center gap-1 text-[#D9A928] opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[10px] font-black uppercase tracking-wider">View</span>
-                      <ArrowRight className="h-3 w-3" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+          <div className="-mt-20 md:-mt-24 lg:-mt-28 mb-10 w-full flex justify-center">
+            <SocialCards
+              cards={[
+                {
+                  icon: (
+                    <svg viewBox="0 0 58 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", height: "100%" }}>
+                      <rect width="58" height="22" rx="11" fill="currentColor" fillOpacity="0.18"/>
+                      <circle cx="13" cy="11" r="7.5" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1"/>
+                      <polygon points="10.5,7.5 18,11 10.5,14.5" fill="currentColor"/>
+                      <text x="24" y="15" fontFamily="Arial, sans-serif" fontSize="8.5" fontWeight="900" fill="currentColor" letterSpacing="1.5">LIVE</text>
+                    </svg>
+                  ),
+                  wideIcon: true,
+                  spacer: true,
+                  title: "LIVE MATCHES",
+                  desc: "Real-time scorecards and match updates.",
+                  link: "/live",
+                  img: "/card-live.jpg",
+                  bgSize: "cover",
+                },
+                {
+                  icon: <ClipboardCheck className="h-5 w-5" />,
+                  title: "RESULTS",
+                  desc: "Review completed matches and final scores.",
+                  link: "/scorecards",
+                  img: "/card-results.jpg",
+                  bgSize: "cover",
+                },
+                {
+                  icon: <CalendarDays className="h-5 w-5" />,
+                  title: "FIXTURES",
+                  desc: "Explore upcoming games and tournament schedule.",
+                  link: "/matches",
+                  img: "/card-fixtures.jpg",
+                  bgSize: "cover",
+                },
+                {
+                  icon: <UsersRound className="h-5 w-5" />,
+                  title: "TEAMS",
+                  desc: "Meet the squads competing for the TPL 2026 title.",
+                  link: "/matches",
+                  img: "/card-teams.jpg",
+                  bgSize: "cover",
+                },
+              ]}
+            />
           </div>
 
           <div className="text-center">
