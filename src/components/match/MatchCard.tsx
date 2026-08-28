@@ -4,6 +4,7 @@ import { lookup } from "@/lib/repositories";
 import { useMatchStore } from "@/lib/scoring/store";
 import { formatMatchTime } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { TeamLogo } from "@/components/team/TeamLogo";
 
 // Preset cricket action backdrops cycling per match
 const MATCH_BACKDROPS = [
@@ -29,7 +30,7 @@ export function StatusPill({ status }: { status: Match["status"] }) {
   if (status === "COMPLETED") {
     return (
       <span className="inline-flex items-center rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-white uppercase border border-white/10">
-        FINAL
+        COMPLETED
       </span>
     );
   }
@@ -40,18 +41,20 @@ export function StatusPill({ status }: { status: Match["status"] }) {
   );
 }
 
-// ── Team Crest (with real-time live score overlay if batting) ─────────────────
+// ── Team Crest ────────────────────────────────────────────────────────────────
 
 function TeamCrest({
   teamId,
   scoreText,
   oversText,
   isBatting,
+  showScore = true,
 }: {
   teamId: string;
   scoreText?: string;
   oversText?: string;
   isBatting?: boolean;
+  showScore?: boolean;
 }) {
   const team = lookup.team(teamId);
   const words = (team?.name ?? "Team").split(" ");
@@ -59,27 +62,25 @@ function TeamCrest({
   const line2 = words.length > 1 ? words[words.length - 1] : "";
 
   return (
-    <div className="flex flex-col items-center gap-1.5 text-center min-w-0 w-[78px] sm:w-[94px] md:w-[115px]">
-      <div className={`relative h-11 w-11 sm:h-14 sm:w-14 md:h-16 md:w-16 shrink-0 rounded-xl bg-black/50 border p-1 flex items-center justify-center shadow-md transition-colors ${
-        isBatting ? "border-[#D9A928] shadow-[0_0_15px_rgba(217,169,40,0.3)]" : "border-white/15 group-hover:border-[#D9A928]/40"
-      }`}>
-        {team?.logoUrl ? (
-          <img src={team.logoUrl} alt={team.name ?? "team"} className="h-full w-full object-contain drop-shadow-md" />
-        ) : (
-          <span className="text-[11px] font-black text-[#D9A928]">{team?.shortName?.slice(0, 3) ?? "TPL"}</span>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-1.5 text-center min-w-0 w-[84px] sm:w-[98px] md:w-[120px]">
+      <TeamLogo
+        logoUrl={team?.logoUrl}
+        name={team?.name}
+        shortName={team?.shortName}
+        isBatting={isBatting}
+        size="md"
+      />
 
-      <div className="leading-tight">
-        <p className="text-[9px] sm:text-[10px] font-semibold text-white/65 uppercase tracking-wider truncate w-[78px] sm:w-[94px] md:w-[115px]">
+      <div className="leading-tight w-full">
+        <p className="text-[9px] sm:text-[10px] font-semibold text-white/65 uppercase tracking-wider truncate w-full">
           {line1}
         </p>
-        <p className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wide truncate w-[78px] sm:w-[94px] md:w-[115px]">
+        <p className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wide truncate w-full">
           {line2 || line1}
         </p>
 
-        {/* Live Score if available */}
-        {scoreText && (
+        {/* Live or Final Score (only if match has started/completed) */}
+        {showScore && scoreText && (
           <div className="mt-1">
             <span className="inline-block px-1.5 py-0.5 rounded bg-black/60 border border-white/10 text-[10px] sm:text-xs font-black text-[#D9A928] tabular-nums">
               {scoreText}
@@ -102,8 +103,11 @@ interface MatchCardProps {
 export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   const { state } = useMatchStore(match.id, match);
 
-  const isLive = match.status === "LIVE" || state?.phase === "innings1" || state?.phase === "innings2";
+  // Derive unambiguous effective status
   const isDone = match.status === "COMPLETED" || state?.phase === "complete";
+  const hasDeliveries = (state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0;
+  const isLive = !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
+  const effectiveStatus = isDone ? "COMPLETED" : isLive ? "LIVE" : match.status === "READY" ? "READY" : "UPCOMING";
 
   const time = formatMatchTime(match?.scheduledAt);
 
@@ -146,8 +150,10 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
     ? inn2.oversText
     : undefined;
 
+  const resultText = isDone ? (match.resultText ?? state?.resultText) : undefined;
+
   return (
-    <article className="group relative overflow-hidden rounded-2xl bg-[#121316] border border-white/[0.12] shadow-2xl transition-all duration-300 hover:border-[#D9A928]/40">
+    <article className="group relative overflow-hidden rounded-2xl bg-[#121316] border border-white/[0.12] shadow-2xl transition-all duration-300 hover:border-[#D9A928]/40 flex flex-col justify-between w-full">
       {/* ── Stadium Backdrop ─────────────────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <img
@@ -160,117 +166,86 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
         <div className="absolute top-0 right-1/4 w-40 h-40 bg-[#D9A928]/8 rounded-full blur-3xl" />
       </div>
 
-      {/* ── Card Body ────────────────────────────────────────────────────── */}
-      <div className="relative z-10">
+      {/* ── Card Content (Fully contained, zero clipping) ────────────────── */}
+      <div className="relative z-10 flex flex-col p-4 sm:p-5 gap-4">
 
-        {/* ── ROW 1: Status + Match Number ─────────────────────────── */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <StatusPill status={isLive ? "LIVE" : match.status} />
+        {/* ── TOP BAR: Status + Match # ────────────────────────────────────── */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <StatusPill status={effectiveStatus} />
           <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
             Match #{String(match.matchNumber).padStart(2, "0")}
           </span>
         </div>
 
-        {/* ── ROW 2: Left meta + Teams center + (desktop) Button right ─ */}
-        <div className="flex items-center gap-3 px-4 pb-3 md:pb-4">
+        {/* ── CENTER MATCHUP: Team A vs Team B ─────────────────────────────── */}
+        <div className="flex items-center justify-center gap-3 sm:gap-6 my-1">
+          <TeamCrest
+            teamId={match.teamAId}
+            scoreText={teamAScore}
+            oversText={teamAOvers}
+            isBatting={isLive && currentInn?.battingTeamId === match.teamAId}
+            showScore={isLive || isDone}
+          />
 
-          {/* Left: Metadata (time / venue / overs) */}
-          <div className="flex flex-col gap-1 shrink-0 w-[110px] sm:w-[130px] md:w-[170px]">
-            <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide leading-tight">
-              TPL 2026
-            </p>
-            <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs text-white/65 font-medium">
-              <div className="flex items-center gap-1.5">
-                <Clock className="h-3 w-3 text-[#D9A928] shrink-0" />
-                <span>{time}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-3 w-3 text-[#D9A928] shrink-0" />
-                <span className="truncate max-w-[90px] sm:max-w-[110px]">{match.venue}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Layers className="h-3 w-3 text-[#D9A928] shrink-0" />
-                <span>{match.overs} overs</span>
-              </div>
-            </div>
+          <div className="flex flex-col items-center gap-1 shrink-0 px-1">
+            <span className="h-px w-4 bg-[#D9A928]/50" />
+            <span className="text-[10px] sm:text-xs font-black tracking-widest text-[#D9A928] uppercase">VS</span>
+            <span className="h-px w-4 bg-[#D9A928]/50" />
           </div>
 
-          {/* Center: Head-to-head teams with Live Scores */}
-          <div className="flex-1 flex items-center justify-center gap-2 sm:gap-3">
-            <TeamCrest
-              teamId={match.teamAId}
-              scoreText={teamAScore}
-              oversText={teamAOvers}
-              isBatting={currentInn?.battingTeamId === match.teamAId}
-            />
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
-              <span className="h-px w-4 bg-[#D9A928]/50" />
-              <span className="text-[10px] sm:text-xs font-black tracking-widest text-[#D9A928] uppercase">VS</span>
-              <span className="h-px w-4 bg-[#D9A928]/50" />
-            </div>
-            <TeamCrest
-              teamId={match.teamBId}
-              scoreText={teamBScore}
-              oversText={teamBOvers}
-              isBatting={currentInn?.battingTeamId === match.teamBId}
-            />
-          </div>
-
-          {/* Right: Button (desktop only — on mobile it's below) */}
-          <div className="hidden md:flex shrink-0">
-            {isDone ? (
-              <Link
-                to="/scorecard/$matchId"
-                params={{ matchId: match.id }}
-                className="tap flex items-center gap-2 px-5 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs tracking-widest uppercase border border-white/20 transition-all"
-              >
-                {buttonLabel}
-                <ArrowRight className="h-3.5 w-3.5 text-[#D9A928]" />
-              </Link>
-            ) : (
-              <Link
-                to={targetRoute}
-                params={{ matchId: match.id }}
-                className="tap group/btn flex items-center gap-2 px-6 py-3 rounded-lg bg-[#D9A928] hover:bg-[#F4C542] active:bg-[#9A6A05] text-[#111111] font-black text-xs tracking-widest uppercase shadow-[0_4px_16px_rgba(217,169,40,0.4)] transition-all hover:scale-[1.02]"
-              >
-                {buttonLabel}
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
-              </Link>
-            )}
-          </div>
+          <TeamCrest
+            teamId={match.teamBId}
+            scoreText={teamBScore}
+            oversText={teamBOvers}
+            isBatting={isLive && currentInn?.battingTeamId === match.teamBId}
+            showScore={isLive || isDone}
+          />
         </div>
 
-        {/* ── ROW 3: Mobile action button — full width ──────────────── */}
-        <div className="md:hidden border-t border-white/10 px-4 py-3">
-          {isDone ? (
-            <Link
-              to="/scorecard/$matchId"
-              params={{ matchId: match.id }}
-              className="tap flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs tracking-widest uppercase border border-white/20 transition-all"
-            >
-              {buttonLabel}
-              <ArrowRight className="h-3.5 w-3.5 text-[#D9A928]" />
-            </Link>
-          ) : (
-            <Link
-              to={targetRoute}
-              params={{ matchId: match.id }}
-              className="tap flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] font-black text-xs tracking-widest uppercase shadow-[0_4px_16px_rgba(217,169,40,0.35)] transition-all"
-            >
-              {buttonLabel}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
-        </div>
-
-        {/* Result strip if completed */}
-        {(state?.resultText || match.resultText) && (
-          <div className="border-t border-white/10 bg-black/40 px-4 py-2 text-center">
-            <p className="text-[10px] font-black text-[#D9A928] uppercase tracking-wide">
-              {state?.resultText ?? match.resultText}
+        {/* ── RESULT BANNER (Only if Completed) ────────────────────────────── */}
+        {resultText && (
+          <div className="rounded-xl bg-black/50 border border-white/10 py-1.5 px-3 text-center">
+            <p className="text-xs font-black text-[#D9A928] uppercase tracking-wide truncate">
+              {resultText}
             </p>
           </div>
         )}
+
+        {/* ── BOTTOM ACTION & METADATA BAR ─────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-white/10">
+          {/* Metadata */}
+          <div className="flex items-center gap-3 text-[10px] sm:text-xs text-white/60 font-medium overflow-hidden">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Clock className="h-3 w-3 text-[#D9A928]" />
+              <span>{time}</span>
+            </div>
+            <span className="text-white/20">•</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <MapPin className="h-3 w-3 text-[#D9A928] shrink-0" />
+              <span className="truncate">{match.venue}</span>
+            </div>
+            <span className="text-white/20">•</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Layers className="h-3 w-3 text-[#D9A928]" />
+              <span>{match.overs} ov</span>
+            </div>
+          </div>
+
+          {/* CTA Button (100% visible inside card) */}
+          <Link
+            to={targetRoute}
+            params={{ matchId: match.id }}
+            className={`tap shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase transition-all shadow-md active:scale-[0.99] ${
+              isDone
+                ? "bg-white/10 hover:bg-white/20 text-white border border-white/15"
+                : "bg-[#D9A928] hover:bg-[#E5B537] text-[#111111]"
+            }`}
+          >
+            <span>{buttonLabel}</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
       </div>
     </article>
   );

@@ -7,6 +7,7 @@ import {
   lookup,
 } from "@/lib/repositories";
 import type { Match, Player, Team } from "@/types/cricket";
+import { buildMatchState } from "@/lib/scoring/engine";
 import { useEffect } from "react";
 
 export function usePrefetchCricketData() {
@@ -85,21 +86,54 @@ function getEffectiveMatch(m: Match): Match {
     if (raw) {
       const doc = JSON.parse(raw);
       if (doc.isCompleted) {
+        const computed = buildMatchState({
+          match: m,
+          setup: doc.setup || { playingXI: {} },
+          deliveries: doc.deliveries || [],
+          secondInningsStarted: doc.secondInningsStarted || false,
+          secondInningsOpeners: doc.secondInningsOpeners,
+        });
         return {
           ...m,
           status: "COMPLETED",
+          resultText: computed.resultText ?? m.resultText,
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
       if (doc.deliveries && doc.deliveries.length > 0) {
+        const computed = buildMatchState({
+          match: m,
+          setup: doc.setup || { playingXI: {} },
+          deliveries: doc.deliveries,
+          secondInningsStarted: doc.secondInningsStarted || false,
+          secondInningsOpeners: doc.secondInningsOpeners,
+        });
+        if (computed.phase === "complete") {
+          return {
+            ...m,
+            status: "COMPLETED",
+            resultText: computed.resultText ?? m.resultText,
+            manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
+          };
+        }
         return {
           ...m,
-          status: m.status === "COMPLETED" ? "COMPLETED" : "LIVE",
+          status: "LIVE",
+          resultText: undefined,
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
     }
   } catch {}
+
+  // A match without active scorer deliveries is strictly UPCOMING / READY
+  if (m.status === "LIVE") {
+    return {
+      ...m,
+      status: "UPCOMING",
+    };
+  }
+
   return m;
 }
 

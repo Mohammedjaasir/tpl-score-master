@@ -7,6 +7,8 @@ import { SponsorsSection } from "@/components/home/SponsorsSection";
 import { useMatches, useTeams, usePrefetchCricketData } from "@/hooks/useCricketData";
 import { Radio, Calendar, ArrowRight, AlertCircle, RefreshCw, Trophy } from "lucide-react";
 
+import { NoLiveMatchesCard } from "@/components/home/NoLiveMatchesCard";
+
 export const Route = createFileRoute("/home")({
   component: PublicHome,
 });
@@ -58,14 +60,12 @@ function PublicHome() {
                 LIVE MATCHES
               </h2>
             </div>
-            {liveMatches.length > 0 && (
-              <Link
-                to="/scorecards"
-                className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
-              >
-                Scorecard <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
+            <Link
+              to="/scorecards"
+              className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
+            >
+              SCORECARD <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
           {/* Loading Skeleton */}
@@ -105,26 +105,9 @@ function PublicHome() {
             </div>
           )}
 
-          {/* Clean Professional Empty State when 0 matches are live */}
+          {/* Exact Reference Empty State when 0 matches are live */}
           {!isLoading && !isError && liveMatches.length === 0 && (
-            <div className="p-8 sm:p-10 rounded-2xl bg-white border border-[#E5E5E5] text-center flex flex-col items-center justify-center gap-3 shadow-sm">
-              <div className="h-12 w-12 rounded-full bg-[#D9A928]/10 flex items-center justify-center text-[#9A6A05]">
-                <Radio className="h-6 w-6 text-[#D9A928]" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-[#111111]">
-                NO LIVE MATCHES RIGHT NOW
-              </h3>
-              <p className="text-xs text-[#5F6368] max-w-md font-medium">
-                Next scheduled matches are available in Fixtures. Stay tuned for live ball-by-ball scoring when matches begin.
-              </p>
-              <Link
-                to="/matches"
-                className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-[#111111] shadow-sm transition-all"
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                <span>View Fixtures</span>
-              </Link>
-            </div>
+            <NoLiveMatchesCard />
           )}
         </section>
 
@@ -142,7 +125,7 @@ function PublicHome() {
                 to="/matches"
                 className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
               >
-                Full Schedule <ArrowRight className="h-3.5 w-3.5" />
+                VIEW ALL <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
 

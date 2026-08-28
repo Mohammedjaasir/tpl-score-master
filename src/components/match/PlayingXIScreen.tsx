@@ -108,32 +108,32 @@ function TeamSection({
                 </p>
               </div>
 
-              {/* Captain / Keeper badges */}
+              {/* Captain (C) / Wicketkeeper (WK) badges */}
               {isSelected && (
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => onSetCaptain(p.id)}
-                    title="Set Captain"
-                    className={`tap grid h-7 w-7 place-items-center rounded-full transition-colors ${
+                    title="Set Captain (C)"
+                    className={`tap grid h-7 w-7 place-items-center rounded-full text-xs font-black transition-all ${
                       isCaptain
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
+                        ? "bg-[#D9A928] text-black ring-2 ring-[#D9A928]/40 shadow-sm"
+                        : "bg-secondary text-muted-foreground hover:bg-[#D9A928]/20 hover:text-foreground"
                     }`}
-                    aria-label={isCaptain ? "Captain" : "Set as captain"}
+                    aria-label={isCaptain ? "Captain (C)" : "Set as captain (C)"}
                   >
-                    <Star className="h-3.5 w-3.5" fill={isCaptain ? "currentColor" : "none"} />
+                    C
                   </button>
                   <button
                     onClick={() => onSetKeeper(p.id)}
-                    title="Set Wicketkeeper"
-                    className={`tap grid h-7 w-7 place-items-center rounded-full transition-colors ${
+                    title="Set Wicketkeeper (WK)"
+                    className={`tap grid h-7 w-7 place-items-center rounded-full text-[10px] font-black transition-all ${
                       isKeeper
-                        ? "bg-blue-100 text-blue-600"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
+                        ? "bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-sm"
+                        : "bg-secondary text-muted-foreground hover:bg-blue-100 hover:text-foreground"
                     }`}
-                    aria-label={isKeeper ? "Wicketkeeper" : "Set as wicketkeeper"}
+                    aria-label={isKeeper ? "Wicketkeeper (WK)" : "Set as wicketkeeper (WK)"}
                   >
-                    <Shield className="h-3.5 w-3.5" fill={isKeeper ? "currentColor" : "none"} />
+                    WK
                   </button>
                 </div>
               )}

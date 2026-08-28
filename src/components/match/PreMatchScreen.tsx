@@ -5,6 +5,8 @@ import { useTeam } from "@/hooks/useCricketData";
 import { lookup } from "@/lib/repositories";
 import { MapPin, Clock } from "lucide-react";
 
+import { TeamLogo } from "@/components/team/TeamLogo";
+
 interface Props {
   match: Match;
   store: MatchStore;
@@ -54,14 +56,14 @@ export function PreMatchScreen({ match, store }: Props) {
 
           {/* Teams */}
           <div className="mt-8 flex items-center gap-4">
-            <div className="flex-1 text-center">
-              <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-2xl bg-background/10 text-lg font-extrabold text-background overflow-hidden border border-white/10">
-                {teamA?.logoUrl ? (
-                  <img src={teamA.logoUrl} alt={teamA.name} className="h-full w-full object-cover" />
-                ) : (
-                  teamA?.shortName
-                )}
-              </div>
+            <div className="flex-1 flex flex-col items-center text-center">
+              <TeamLogo
+                logoUrl={teamA?.logoUrl}
+                name={teamA?.name}
+                shortName={teamA?.shortName}
+                size="lg"
+                className="mb-2 shadow-lg"
+              />
               <p className="text-sm font-bold text-background leading-tight">{teamA?.name}</p>
             </div>
 
@@ -69,14 +71,14 @@ export function PreMatchScreen({ match, store }: Props) {
               <p className="font-display text-2xl font-extrabold text-background/40 uppercase">VS</p>
             </div>
 
-            <div className="flex-1 text-center">
-              <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-2xl bg-primary/20 text-lg font-extrabold text-primary overflow-hidden border border-primary/20">
-                {teamB?.logoUrl ? (
-                  <img src={teamB.logoUrl} alt={teamB.name} className="h-full w-full object-cover" />
-                ) : (
-                  teamB?.shortName
-                )}
-              </div>
+            <div className="flex-1 flex flex-col items-center text-center">
+              <TeamLogo
+                logoUrl={teamB?.logoUrl}
+                name={teamB?.name}
+                shortName={teamB?.shortName}
+                size="lg"
+                className="mb-2 shadow-lg"
+              />
               <p className="text-sm font-bold text-background leading-tight">{teamB?.name}</p>
             </div>
           </div>

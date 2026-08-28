@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMatches, useTeams } from "@/hooks/useCricketData";
 import { calculateStandings } from "@/lib/scoring/standings";
 import { Trophy, RefreshCw, AlertCircle, ArrowRight, Shield } from "lucide-react";
+import { TeamLogo } from "@/components/team/TeamLogo";
 
 export const Route = createFileRoute("/pointables")({
   component: PointablesPage,
@@ -113,13 +114,12 @@ function PointablesPage() {
 
                         <td className="px-3 sm:px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-lg bg-black/5 border border-[#E5E5E5] p-1 flex items-center justify-center shrink-0">
-                              {team.logoUrl ? (
-                                <img src={team.logoUrl} alt="" className="h-full w-full object-contain" />
-                              ) : (
-                                <Shield className="h-4 w-4 text-[#D9A928]" />
-                              )}
-                            </div>
+                            <TeamLogo
+                              logoUrl={team.logoUrl}
+                              name={team.teamName}
+                              shortName={team.teamShortName}
+                              size="xs"
+                            />
                             <div className="min-w-0">
                               <p className="font-extrabold text-[#111111] uppercase truncate">
                                 {team.teamName}

@@ -381,7 +381,9 @@ export function buildMatchState(input: MatchInput): MatchState {
   innings.push(first);
 
   let phase: MatchState["phase"] = "innings1";
-  if (!setup.battingFirstId || !setup.openers) phase = "setup";
+  if (!setup.battingFirstId || !setup.openers || (deliveries.length === 0 && match.status !== "LIVE")) {
+    phase = "setup";
+  }
 
   let second: InningsState | undefined;
   if (first.isComplete) {

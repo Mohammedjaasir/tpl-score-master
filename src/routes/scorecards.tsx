@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { MatchCard } from "@/components/match/MatchCard";
+import { NoLiveMatchesCard } from "@/components/home/NoLiveMatchesCard";
 import { useMatches, useTeams } from "@/hooks/useCricketData";
 import {
   ClipboardList,
@@ -195,13 +196,7 @@ function ScorecardsPage() {
                 <MatchCard key={m.id} match={m} scorerMode={false} />
               ))
             ) : (
-              <div className="card-surface p-12 text-center bg-white border border-[#E5E5E5] rounded-3xl flex flex-col items-center gap-3">
-                <Radio className="h-10 w-10 text-[#5F6368]/30" />
-                <p className="text-sm font-black text-[#111111] uppercase">NO LIVE MATCHES RIGHT NOW</p>
-                <p className="text-xs text-[#5F6368]">
-                  Live matches will appear here automatically when a match is started by the scorer.
-                </p>
-              </div>
+              <NoLiveMatchesCard />
             )}
           </div>
         )}

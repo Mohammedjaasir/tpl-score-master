@@ -349,13 +349,12 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
             }`}
           >
             <div className="flex items-center gap-3.5 min-w-0">
-              <div className="h-12 w-12 rounded-xl bg-black/60 border border-white/20 p-1.5 flex items-center justify-center shrink-0">
-                {teamA?.logoUrl ? (
-                  <img src={teamA.logoUrl} alt={teamA.name} className="h-full w-full object-contain" />
-                ) : (
-                  <span className="text-sm font-black text-[#D9A928]">{teamA?.shortName ?? "A"}</span>
-                )}
-              </div>
+              <TeamLogo
+                logoUrl={teamA?.logoUrl}
+                name={teamA?.name}
+                shortName={teamA?.shortName}
+                size="md"
+              />
               <div className="min-w-0">
                 <p className="text-sm sm:text-base font-black uppercase text-white truncate flex items-center gap-1.5">
                   {teamA?.name ?? "Team A"}
@@ -405,13 +404,12 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
             }`}
           >
             <div className="flex items-center gap-3.5 min-w-0">
-              <div className="h-12 w-12 rounded-xl bg-black/60 border border-white/20 p-1.5 flex items-center justify-center shrink-0">
-                {teamB?.logoUrl ? (
-                  <img src={teamB.logoUrl} alt={teamB.name} className="h-full w-full object-contain" />
-                ) : (
-                  <span className="text-sm font-black text-[#D9A928]">{teamB?.shortName ?? "B"}</span>
-                )}
-              </div>
+              <TeamLogo
+                logoUrl={teamB?.logoUrl}
+                name={teamB?.name}
+                shortName={teamB?.shortName}
+                size="md"
+              />
               <div className="min-w-0">
                 <p className="text-sm sm:text-base font-black uppercase text-white truncate flex items-center gap-1.5">
                   {teamB?.name ?? "Team B"}
