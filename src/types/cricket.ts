@@ -182,6 +182,9 @@ export interface FallOfWicket {
   runs: number;
   oversText: string;
   batterOutId: string;
+  dismissalType?: string | undefined;
+  bowlerId?: string | undefined;
+  fielderId?: string | undefined;
 }
 
 export interface BallSummary {

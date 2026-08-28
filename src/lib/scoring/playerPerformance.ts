@@ -358,3 +358,305 @@ export function calculatePlayerPerformance(
     currentLiveMatch: currentLiveInfo,
   };
 }
+
+// ── Match MVP Scoring ────────────────────────────────────────────────────────
+export interface PlayerMVPScore {
+  playerId: string;
+  playerName: string;
+  playerRole?: string;
+  playerAvatar?: string;
+  teamId: string;
+  teamName: string;
+  teamShortName: string;
+  totalPoints: number;
+  breakdown: {
+    battingPoints: number;
+    bowlingPoints: number;
+    fieldingPoints: number;
+    runs: number;
+    balls: number;
+    fours: number;
+    sixes: number;
+    wickets: number;
+    oversText: string;
+    runsConceded: number;
+    catches: number;
+    runOuts: number;
+    stumpings: number;
+  };
+}
+
+export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
+  if (!state) return [];
+  const map = new Map<string, PlayerMVPScore>();
+
+  const getOrCreate = (playerId: string, teamId: string) => {
+    if (!map.has(playerId)) {
+      const p = lookup.player(playerId);
+      const t = lookup.team(teamId);
+      map.set(playerId, {
+        playerId,
+        playerName: p?.name ?? playerId,
+        playerRole: p?.role,
+        playerAvatar: p?.avatar,
+        teamId,
+        teamName: t?.name ?? "Team",
+        teamShortName: t?.shortName ?? "TPL",
+        totalPoints: 0,
+        breakdown: {
+          battingPoints: 0,
+          bowlingPoints: 0,
+          fieldingPoints: 0,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          wickets: 0,
+          oversText: "0.0",
+          runsConceded: 0,
+          catches: 0,
+          runOuts: 0,
+          stumpings: 0,
+        },
+      });
+    }
+    return map.get(playerId)!;
+  };
+
+  state.innings.forEach((inn) => {
+    // Batting
+    inn.batters.forEach((b) => {
+      const entry = getOrCreate(b.playerId, inn.battingTeamId);
+      const batPts =
+        b.runs * 1 +
+        b.fours * 1 +
+        b.sixes * 2 +
+        (b.runs >= 50 ? 25 : b.runs >= 30 ? 10 : 0);
+      entry.breakdown.runs += b.runs;
+      entry.breakdown.balls += b.balls;
+      entry.breakdown.fours += b.fours;
+      entry.breakdown.sixes += b.sixes;
+      entry.breakdown.battingPoints += batPts;
+      entry.totalPoints += batPts;
+    });
+
+    // Bowling
+    inn.bowlers.forEach((bw) => {
+      const entry = getOrCreate(bw.playerId, inn.bowlingTeamId);
+      const bowlPts =
+        bw.wickets * 25 +
+        bw.maidens * 20 +
+        (bw.legalBalls >= 6 && bw.economy <= 6.0 ? 15 : 0);
+      entry.breakdown.wickets += bw.wickets;
+      entry.breakdown.oversText = oversText(bw.legalBalls);
+      entry.breakdown.runsConceded += bw.runs;
+      entry.breakdown.bowlingPoints += bowlPts;
+      entry.totalPoints += bowlPts;
+    });
+
+    // Fielding
+    inn.overGroups.forEach((og) => {
+      og.balls.forEach((bs) => {
+        const w = bs.delivery.wicket;
+        if (w?.fielderId) {
+          const entry = getOrCreate(w.fielderId, inn.bowlingTeamId);
+          if (w.type === "Caught") {
+            entry.breakdown.catches += 1;
+            entry.breakdown.fieldingPoints += 10;
+            entry.totalPoints += 10;
+          } else if (w.type === "Run Out") {
+            entry.breakdown.runOuts += 1;
+            entry.breakdown.fieldingPoints += 15;
+            entry.totalPoints += 15;
+          } else if (w.type === "Stumped") {
+            entry.breakdown.stumpings += 1;
+            entry.breakdown.fieldingPoints += 15;
+            entry.totalPoints += 15;
+          }
+        }
+      });
+    });
+  });
+
+  return Array.from(map.values())
+    .filter((p) => p.totalPoints > 0)
+    .sort((a, b) => b.totalPoints - a.totalPoints);
+}
+
+// ── Tournament-Wide Stats & Leaderboards ────────────────────────────────────
+export interface TournamentLeaderboards {
+  orangeCap: Array<{
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    teamShortName: string;
+    runs: number;
+    innings: number;
+    balls: number;
+    highestScore: string;
+    fours: number;
+    sixes: number;
+    strikeRate: number;
+    average: number;
+  }>;
+  purpleCap: Array<{
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    teamShortName: string;
+    wickets: number;
+    innings: number;
+    oversText: string;
+    runsConceded: number;
+    economy: number;
+    bestBowling: string;
+  }>;
+  mvpLeaderboard: Array<{
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    teamShortName: string;
+    points: number;
+    runs: number;
+    wickets: number;
+    catches: number;
+  }>;
+  mostSixes: Array<{
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    teamShortName: string;
+    sixes: number;
+    innings: number;
+    runs: number;
+  }>;
+  mostFours: Array<{
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    teamShortName: string;
+    fours: number;
+    innings: number;
+    runs: number;
+  }>;
+}
+
+export function calculateTournamentLeaderboards(matches: Match[]): TournamentLeaderboards {
+  const allPlayers = lookup.players();
+  const playerStatsMap = new Map<string, ReturnType<typeof calculatePlayerPerformance>>();
+
+  allPlayers.forEach((p) => {
+    const stats = calculatePlayerPerformance(p.id, matches);
+    if (stats.hasData) {
+      playerStatsMap.set(p.id, stats);
+    }
+  });
+
+  const orangeCap = Array.from(playerStatsMap.entries())
+    .filter(([_, s]) => s.batting.runs > 0)
+    .map(([pId, s]) => {
+      const p = lookup.player(pId);
+      const t = lookup.team(p?.teamId);
+      const hs = `${s.batting.highestScore.runs}${s.batting.highestScore.isNotOut ? "*" : ""}`;
+      return {
+        playerId: pId,
+        playerName: p?.name ?? pId,
+        teamName: t?.name ?? "Team",
+        teamShortName: t?.shortName ?? "TPL",
+        runs: s.batting.runs,
+        innings: s.batting.innings,
+        balls: s.batting.balls,
+        highestScore: hs,
+        fours: s.batting.fours,
+        sixes: s.batting.sixes,
+        strikeRate: s.batting.strikeRate,
+        average: s.batting.average,
+      };
+    })
+    .sort((a, b) => b.runs - a.runs || b.strikeRate - a.strikeRate);
+
+  const purpleCap = Array.from(playerStatsMap.entries())
+    .filter(([_, s]) => s.bowling.wickets > 0 || s.bowling.legalBalls > 0)
+    .map(([pId, s]) => {
+      const p = lookup.player(pId);
+      const t = lookup.team(p?.teamId);
+      const bb = `${s.bowling.bestBowling.wickets}/${s.bowling.bestBowling.runs}`;
+      return {
+        playerId: pId,
+        playerName: p?.name ?? pId,
+        teamName: t?.name ?? "Team",
+        teamShortName: t?.shortName ?? "TPL",
+        wickets: s.bowling.wickets,
+        innings: s.bowling.innings,
+        oversText: s.bowling.oversText,
+        runsConceded: s.bowling.runsConceded,
+        economy: s.bowling.economy,
+        bestBowling: bb,
+      };
+    })
+    .sort((a, b) => b.wickets - a.wickets || a.economy - b.economy);
+
+  const mvpLeaderboard = Array.from(playerStatsMap.entries())
+    .map(([pId, s]) => {
+      const p = lookup.player(pId);
+      const t = lookup.team(p?.teamId);
+      const pts =
+        s.batting.runs * 1 +
+        s.batting.fours * 1 +
+        s.batting.sixes * 2 +
+        s.batting.fifties * 25 +
+        s.batting.hundreds * 50 +
+        s.bowling.wickets * 25 +
+        s.bowling.maidens * 20 +
+        s.fielding.catches * 10 +
+        s.fielding.runOuts * 15 +
+        s.fielding.stumpings * 15;
+
+      return {
+        playerId: pId,
+        playerName: p?.name ?? pId,
+        teamName: t?.name ?? "Team",
+        teamShortName: t?.shortName ?? "TPL",
+        points: pts,
+        runs: s.batting.runs,
+        wickets: s.bowling.wickets,
+        catches: s.fielding.catches,
+      };
+    })
+    .filter((item) => item.points > 0)
+    .sort((a, b) => b.points - a.points);
+
+  const mostSixes = orangeCap
+    .filter((item) => item.sixes > 0)
+    .map((item) => ({
+      playerId: item.playerId,
+      playerName: item.playerName,
+      teamName: item.teamName,
+      teamShortName: item.teamShortName,
+      sixes: item.sixes,
+      innings: item.innings,
+      runs: item.runs,
+    }))
+    .sort((a, b) => b.sixes - a.sixes || b.runs - a.runs);
+
+  const mostFours = orangeCap
+    .filter((item) => item.fours > 0)
+    .map((item) => ({
+      playerId: item.playerId,
+      playerName: item.playerName,
+      teamName: item.teamName,
+      teamShortName: item.teamShortName,
+      fours: item.fours,
+      innings: item.innings,
+      runs: item.runs,
+    }))
+    .sort((a, b) => b.fours - a.fours || b.runs - a.runs);
+
+  return {
+    orangeCap,
+    purpleCap,
+    mvpLeaderboard,
+    mostSixes,
+    mostFours,
+  };
+}

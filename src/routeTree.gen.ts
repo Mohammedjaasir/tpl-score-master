@@ -13,9 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as MatchesRouteImport } from './routes/matches'
+import { Route as PointablesRouteImport } from './routes/pointables'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ScorecardsRouteImport } from './routes/scorecards'
 import { Route as ScorerRouteImport } from './routes/scorer'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as MatchMatchIdRouteImport } from './routes/match/$matchId'
 import { Route as PlayersPlayerIdRouteImport } from './routes/players/$playerId'
 import { Route as ScorecardMatchIdRouteImport } from './routes/scorecard/$matchId'
@@ -40,6 +42,11 @@ const MatchesRoute = MatchesRouteImport.update({
   path: '/matches',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PointablesRoute = PointablesRouteImport.update({
+  id: '/pointables',
+  path: '/pointables',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -53,6 +60,11 @@ const ScorecardsRoute = ScorecardsRouteImport.update({
 const ScorerRoute = ScorerRouteImport.update({
   id: '/scorer',
   path: '/scorer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
@@ -76,9 +88,11 @@ export interface FileRoutesByFullPath {
   '/home': typeof HomeRoute
   '/live': typeof LiveRoute
   '/matches': typeof MatchesRoute
+  '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
+  '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
@@ -88,9 +102,11 @@ export interface FileRoutesByTo {
   '/home': typeof HomeRoute
   '/live': typeof LiveRoute
   '/matches': typeof MatchesRoute
+  '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
+  '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
@@ -101,9 +117,11 @@ export interface FileRoutesById {
   '/home': typeof HomeRoute
   '/live': typeof LiveRoute
   '/matches': typeof MatchesRoute
+  '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
+  '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
@@ -115,9 +133,11 @@ export interface FileRouteTypes {
     | '/home'
     | '/live'
     | '/matches'
+    | '/pointables'
     | '/profile'
     | '/scorecards'
     | '/scorer'
+    | '/stats'
     | '/match/$matchId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
@@ -127,9 +147,11 @@ export interface FileRouteTypes {
     | '/home'
     | '/live'
     | '/matches'
+    | '/pointables'
     | '/profile'
     | '/scorecards'
     | '/scorer'
+    | '/stats'
     | '/match/$matchId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
@@ -139,9 +161,11 @@ export interface FileRouteTypes {
     | '/home'
     | '/live'
     | '/matches'
+    | '/pointables'
     | '/profile'
     | '/scorecards'
     | '/scorer'
+    | '/stats'
     | '/match/$matchId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
@@ -152,9 +176,11 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   LiveRoute: typeof LiveRoute
   MatchesRoute: typeof MatchesRoute
+  PointablesRoute: typeof PointablesRoute
   ProfileRoute: typeof ProfileRoute
   ScorecardsRoute: typeof ScorecardsRoute
   ScorerRoute: typeof ScorerRoute
+  StatsRoute: typeof StatsRoute
   MatchMatchIdRoute: typeof MatchMatchIdRoute
   PlayersPlayerIdRoute: typeof PlayersPlayerIdRoute
   ScorecardMatchIdRoute: typeof ScorecardMatchIdRoute
@@ -190,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatchesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pointables': {
+      id: '/pointables'
+      path: '/pointables'
+      fullPath: '/pointables'
+      preLoaderRoute: typeof PointablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -209,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/scorer'
       fullPath: '/scorer'
       preLoaderRoute: typeof ScorerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/match/$matchId': {
@@ -240,9 +280,11 @@ const rootRouteChildren: RootRouteChildren = {
   HomeRoute: HomeRoute,
   LiveRoute: LiveRoute,
   MatchesRoute: MatchesRoute,
+  PointablesRoute: PointablesRoute,
   ProfileRoute: ProfileRoute,
   ScorecardsRoute: ScorecardsRoute,
   ScorerRoute: ScorerRoute,
+  StatsRoute: StatsRoute,
   MatchMatchIdRoute: MatchMatchIdRoute,
   PlayersPlayerIdRoute: PlayersPlayerIdRoute,
   ScorecardMatchIdRoute: ScorecardMatchIdRoute,

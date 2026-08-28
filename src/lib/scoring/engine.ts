@@ -242,6 +242,9 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
           runs,
           oversText: ballOversText,
           batterOutId: outId,
+          dismissalType: d.wicket?.type,
+          bowlerId: d.bowlerId,
+          fielderId: d.wicket?.fielderId,
         });
         // Preserve completed partnership in history before resetting
         completedPartnerships.push({

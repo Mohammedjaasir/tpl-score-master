@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { MatchCard } from "@/components/match/MatchCard";
 import { MovingCricketHero } from "@/components/home/MovingCricketHero";
+import { SponsorsSection } from "@/components/home/SponsorsSection";
 import { useMatches, useTeams, usePrefetchCricketData } from "@/hooks/useCricketData";
 import { Radio, Calendar, ArrowRight, AlertCircle, RefreshCw, Trophy } from "lucide-react";
 
@@ -59,10 +60,10 @@ function PublicHome() {
             </div>
             {liveMatches.length > 0 && (
               <Link
-                to="/live"
+                to="/scorecards"
                 className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
               >
-                Live Centre <ArrowRight className="h-3.5 w-3.5" />
+                Scorecard <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             )}
           </div>
@@ -178,6 +179,9 @@ function PublicHome() {
             </div>
           </section>
         )}
+
+        {/* ── SECTION 4: SPONSORS & OFFICIAL TOURNAMENT PARTNERS ───────── */}
+        <SponsorsSection />
 
         {/* Full Fixtures CTA Banner */}
         <Link

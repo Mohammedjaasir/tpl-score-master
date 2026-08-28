@@ -1,11 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, ListChecks, Radio, ClipboardList, User } from "lucide-react";
+import { Home, ListChecks, Trophy, ClipboardList, User } from "lucide-react";
 import { Dock, DockIcon, DockItem, DockLabel } from "@/components/ui/dock";
 
 const navItems = [
   { to: "/home", label: "Dashboard", icon: Home },
   { to: "/matches", label: "Matches", icon: ListChecks },
-  { to: "/live", label: "Live Center", icon: Radio, isLive: true },
+  { to: "/pointables", label: "POINTABLES", icon: Trophy },
   { to: "/scorecards", label: "Scorecards", icon: ClipboardList },
   { to: "/profile", label: "Profile", icon: User },
 ] as const;

@@ -75,7 +75,7 @@ export function MovingCricketHero({ liveCount }: MovingCricketHeroProps) {
         <div className="mt-8 flex flex-wrap items-center gap-3">
           {liveCount > 0 ? (
             <Link
-              to="/live"
+              to="/scorecards"
               className="tap group inline-flex items-center gap-3 px-5 py-3.5 rounded-xl bg-[#D9A928] hover:bg-[#E5B537] active:bg-[#C2941E] text-[#111111] font-bold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-[0_4px_16px_rgba(217,169,40,0.3)] active:scale-[0.99]"
             >
               {/* Red Live Dot */}

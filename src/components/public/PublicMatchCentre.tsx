@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { Match, MatchState, InningsState, Delivery, OverGroup } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 import { oversText, describeDelivery, ballLabel } from "@/lib/scoring/engine";
+import { calculateMatchMVP } from "@/lib/scoring/playerPerformance";
 import {
   ChevronLeft,
   Radio,
@@ -228,6 +229,8 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
       highlights,
     };
   }, [state, teamA, teamB]);
+
+  const matchMvpList = useMemo(() => calculateMatchMVP(state), [state]);
 
   // Player of the match lookup
   const momPlayerId = match.manOfTheMatchId ?? state?.match.manOfTheMatchId;
@@ -1062,6 +1065,61 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Fall of Wickets Section */}
+                {inn.fallOfWickets && inn.fallOfWickets.length > 0 && (
+                  <div className="bg-[#FAFAF8] border border-[#E5E5E5] rounded-2xl p-4 flex flex-col gap-2.5">
+                    <h4 className="text-[11px] font-black uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928]" />
+                      Fall of Wickets ({team?.shortName ?? "Innings"})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {inn.fallOfWickets.map((w) => {
+                        const p = lookup.player(w.batterOutId);
+                        const bowler = lookup.player(w.bowlerId);
+                        const fielder = lookup.player(w.fielderId);
+                        let dismissalString = w.dismissalType ?? "Dismissed";
+                        if (w.dismissalType === "Caught" && fielder && bowler) {
+                          dismissalString = `c ${fielder.shortName} b ${bowler.shortName}`;
+                        } else if (w.dismissalType === "Bowled" && bowler) {
+                          dismissalString = `b ${bowler.shortName}`;
+                        } else if (w.dismissalType === "LBW" && bowler) {
+                          dismissalString = `lbw b ${bowler.shortName}`;
+                        } else if (w.dismissalType === "Run Out" && fielder) {
+                          dismissalString = `run out (${fielder.shortName})`;
+                        } else if (w.dismissalType === "Stumped" && fielder && bowler) {
+                          dismissalString = `st ${fielder.shortName} b ${bowler.shortName}`;
+                        }
+
+                        return (
+                          <div
+                            key={w.wicketNumber}
+                            className="bg-white border border-[#E5E5E5] rounded-xl p-2.5 flex items-start justify-between gap-2 shadow-2xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-[#111111] text-xs">
+                                <span className="font-black text-[#D9A928]">
+                                  {w.wicketNumber} — {w.runs}
+                                </span>{" "}
+                                <span className="text-[10px] text-[#5F6368]">({w.oversText} ov)</span>
+                              </p>
+                              <Link
+                                to="/players/$playerId"
+                                params={{ playerId: w.batterOutId }}
+                                className="text-xs font-black text-[#111111] hover:text-[#D9A928] hover:underline block mt-0.5 truncate"
+                              >
+                                {p?.name ?? "Batter"}
+                              </Link>
+                              <p className="text-[10px] text-[#5F6368] font-medium mt-0.5 truncate">
+                                {dismissalString}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1276,6 +1334,59 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
               <p className="text-xs text-[#5F6368] italic">Highlights will appear as the match progresses.</p>
             )}
           </div>
+
+          {/* Match MVP / Top Performers List */}
+          {matchMvpList.length > 0 && (
+            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-[#D9A928]" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                    MOST VALUABLE PLAYERS (MVP)
+                  </h3>
+                </div>
+                <span className="text-[10px] font-bold text-[#5F6368] uppercase">
+                  Match Impact Points
+                </span>
+              </div>
+              <div className="flex flex-col divide-y divide-[#E5E5E5]">
+                {matchMvpList.slice(0, 5).map((mvp, idx) => (
+                  <div key={mvp.playerId} className="py-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                          idx === 0
+                            ? "bg-[#D9A928] text-black shadow-xs"
+                            : "bg-[#F7F7F5] text-[#5F6368]"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <Link
+                          to="/players/$playerId"
+                          params={{ playerId: mvp.playerId }}
+                          className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline truncate block"
+                        >
+                          {mvp.playerName}
+                        </Link>
+                        <p className="text-[10px] text-[#5F6368] font-bold truncate">
+                          {mvp.teamShortName} • {mvp.breakdown.runs > 0 ? `${mvp.breakdown.runs} runs (${mvp.breakdown.balls}b)` : ""}{" "}
+                          {mvp.breakdown.wickets > 0 ? `• ${mvp.breakdown.wickets} wkts (${mvp.breakdown.oversText} ov)` : ""}{" "}
+                          {mvp.breakdown.catches > 0 ? `• ${mvp.breakdown.catches} ct` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs sm:text-sm font-black text-[#111111] bg-[#D9A928]/15 px-2.5 py-1 rounded-xl tabular-nums">
+                        {mvp.totalPoints} pts
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

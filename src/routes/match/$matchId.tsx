@@ -137,7 +137,7 @@ function MatchPage() {
       {screen === "bowler" && <BowlerSelectScreen match={match} store={store} />}
       {screen === "scoring" && state && <LiveScoringScreen store={store} />}
       {screen === "break" && <InningsBreakScreen match={match} store={store} />}
-      {screen === "complete" && state && <MatchCompleteScreen state={state} />}
+      {screen === "complete" && state && <MatchCompleteScreen state={state} store={store} />}
     </div>
   );
 }
