@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { MatchCard } from "@/components/match/MatchCard";
@@ -11,11 +12,28 @@ export const Route = createFileRoute("/home")({
 
 function PublicHome() {
   usePrefetchCricketData();
-  const { data: allMatches = [], isLoading, isError, error, refetch } = useMatches();
+  const { data: allMatches = [], isLoading: queryLoading, isError: queryError, error, refetch } = useMatches();
   useTeams();
+
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, 5000); // 5 seconds hard cap
+    return () => clearTimeout(timer);
+  }, []);
 
   const liveMatches = allMatches.filter((m) => m.status === "LIVE");
   const displayMatches = liveMatches.length > 0 ? liveMatches : allMatches.slice(0, 3);
+
+  const isLoading = queryLoading && !timedOut;
+  const isError = queryError || (timedOut && displayMatches.length === 0);
+
+  const handleRetry = () => {
+    setTimedOut(false);
+    refetch();
+  };
 
   return (
     <AppShell title="Dashboard" fullBleedTop={true}>
@@ -43,7 +61,7 @@ function PublicHome() {
             </Link>
           </div>
 
-          {/* If matches exist (either from cache or fresh fetch), show them immediately */}
+          {/* If matches exist, show them immediately */}
           {displayMatches.length > 0 && (
             <div className="flex flex-col gap-4">
               {displayMatches.map((m) => (
@@ -52,7 +70,7 @@ function PublicHome() {
             </div>
           )}
 
-          {/* Loading Skeleton (Only shown if zero cached data exists) */}
+          {/* Loading Skeleton (Only shown for max 5 seconds if zero data exists) */}
           {isLoading && displayMatches.length === 0 && (
             <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-2xl">
               <RefreshCw className="h-6 w-6 text-[#D9A928] animate-spin" />
@@ -60,7 +78,7 @@ function PublicHome() {
             </div>
           )}
 
-          {/* Error / Offline State with Retry (Only shown if zero data exists) */}
+          {/* Error / Timeout State with Retry */}
           {isError && displayMatches.length === 0 && (
             <div className="card-surface p-6 sm:p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-2xl">
               <AlertCircle className="h-8 w-8 text-[#D9A928]" />
@@ -68,10 +86,10 @@ function PublicHome() {
                 Unable to load live matches right now
               </p>
               <p className="text-xs text-[#5F6368] max-w-sm">
-                {error instanceof Error ? error.message : "Please check your network connection and try again."}
+                {error instanceof Error ? error.message : "Network is slow or unreachable. Please tap retry."}
               </p>
               <button
-                onClick={() => refetch()}
+                onClick={handleRetry}
                 className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-md transition-all"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -80,7 +98,7 @@ function PublicHome() {
             </div>
           )}
 
-          {/* No Matches Found (Loaded but empty) */}
+          {/* No Matches Found */}
           {!isLoading && !isError && displayMatches.length === 0 && (
             <div className="card-surface p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl">
               <p className="text-xs font-bold text-[#5F6368]">No live matches currently scheduled.</p>
