@@ -141,9 +141,16 @@ export function MatchCompleteScreen({ state, store }: Props) {
         {/* Actions */}
         <div className="flex flex-col gap-3 mt-2">
           <Link
+            to="/scorer"
+            className="tap flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] hover:bg-[#222222] text-sm font-black uppercase tracking-wider text-white shadow-md transition-all"
+          >
+            <span>Back to Scorer Match Control</span>
+          </Link>
+
+          <Link
             to="/scorecard/$matchId"
             params={{ matchId }}
-            className="tap flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#D9A928] text-sm font-extrabold uppercase tracking-widest text-black shadow-md hover:bg-[#E5B537]"
+            className="tap flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#D9A928] text-xs font-black uppercase tracking-widest text-black shadow-sm hover:bg-[#E5B537]"
           >
             View Public Scorecard
           </Link>

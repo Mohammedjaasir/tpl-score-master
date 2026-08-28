@@ -14,7 +14,9 @@ export interface MatchDoc {
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
   pendingBowlerIds: [string | null, string | null];
   playerOfTheMatchId?: string;
+  isStarted?: boolean;
   isCompleted?: boolean;
+  startedAt?: string;
   syncQueue: string[];
 }
 
@@ -31,7 +33,7 @@ function emptyDoc(matchId: string): MatchDoc {
   };
 }
 
-function load(matchId: string): MatchDoc {
+export function loadMatchDoc(matchId: string): MatchDoc {
   if (typeof window === "undefined") return emptyDoc(matchId);
   try {
     const raw = window.localStorage.getItem(STORAGE_PREFIX + matchId);
@@ -40,6 +42,65 @@ function load(matchId: string): MatchDoc {
   } catch {
     return emptyDoc(matchId);
   }
+}
+
+export function broadcastTournamentUpdate() {
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    try {
+      const bc = new BroadcastChannel("tpl-global-tournament");
+      bc.postMessage({ type: "tournament_updated", timestamp: Date.now() });
+      bc.close();
+    } catch {}
+  }
+  try {
+    const channel = supabase.channel("tpl-tournament-matches");
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.send({
+          type: "broadcast",
+          event: "tournament_updated",
+          payload: { timestamp: Date.now() },
+        });
+      }
+    });
+  } catch {}
+}
+
+export function startMatchSession(matchId: string) {
+  if (typeof window === "undefined") return;
+  const existing = loadMatchDoc(matchId);
+  const next: MatchDoc = {
+    ...existing,
+    isStarted: true,
+    isCompleted: false,
+    startedAt: existing.startedAt || new Date().toISOString(),
+  };
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(next));
+  } catch {}
+
+  // Broadcast to other tabs & windows
+  try {
+    const bc = new BroadcastChannel(`tpl_match_${matchId}`);
+    bc.postMessage(next);
+    bc.close();
+  } catch {}
+
+  // Broadcast to supabase realtime channel
+  try {
+    const channel = supabase.channel(`match-live:${matchId}`);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.send({
+          type: "broadcast",
+          event: "score_update",
+          payload: { doc: next },
+        });
+      }
+    });
+  } catch {}
+
+  broadcastTournamentUpdate();
 }
 
 export interface DeliveryInput {
@@ -61,7 +122,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
   // ── Load initial state ────────────────────────────────────────────────────
   useEffect(() => {
-    setDoc(load(matchId));
+    setDoc(loadMatchDoc(matchId));
     setHydrated(true);
   }, [matchId]);
 
@@ -339,6 +400,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           resultText: resultText ?? state?.resultText,
           manOfTheMatchId: d.playerOfTheMatchId,
         });
+        broadcastTournamentUpdate();
         return next;
       });
     },

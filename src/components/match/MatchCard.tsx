@@ -126,27 +126,22 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   const inn2 = state?.innings[1];
   const currentInn = state?.innings[state?.currentInningsIndex ?? 0];
 
-  const teamAScore = inn1?.battingTeamId === match.teamAId
+  // Derive innings team order: 1st batting team always on top/left, 2nd batting team on bottom/right
+  const battingFirstId = state?.innings[0]?.battingTeamId ?? state?.setup?.battingFirstId;
+  const firstTeamId = battingFirstId ? battingFirstId : match.teamAId;
+  const secondTeamId = firstTeamId === match.teamAId ? match.teamBId : match.teamAId;
+
+  const firstScore = inn1 && (inn1.legalBalls > 0 || inn1.runs > 0 || isLive || isDone)
     ? `${inn1.runs}/${inn1.wickets}`
-    : inn2?.battingTeamId === match.teamAId
+    : undefined;
+  const firstOvers = inn1 && (inn1.legalBalls > 0 || inn1.runs > 0 || isLive || isDone)
+    ? inn1.oversText
+    : undefined;
+
+  const secondScore = inn2
     ? `${inn2.runs}/${inn2.wickets}`
     : undefined;
-
-  const teamAOvers = inn1?.battingTeamId === match.teamAId
-    ? inn1.oversText
-    : inn2?.battingTeamId === match.teamAId
-    ? inn2.oversText
-    : undefined;
-
-  const teamBScore = inn1?.battingTeamId === match.teamBId
-    ? `${inn1.runs}/${inn1.wickets}`
-    : inn2?.battingTeamId === match.teamBId
-    ? `${inn2.runs}/${inn2.wickets}`
-    : undefined;
-
-  const teamBOvers = inn1?.battingTeamId === match.teamBId
-    ? inn1.oversText
-    : inn2?.battingTeamId === match.teamBId
+  const secondOvers = inn2
     ? inn2.oversText
     : undefined;
 
@@ -177,13 +172,13 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
           </span>
         </div>
 
-        {/* ── CENTER MATCHUP: Team A vs Team B ─────────────────────────────── */}
+        {/* ── CENTER MATCHUP: 1st Innings Team vs 2nd Innings Team ─────────── */}
         <div className="flex items-center justify-center gap-3 sm:gap-6 my-1">
           <TeamCrest
-            teamId={match.teamAId}
-            scoreText={teamAScore}
-            oversText={teamAOvers}
-            isBatting={isLive && currentInn?.battingTeamId === match.teamAId}
+            teamId={firstTeamId}
+            scoreText={firstScore}
+            oversText={firstOvers}
+            isBatting={isLive && currentInn?.battingTeamId === firstTeamId}
             showScore={isLive || isDone}
           />
 
@@ -194,10 +189,10 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
           </div>
 
           <TeamCrest
-            teamId={match.teamBId}
-            scoreText={teamBScore}
-            oversText={teamBOvers}
-            isBatting={isLive && currentInn?.battingTeamId === match.teamBId}
+            teamId={secondTeamId}
+            scoreText={secondScore}
+            oversText={secondOvers}
+            isBatting={isLive && currentInn?.battingTeamId === secondTeamId}
             showScore={isLive || isDone}
           />
         </div>

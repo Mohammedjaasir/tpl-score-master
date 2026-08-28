@@ -97,23 +97,16 @@ export function toPlayer(row: SupabaseRegistration): Player {
 
 export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
   let status: MatchStatus = "UPCOMING";
-  const raw = row.status?.toLowerCase();
+  const raw = (row.status || "").toLowerCase().trim();
   if (raw === "live") status = "LIVE";
-  else if (raw === "completed") status = "COMPLETED";
-  else if (raw === "scheduled") {
-    const start = new Date(row.start_time).getTime();
-    const now = Date.now();
-    if (!isNaN(start) && now >= start - 2 * 60 * 60 * 1000) {
-      status = "READY";
-    } else {
-      status = "UPCOMING";
-    }
-  }
+  else if (raw === "completed" || raw === "complete" || raw === "finished") status = "COMPLETED";
+  else if (raw === "ready") status = "READY";
+  else status = "UPCOMING";
 
   return {
     id: row.id,
     tournament: TOURNAMENT_NAME,
-    matchNumber,
+    matchNumber: row.match_number || matchNumber,
     teamAId: row.team_a_id,
     teamBId: row.team_b_id,
     venue: "TPL Cricket Ground",
@@ -179,6 +172,7 @@ class LookupCache {
   }
 
   setMatches(matches: Match[]) {
+    this.matchesMap.clear();
     matches.forEach((m) => this.matchesMap.set(m.id, m));
     if (typeof window !== "undefined") {
       try {
@@ -421,6 +415,12 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
+    // If tournament fixtures have been generated or cached locally, use them
+    const cachedMatches = lookup.matches();
+    if (cachedMatches.length > 0) {
+      return cachedMatches;
+    }
+
     const startTime = Date.now();
     console.log("[MATCH_FETCH_START] Initiating match query from Supabase...");
 
@@ -436,15 +436,16 @@ export class SupabaseMatchRepository implements MatchRepository {
 
       if (error) {
         console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — HTTP ${status}: ${error.message}`);
-        if (lookup.matches().length > 0) return lookup.matches();
-        throw new Error(`Failed to load matches: ${error.message}`);
+        return lookup.matches();
       }
 
       const rawList = (data as SupabaseMatch[] || []);
       console.log(`[MATCH_FETCH_SUCCESS] — ${duration}ms — ${rawList.length} matches received`);
 
       const domainMatches = rawList.map((m, idx) => toMatch(m, idx + 1));
-      lookup.setMatches(domainMatches);
+      if (domainMatches.length > 0) {
+        lookup.setMatches(domainMatches);
+      }
       return domainMatches;
     } catch (err: any) {
       const duration = Date.now() - startTime;
@@ -453,10 +454,7 @@ export class SupabaseMatchRepository implements MatchRepository {
       } else {
         console.error(`[MATCH_FETCH_ERROR] — ${duration}ms — ${err?.message || err}`);
       }
-      if (lookup.matches().length > 0) {
-        return lookup.matches();
-      }
-      throw err;
+      return lookup.matches();
     }
   }
 

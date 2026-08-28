@@ -48,6 +48,14 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
   const teamA = lookup.team(match.teamAId);
   const teamB = lookup.team(match.teamBId);
 
+  // Exact Innings Order: 1st batting team always on top / first
+  const battingFirstId = state?.innings[0]?.battingTeamId ?? state?.setup?.battingFirstId;
+  const firstTeamId = battingFirstId ? battingFirstId : match.teamAId;
+  const secondTeamId = firstTeamId === match.teamAId ? match.teamBId : match.teamAId;
+
+  const teamFirst = lookup.team(firstTeamId);
+  const teamSecond = lookup.team(secondTeamId);
+
   const isLive = match.status === "LIVE" || state?.phase === "innings1" || state?.phase === "innings2";
   const isDone = match.status === "COMPLETED" || state?.phase === "complete";
 
@@ -56,8 +64,8 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
   const firstInnings = state?.innings[0];
   const secondInnings = state?.innings[1];
 
-  const battingTeam = currentInnings ? lookup.team(currentInnings.battingTeamId) : teamA;
-  const bowlingTeam = currentInnings ? lookup.team(currentInnings.bowlingTeamId) : teamB;
+  const battingTeam = currentInnings ? lookup.team(currentInnings.battingTeamId) : teamFirst;
+  const bowlingTeam = currentInnings ? lookup.team(currentInnings.bowlingTeamId) : teamSecond;
 
   // Active Batters
   const activeBatters = currentInnings?.batters.filter((b) => !b.out) ?? [];
@@ -340,38 +348,39 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
           </div>
         </div>
 
-        {/* Head-to-Head Scoreboard Grid */}
+        {/* Head-to-Head Scoreboard Grid (1st Innings Team ALWAYS First / On Top) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-          {/* Team A Score Card */}
+          {/* 1st Batting Team Score Card */}
           <div
             className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-              currentInnings?.battingTeamId === teamA?.id && isLive
+              currentInnings?.battingTeamId === firstTeamId && isLive
                 ? "bg-white/10 border-[#D9A928]/50 shadow-lg shadow-[#D9A928]/10"
                 : "bg-white/5 border-white/10"
             }`}
           >
             <div className="flex items-center gap-3.5 min-w-0">
               <TeamLogo
-                logoUrl={teamA?.logoUrl}
-                name={teamA?.name}
-                shortName={teamA?.shortName}
+                logoUrl={teamFirst?.logoUrl}
+                name={teamFirst?.name}
+                shortName={teamFirst?.shortName}
                 size="md"
+                isBatting={currentInnings?.battingTeamId === firstTeamId && isLive}
               />
               <div className="min-w-0">
                 <p className="text-sm sm:text-base font-black uppercase text-white truncate flex items-center gap-1.5">
-                  {teamA?.name ?? "Team A"}
-                  {currentInnings?.battingTeamId === teamA?.id && isLive && (
+                  {teamFirst?.name ?? "Team 1"}
+                  {currentInnings?.battingTeamId === firstTeamId && isLive && (
                     <span className="h-2 w-2 rounded-full bg-[#D9A928] animate-pulse shrink-0" />
                   )}
                 </p>
                 <p className="text-[10px] text-white/50 font-bold uppercase tracking-wider">
-                  {firstInnings?.battingTeamId === teamA?.id ? "1st Innings" : secondInnings?.battingTeamId === teamA?.id ? "2nd Innings" : "Batting Squad"}
+                  {firstInnings ? "1st Innings" : "Batting Squad"}
                 </p>
               </div>
             </div>
 
             <div className="text-right shrink-0">
-              {firstInnings?.battingTeamId === teamA?.id ? (
+              {firstInnings && (firstInnings.legalBalls > 0 || firstInnings.runs > 0 || isLive || isDone) ? (
                 <>
                   <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
                     {firstInnings.runs}
@@ -379,16 +388,6 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
                   </p>
                   <p className="text-[10px] text-white/60 font-bold tabular-nums">
                     {firstInnings.oversText} ov {firstInnings.crr > 0 ? `• CRR ${firstInnings.crr.toFixed(2)}` : ""}
-                  </p>
-                </>
-              ) : secondInnings?.battingTeamId === teamA?.id ? (
-                <>
-                  <p className="text-xl sm:text-2xl font-black text-[#D9A928] tabular-nums">
-                    {secondInnings.runs}
-                    <span className="text-white/60">/{secondInnings.wickets}</span>
-                  </p>
-                  <p className="text-[10px] text-white/60 font-bold tabular-nums">
-                    {secondInnings.oversText} ov {secondInnings.crr > 0 ? `• CRR ${secondInnings.crr.toFixed(2)}` : ""}
                   </p>
                 </>
               ) : (
@@ -397,46 +396,37 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
             </div>
           </div>
 
-          {/* Team B Score Card */}
+          {/* 2nd Batting Team Score Card */}
           <div
             className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-              currentInnings?.battingTeamId === teamB?.id && isLive
+              currentInnings?.battingTeamId === secondTeamId && isLive
                 ? "bg-white/10 border-[#D9A928]/50 shadow-lg shadow-[#D9A928]/10"
                 : "bg-white/5 border-white/10"
             }`}
           >
             <div className="flex items-center gap-3.5 min-w-0">
               <TeamLogo
-                logoUrl={teamB?.logoUrl}
-                name={teamB?.name}
-                shortName={teamB?.shortName}
+                logoUrl={teamSecond?.logoUrl}
+                name={teamSecond?.name}
+                shortName={teamSecond?.shortName}
                 size="md"
+                isBatting={currentInnings?.battingTeamId === secondTeamId && isLive}
               />
               <div className="min-w-0">
                 <p className="text-sm sm:text-base font-black uppercase text-white truncate flex items-center gap-1.5">
-                  {teamB?.name ?? "Team B"}
-                  {currentInnings?.battingTeamId === teamB?.id && isLive && (
+                  {teamSecond?.name ?? "Team 2"}
+                  {currentInnings?.battingTeamId === secondTeamId && isLive && (
                     <span className="h-2 w-2 rounded-full bg-[#D9A928] animate-pulse shrink-0" />
                   )}
                 </p>
                 <p className="text-[10px] text-white/50 font-bold uppercase tracking-wider">
-                  {firstInnings?.battingTeamId === teamB?.id ? "1st Innings" : secondInnings?.battingTeamId === teamB?.id ? "2nd Innings" : "Batting Squad"}
+                  {secondInnings ? "2nd Innings" : "Bowling Squad"}
                 </p>
               </div>
             </div>
 
             <div className="text-right shrink-0">
-              {firstInnings?.battingTeamId === teamB?.id ? (
-                <>
-                  <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
-                    {firstInnings.runs}
-                    <span className="text-white/60">/{firstInnings.wickets}</span>
-                  </p>
-                  <p className="text-[10px] text-white/60 font-bold tabular-nums">
-                    {firstInnings.oversText} ov {firstInnings.crr > 0 ? `• CRR ${firstInnings.crr.toFixed(2)}` : ""}
-                  </p>
-                </>
-              ) : secondInnings?.battingTeamId === teamB?.id ? (
+              {secondInnings ? (
                 <>
                   <p className="text-xl sm:text-2xl font-black text-[#D9A928] tabular-nums">
                     {secondInnings.runs}

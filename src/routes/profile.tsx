@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { useTournamentStats } from "@/hooks/useCricketData";
-import { useScorerAuth } from "@/lib/auth";
+import { useScorerAuth, useAdminAuth } from "@/lib/auth";
 import {
   User,
   Database,
@@ -24,6 +24,7 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const stats = useTournamentStats();
   const { isAuthenticated, userEmail, loginWithPassword, loginWithPin, logout, isLoading } = useScorerAuth();
+  const { isAdminAuthenticated, adminEmail } = useAdminAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -309,6 +310,40 @@ function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* ── ADMIN ACCESS ENTRY POINT ─────────────────────────────────── */}
+        <div className="w-full card-surface p-5 flex flex-col gap-3.5 border border-[#E5E5E5] bg-white rounded-3xl shadow-md">
+          <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-3">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-2xl bg-[#121316] text-[#D9A928] flex items-center justify-center shadow-sm">
+                <Lock className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                  {isAdminAuthenticated ? "TPL Admin Portal" : "Tournament Administration"}
+                </p>
+                <p className="text-[10px] text-[#5F6368] font-medium">
+                  {isAdminAuthenticated ? `Authorized as ${adminEmail}` : "Tournament management, fixtures & reports"}
+                </p>
+              </div>
+            </div>
+            {isAdminAuthenticated && (
+              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                Active
+              </span>
+            )}
+          </div>
+
+          <Link
+            to="/admin"
+            className="tap flex items-center justify-between px-4 py-3.5 rounded-2xl bg-[#121316] hover:bg-[#1C1E23] text-white font-black text-xs uppercase tracking-wider transition-all group shadow-sm"
+          >
+            <span className="text-[#D9A928]">
+              {isAdminAuthenticated ? "ADMIN PORTAL →" : "ADMIN LOGIN →"}
+            </span>
+            <ArrowRight className="h-4 w-4 text-[#D9A928] transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
       </div>
     </AppShell>
   );

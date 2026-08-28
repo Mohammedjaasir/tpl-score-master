@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   teamRepository,
   playerRepository,
@@ -9,6 +9,7 @@ import {
 import type { Match, Player, Team } from "@/types/cricket";
 import { buildMatchState } from "@/lib/scoring/engine";
 import { useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export function usePrefetchCricketData() {
   useEffect(() => {
@@ -100,11 +101,11 @@ function getEffectiveMatch(m: Match): Match {
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
-      if (doc.deliveries && doc.deliveries.length > 0) {
+      if (doc.isStarted || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId) {
         const computed = buildMatchState({
           match: m,
           setup: doc.setup || { playingXI: {} },
-          deliveries: doc.deliveries,
+          deliveries: doc.deliveries || [],
           secondInningsStarted: doc.secondInningsStarted || false,
           secondInningsOpeners: doc.secondInningsOpeners,
         });
@@ -126,7 +127,7 @@ function getEffectiveMatch(m: Match): Match {
     }
   } catch {}
 
-  // A match without active scorer deliveries is strictly UPCOMING / READY
+  // A match without explicit scorer start/deliveries is strictly UPCOMING / SCHEDULED
   if (m.status === "LIVE") {
     return {
       ...m,
@@ -138,6 +139,47 @@ function getEffectiveMatch(m: Match): Match {
 }
 
 export function useMatches() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // 1. Cross-device Realtime channel for global match updates
+    const channel = supabase.channel("tpl-tournament-matches", {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on("broadcast", { event: "tournament_updated" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["matches"] });
+      })
+      .on("broadcast", { event: "match_status_changed" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["matches"] });
+      })
+      .subscribe();
+
+    // 2. BroadcastChannel for instant local cross-tab / cross-window sync
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      bc = new BroadcastChannel("tpl-global-tournament");
+      bc.onmessage = () => {
+        queryClient.invalidateQueries({ queryKey: ["matches"] });
+      };
+    }
+
+    // 3. Storage event listener for cross-tab local storage changes
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key?.startsWith("tpl-scoring:") || e.key === "tpl_cache_matches") {
+        queryClient.invalidateQueries({ queryKey: ["matches"] });
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      supabase.removeChannel(channel);
+      if (bc) bc.close();
+    };
+  }, [queryClient]);
+
   return useQuery<Match[]>({
     queryKey: ["matches"],
     queryFn: async () => {
