@@ -314,6 +314,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     oversText: oversText(legalBalls),
     oversFloat: legalBalls / 6,
     crr: legalBalls > 0 ? runs / (legalBalls / 6) : 0,
+    maxOvers: config.maxOvers,
     strikerId,
     nonStrikerId,
     currentBowlerId: overInProgress?.bowlerId,
@@ -352,8 +353,10 @@ export interface MatchInput {
   match: Match;
   setup: MatchSetup;
   deliveries: Delivery[];
-  secondInningsStarted: boolean;
+  secondInningsStarted?: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
+  reducedOvers?: number;
+  secondInningsReducedOvers?: number;
 }
 
 export function buildMatchState(input: MatchInput): MatchState {
@@ -363,6 +366,9 @@ export function buildMatchState(input: MatchInput): MatchState {
   const teamBId = teamAId === match.teamAId ? match.teamBId : match.teamAId;
 
   const xiOf = (teamId: string) => setup.playingXI[teamId]?.playerIds ?? [];
+
+  // Scenario A: Rain before or during 1st innings -> equal overs reduction
+  const maxOvers1 = input.reducedOvers ?? setup.reducedOvers ?? match.overs;
 
   const innings: InningsState[] = [];
 
@@ -374,7 +380,7 @@ export function buildMatchState(input: MatchInput): MatchState {
       battingXI: xiOf(teamAId),
       bowlingXI: xiOf(teamBId),
       openers: setup.openers,
-      maxOvers: match.overs,
+      maxOvers: maxOvers1,
     },
     deliveries.filter((d) => d.inningsIndex === 0),
   );
@@ -383,6 +389,22 @@ export function buildMatchState(input: MatchInput): MatchState {
   let phase: MatchState["phase"] = "innings1";
   if (!setup.battingFirstId || !setup.openers || (deliveries.length === 0 && match.status !== "LIVE")) {
     phase = "setup";
+  }
+
+  // Scenario B: Rain during 2nd innings -> ARR target revision
+  const secondReduced = input.secondInningsReducedOvers ?? setup.secondInningsReducedOvers;
+  const isSecondReduced = typeof secondReduced === "number" && secondReduced > 0 && secondReduced < maxOvers1;
+  const maxOvers2 = isSecondReduced ? secondReduced : maxOvers1;
+
+  let target = first.runs + 1;
+  let isTargetRevised = false;
+  let arr: number | undefined;
+
+  if (isSecondReduced) {
+    // Official Formula: (Team A Total / Team A Overs) × Team B Reduced Overs = Revised Target
+    arr = maxOvers1 > 0 ? first.runs / maxOvers1 : 0;
+    target = Math.round(arr * maxOvers2);
+    isTargetRevised = true;
   }
 
   let second: InningsState | undefined;
@@ -397,11 +419,14 @@ export function buildMatchState(input: MatchInput): MatchState {
           battingXI: xiOf(teamBId),
           bowlingXI: xiOf(teamAId),
           openers: input.secondInningsOpeners,
-          maxOvers: match.overs,
-          target: first.runs + 1,
+          maxOvers: maxOvers2,
+          target,
         },
         deliveries.filter((d) => d.inningsIndex === 1),
       );
+      second.originalTarget = first.runs + 1;
+      second.isTargetRevised = isTargetRevised;
+      second.arr = arr;
       innings.push(second);
     }
   }
@@ -409,17 +434,18 @@ export function buildMatchState(input: MatchInput): MatchState {
   let resultText: string | undefined;
   if (second?.isComplete) {
     phase = "complete";
-    const target = first.runs + 1;
     if (second.runs >= target) {
       const wicketsLeft = Math.max(0, xiOf(teamBId).length - 1 - second.wickets);
-      resultText = `${nameOf(teamBId)} won by ${wicketsLeft} wicket${wicketsLeft === 1 ? "" : "s"}`;
-    } else if (second.runs === first.runs) {
+      resultText = `${nameOf(teamBId)} won by ${wicketsLeft} wicket${wicketsLeft === 1 ? "" : "s"}${isTargetRevised ? " (ARR)" : ""}`;
+    } else if (second.runs === first.runs && !isTargetRevised) {
       resultText = "Match tied";
     } else {
-      const margin = first.runs - second.runs;
-      resultText = `${nameOf(teamAId)} won by ${margin} run${margin === 1 ? "" : "s"}`;
+      const margin = isTargetRevised ? Math.max(1, target - second.runs) : first.runs - second.runs;
+      resultText = `${nameOf(teamAId)} won by ${margin} run${margin === 1 ? "" : "s"}${isTargetRevised ? " (ARR)" : ""}`;
     }
   }
+
+  const isRainAffected = maxOvers1 < match.overs || isSecondReduced;
 
   return {
     match,
@@ -428,6 +454,8 @@ export function buildMatchState(input: MatchInput): MatchState {
     currentInningsIndex: second ? 1 : 0,
     phase,
     resultText,
+    isRainAffected,
+    revisedOvers: isSecondReduced ? maxOvers2 : maxOvers1 < match.overs ? maxOvers1 : undefined,
   };
 }
 

@@ -81,10 +81,14 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
           if (inn1 && inn2) {
             const team1Runs = inn1.runs;
             const team2Runs = inn2.runs;
-            const team1IsAllOut = inn1.wickets >= 10;
-            const team2IsAllOut = inn2.wickets >= 10;
-            const team1Overs = team1IsAllOut ? (m.overs || 5) : Math.max(0.1, inn1.oversFloat);
-            const team2Overs = team2IsAllOut ? (m.overs || 5) : Math.max(0.1, inn2.oversFloat);
+            const xiCount1 = doc.setup?.playingXI[inn1.battingTeamId]?.playerIds?.length || 11;
+            const xiCount2 = doc.setup?.playingXI[inn2.battingTeamId]?.playerIds?.length || 11;
+            const team1IsAllOut = inn1.wickets >= Math.max(1, xiCount1 - 1);
+            const team2IsAllOut = inn2.wickets >= Math.max(1, xiCount2 - 1);
+            const scheduledOvers1 = inn1.maxOvers || m.overs || 5;
+            const scheduledOvers2 = inn2.maxOvers || m.overs || 5;
+            const team1Overs = team1IsAllOut ? scheduledOvers1 : Math.max(0.1, inn1.oversFloat);
+            const team2Overs = team2IsAllOut ? scheduledOvers2 : Math.max(0.1, inn2.oversFloat);
 
             if (inn1.battingTeamId === m.teamAId) {
               runsA = team1Runs;
@@ -158,12 +162,12 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     };
   });
 
-  // Sort by Points (descending), Wins (descending), NRR (descending), Name (ascending)
+  // Official rule: Sort by Points (descending), Net Run Rate (descending), Wins (descending), Name (ascending)
   list.sort(
     (a, b) =>
       b.points - a.points ||
-      b.won - a.won ||
       b.nrr - a.nrr ||
+      b.won - a.won ||
       a.teamName.localeCompare(b.teamName),
   );
 

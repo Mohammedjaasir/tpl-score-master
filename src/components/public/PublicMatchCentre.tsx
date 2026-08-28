@@ -26,6 +26,7 @@ import {
   Target,
   ArrowRight,
   User,
+  CloudRain,
 } from "lucide-react";
 import { formatMatchTime, formatDeliveryTimestamp } from "@/lib/utils";
 
@@ -452,7 +453,24 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
         </div>
 
         {/* Dynamic Match Situation Banner */}
-        <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+        {state?.isRainAffected && (
+          <div className="mt-4 p-3 rounded-2xl bg-blue-950/60 border border-blue-500/40 text-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <CloudRain className="h-4 w-4 text-blue-400 shrink-0" />
+              <span>
+                RAIN AFFECTED • {state.revisedOvers ? `${state.revisedOvers} OVERS PER SIDE` : "REDUCED OVERS"}
+              </span>
+            </div>
+            {currentInnings?.isTargetRevised && (
+              <div className="flex items-center gap-3 font-mono font-bold text-[11px]">
+                <span>Original Target: <span className="line-through text-white/50">{currentInnings.originalTarget}</span></span>
+                <span className="text-[#D9A928] bg-black/60 px-2 py-0.5 rounded border border-[#D9A928]/40">Revised Target: {currentInnings.target} (ARR Method)</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
           {isDone ? (
             <div className="flex items-center gap-2 text-sm font-black text-[#D9A928] uppercase tracking-wide">
               <Trophy className="h-4 w-4" />
@@ -461,7 +479,7 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
           ) : currentInnings?.target !== undefined ? (
             <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
               <span className="text-[#D9A928] font-black uppercase">
-                Target: {currentInnings.target}
+                {currentInnings.isTargetRevised ? `Revised Target: ${currentInnings.target} (ARR)` : `Target: ${currentInnings.target}`}
               </span>
               <span className="text-white">
                 Need <strong className="text-white font-black">{currentInnings.runsNeeded}</strong> runs from{" "}

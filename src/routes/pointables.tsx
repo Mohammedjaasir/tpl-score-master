@@ -165,11 +165,66 @@ function PointablesPage() {
                 Win: <strong className="text-[#111111]">2 pts</strong> • Tie/NR: <strong className="text-[#111111]">1 pt</strong> • Loss: <strong className="text-[#111111]">0 pts</strong>
               </span>
               <span className="font-bold">
-                Top 4 teams qualify for knockouts
+                Sorted by Points $\to$ Net Run Rate (NRR) $\to$ Wins
               </span>
             </div>
           </div>
         )}
+
+        {/* Official Knockout Stage Schedule Card */}
+        <div className="bg-[#121316] text-white rounded-3xl p-6 sm:p-7 border border-white/10 shadow-xl relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-xl bg-[#D9A928]/20 flex items-center justify-center text-[#D9A928]">
+                <Trophy className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-wide">Official Knockout Qualification</h3>
+                <p className="text-[10px] text-white/50 font-bold uppercase">Top 2 from Group 1 &amp; Top 2 from Group 2</p>
+              </div>
+            </div>
+
+            <Link
+              to="/rules"
+              className="text-[10px] font-black uppercase tracking-wider text-[#D9A928] hover:underline flex items-center gap-1"
+            >
+              <span>View Rules</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-4">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-2">
+              <div>
+                <span className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase">Semi-Final 1 (Match 10)</span>
+                <p className="text-xs font-black text-white mt-1">Group 1 Winner</p>
+                <p className="text-[10px] text-white/40 font-bold">vs</p>
+                <p className="text-xs font-black text-white">Group 2 Runner-up</p>
+              </div>
+              <span className="text-[9px] text-white/40 font-bold uppercase">Scheduled by Admin</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-2">
+              <div>
+                <span className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase">Semi-Final 2 (Match 11)</span>
+                <p className="text-xs font-black text-white mt-1">Group 2 Winner</p>
+                <p className="text-[10px] text-white/40 font-bold">vs</p>
+                <p className="text-xs font-black text-white">Group 1 Runner-up</p>
+              </div>
+              <span className="text-[9px] text-white/40 font-bold uppercase">Scheduled by Admin</span>
+            </div>
+
+            <div className="bg-[#D9A928]/10 border border-[#D9A928]/30 rounded-2xl p-4 flex flex-col justify-between gap-2">
+              <div>
+                <span className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase">The Final (Match 12)</span>
+                <p className="text-xs font-black text-white mt-1">Winner Semi-Final 1</p>
+                <p className="text-[10px] text-white/40 font-bold">vs</p>
+                <p className="text-xs font-black text-white">Winner Semi-Final 2</p>
+              </div>
+              <span className="text-[9px] text-[#D9A928] font-bold uppercase">Championship Match</span>
+            </div>
+          </div>
+        </div>
 
         {/* Empty Standings State if 0 teams */}
         {!isLoading && standings.length === 0 && (

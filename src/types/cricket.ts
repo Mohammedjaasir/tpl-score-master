@@ -116,6 +116,9 @@ export interface MatchSetup {
   playingXI: Record<string, PlayingXI>;
   openers?: { strikerId: string; nonStrikerId: string } | undefined;
   openingBowlerId?: string | undefined;
+  reducedOvers?: number | undefined;
+  secondInningsReducedOvers?: number | undefined;
+  targetRevisionReason?: string | undefined;
 }
 
 export type ExtraType = "wide" | "noball" | "bye" | "legbye" | null;
@@ -232,6 +235,7 @@ export interface InningsState {
   oversText: string;
   oversFloat: number;
   crr: number;
+  maxOvers: number;
   strikerId?: string | undefined;
   nonStrikerId?: string | undefined;
   currentBowlerId?: string | undefined;
@@ -247,6 +251,9 @@ export interface InningsState {
   needsBowler: boolean;
   yetToBat: string[];
   target?: number | undefined;
+  originalTarget?: number | undefined;
+  isTargetRevised?: boolean | undefined;
+  arr?: number | undefined;
   runsNeeded?: number | undefined;
   ballsRemaining?: number | undefined;
   requiredRunRate?: number | undefined;
@@ -259,4 +266,6 @@ export interface MatchState {
   currentInningsIndex: 0 | 1;
   phase: "setup" | "innings1" | "break" | "innings2" | "complete";
   resultText?: string | undefined;
+  isRainAffected?: boolean | undefined;
+  revisedOvers?: number | undefined;
 }

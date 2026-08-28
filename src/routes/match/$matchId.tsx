@@ -60,10 +60,9 @@ function MatchPage() {
   // ── Derive sub-screen from phase ─────────────────────────────────────────
   const phase = state?.phase ?? "setup";
 
-  // During setup, determine which step we're on
   const hasPlayingXI =
     Object.keys(doc.setup.playingXI).length >= 2 &&
-    Object.values(doc.setup.playingXI).every((xi) => xi.playerIds.length === 11);
+    Object.values(doc.setup.playingXI).every((xi) => xi.playerIds.length >= 2 && xi.playerIds.length <= 11);
   const hasOpeners = !!doc.setup.openers;
   const hasBowler = !!(doc.pendingBowlerIds[0] || state?.innings[0]?.currentBowlerId);
 

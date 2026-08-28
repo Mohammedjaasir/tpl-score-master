@@ -208,7 +208,7 @@ export function PlayingXIScreen({ match, store }: Props) {
   const setKeeper = (teamId: string, pid: string) =>
     setKeepers((p) => ({ ...p, [teamId]: pid }));
 
-  const canProceed = xiA.size === maxA && xiB.size === maxB && maxA > 0 && maxB > 0;
+  const canProceed = xiA.size >= 2 && xiA.size <= maxA && xiB.size >= 2 && xiB.size <= maxB;
 
   const handleConfirm = () => {
     const playingXI: Record<string, PlayingXI> = {
