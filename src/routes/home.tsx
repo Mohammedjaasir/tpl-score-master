@@ -6,26 +6,25 @@ import { useMatches, useTeams, usePrefetchCricketData } from "@/hooks/useCricket
 import { Radio, Calendar, ArrowRight, AlertCircle, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/home")({
-  component: ScorerHome,
+  component: PublicHome,
 });
 
-function ScorerHome() {
+function PublicHome() {
   usePrefetchCricketData();
   const { data: allMatches = [], isLoading, isError, error, refetch } = useMatches();
   // Ensure teams are cached
   useTeams();
 
   const liveMatches = allMatches.filter((m) => m.status === "LIVE");
-  const otherMatches = allMatches.filter((m) => m.status !== "LIVE");
   // If there are live matches show them, otherwise show the top matches
   const displayMatches = liveMatches.length > 0 ? liveMatches : allMatches.slice(0, 3);
 
   return (
-    <AppShell title="Scorer Dashboard" fullBleedTop={true}>
+    <AppShell title="Dashboard" fullBleedTop={true}>
       {/* Full-Bleed Moving Cricket Hero Banner */}
       <MovingCricketHero liveCount={liveMatches.length} />
 
-      {/* Main Scorer Sections Container */}
+      {/* Main Public Sections Container */}
       <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-6">
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -55,7 +54,7 @@ function ScorerHome() {
           </div>
         )}
 
-        {/* ── LIVE MATCHES SECTION ────────────────────────────────────────── */}
+        {/* ── PUBLIC LIVE MATCHES SECTION ─────────────────────────────────── */}
         {!isLoading && displayMatches.length > 0 && (
           <section className="flex flex-col gap-4">
             {/* Section Header */}
@@ -74,10 +73,10 @@ function ScorerHome() {
               </Link>
             </div>
 
-            {/* Match Cards List */}
+            {/* Match Cards List (Public Mode -> Links to Match Centre) */}
             <div className="flex flex-col gap-4">
               {displayMatches.map((m) => (
-                <MatchCard key={m.id} match={m} />
+                <MatchCard key={m.id} match={m} scorerMode={false} />
               ))}
             </div>
 

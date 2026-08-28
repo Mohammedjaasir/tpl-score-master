@@ -38,27 +38,39 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+    <div className="flex min-h-screen items-center justify-center bg-[#F7F7F5] px-4 py-8">
+      <div className="max-w-md w-full text-center bg-white border border-[#E5E5E5] rounded-3xl p-6 sm:p-8 shadow-xl">
+        <div className="h-12 w-12 mx-auto rounded-full bg-[#D9A928]/15 text-[#9A6A05] flex items-center justify-center mb-4">
+          <span className="text-2xl">⚠️</span>
+        </div>
+        <h1 className="text-xl font-black tracking-tight text-[#111111] uppercase">
           This page didn't load
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+        <p className="mt-2 text-xs text-[#5F6368] font-medium leading-relaxed">
+          Something went wrong loading this view. You can try refreshing or head back to the tournament home.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+
+        {error?.message && (
+          <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left">
+            <p className="text-[11px] font-mono font-bold text-red-700 break-words">
+              {error.message}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="tap w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-[#D9A928] px-5 py-3 text-xs font-black uppercase tracking-wider text-black transition-all shadow-md"
           >
             Try again
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="tap w-full sm:w-auto inline-flex items-center justify-center rounded-xl border border-[#E5E5E5] bg-[#F7F7F5] px-5 py-3 text-xs font-black uppercase tracking-wider text-[#111111] transition-all hover:bg-white"
           >
             Go home
           </a>

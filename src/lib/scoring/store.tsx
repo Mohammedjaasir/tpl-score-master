@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
 import { buildMatchState, setTeamNameResolver } from "@/lib/scoring/engine";
 import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
+import { supabase } from "@/lib/supabase";
 
 setTeamNameResolver((id) => lookup.team(id)?.name ?? id);
 
@@ -12,7 +13,6 @@ export interface MatchDoc {
   secondInningsStarted: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
   pendingBowlerIds: [string | null, string | null];
-  /** Placeholder for future offline sync: unsynced event ids. */
   syncQueue: string[];
 }
 
@@ -54,11 +54,16 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     () => initialMatch ?? lookup.match(matchId),
   );
 
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const bcRef = useRef<BroadcastChannel | null>(null);
+
+  // ── Load initial state ────────────────────────────────────────────────────
   useEffect(() => {
     setDoc(load(matchId));
     setHydrated(true);
   }, [matchId]);
 
+  // ── Preload match & team entities ─────────────────────────────────────────
   useEffect(() => {
     if (initialMatch) {
       setMatchData(initialMatch);
@@ -71,7 +76,6 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       matchRepository.get(matchId).then((m) => {
         if (m) {
           setMatchData(m);
-          // Also preload teams and team players for seamless lookups
           teamRepository.get(m.teamAId);
           teamRepository.get(m.teamBId);
           playerRepository.listByTeam(m.teamAId);
@@ -81,14 +85,91 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     }
   }, [matchId, initialMatch]);
 
+  // ── Live Realtime Sync (Supabase Realtime Channel + BroadcastChannel + Storage)
   useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(doc));
-    } catch {
-      /* storage unavailable — scoring continues in memory */
+    if (!matchId) return;
+
+    // 1. Cross-device Realtime Broadcast Channel via Supabase
+    const channelName = `match-live:${matchId}`;
+    const channel = supabase.channel(channelName, {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on("broadcast", { event: "score_update" }, ({ payload }) => {
+        if (payload?.doc && payload.doc.matchId === matchId) {
+          setDoc(payload.doc);
+          try {
+            window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(payload.doc));
+          } catch {}
+        }
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    // 2. Same-browser Instant Cross-Tab Sync via BroadcastChannel
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      const bc = new BroadcastChannel(`tpl_match_${matchId}`);
+      bc.onmessage = (event) => {
+        if (event.data && event.data.matchId === matchId) {
+          setDoc(event.data);
+        }
+      };
+      bcRef.current = bc;
     }
-  }, [doc, matchId, hydrated]);
+
+    // 3. Fallback Storage Event Listener (for tabs in same origin)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_PREFIX + matchId && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.matchId === matchId) {
+            setDoc(parsed);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+      if (bcRef.current) {
+        bcRef.current.close();
+      }
+    };
+  }, [matchId]);
+
+  // ── Broadcast doc helper (invoked on any scorer action) ────────────────────
+  const broadcastDoc = useCallback(
+    (newDoc: MatchDoc) => {
+      try {
+        window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(newDoc));
+      } catch {}
+
+      // Broadcast to local tabs
+      if (bcRef.current) {
+        try {
+          bcRef.current.postMessage(newDoc);
+        } catch {}
+      }
+
+      // Broadcast to all remote clients over Supabase Realtime WebSocket
+      if (channelRef.current) {
+        try {
+          channelRef.current.send({
+            type: "broadcast",
+            event: "score_update",
+            payload: { doc: newDoc },
+          });
+        } catch {}
+      }
+    },
+    [matchId],
+  );
 
   const match = matchData ?? lookup.match(matchId);
 
@@ -108,22 +189,31 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const pendingBowlerId = doc.pendingBowlerIds[currentInningsIndex];
   const activeBowlerId = innings?.currentBowlerId ?? pendingBowlerId ?? undefined;
 
-  const updateSetup = useCallback((patch: Partial<MatchSetup>) => {
-    setDoc((d) => ({ ...d, setup: { ...d.setup, ...patch } }));
-  }, []);
+  const updateSetup = useCallback(
+    (patch: Partial<MatchSetup>) => {
+      setDoc((d) => {
+        const next = { ...d, setup: { ...d.setup, ...patch } };
+        broadcastDoc(next);
+        return next;
+      });
+    },
+    [broadcastDoc],
+  );
 
   const setBowler = useCallback(
     (bowlerId: string) => {
       setDoc((d) => {
-        const next: [string | null, string | null] = [...d.pendingBowlerIds] as [
+        const nextPending: [string | null, string | null] = [...d.pendingBowlerIds] as [
           string | null,
           string | null,
         ];
-        next[currentInningsIndex] = bowlerId;
-        return { ...d, pendingBowlerIds: next };
+        nextPending[currentInningsIndex] = bowlerId;
+        const next = { ...d, pendingBowlerIds: nextPending };
+        broadcastDoc(next);
+        return next;
       });
     },
-    [currentInningsIndex],
+    [currentInningsIndex, broadcastDoc],
   );
 
   const record = useCallback(
@@ -153,44 +243,63 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           ...(input.wicket ? { wicket: input.wicket } : {}),
           timestamp: Date.now(),
         };
-        return {
+        const next = {
           ...d,
           deliveries: [...d.deliveries, delivery],
           syncQueue: [...d.syncQueue, delivery.id],
         };
+        broadcastDoc(next);
+        return next;
       });
     },
-    [match],
+    [match, broadcastDoc],
   );
 
   const undo = useCallback(() => {
     setDoc((d) => {
       if (d.deliveries.length === 0) return d;
       const last = d.deliveries[d.deliveries.length - 1]!;
-      return {
+      const next = {
         ...d,
         deliveries: d.deliveries.slice(0, -1),
         syncQueue: d.syncQueue.filter((id) => id !== last.id),
       };
+      broadcastDoc(next);
+      return next;
     });
-  }, []);
+  }, [broadcastDoc]);
 
-  const editDelivery = useCallback((deliveryId: string, patch: Partial<Delivery>) => {
-    setDoc((d) => ({
-      ...d,
-      deliveries: d.deliveries.map((x) => (x.id === deliveryId ? { ...x, ...patch } : x)),
-      syncQueue: d.syncQueue.includes(deliveryId) ? d.syncQueue : [...d.syncQueue, deliveryId],
-    }));
-  }, []);
+  const editDelivery = useCallback(
+    (deliveryId: string, patch: Partial<Delivery>) => {
+      setDoc((d) => {
+        const next = {
+          ...d,
+          deliveries: d.deliveries.map((x) => (x.id === deliveryId ? { ...x, ...patch } : x)),
+          syncQueue: d.syncQueue.includes(deliveryId) ? d.syncQueue : [...d.syncQueue, deliveryId],
+        };
+        broadcastDoc(next);
+        return next;
+      });
+    },
+    [broadcastDoc],
+  );
 
   const startSecondInnings = useCallback(
     (openers: { strikerId: string; nonStrikerId: string }) => {
-      setDoc((d) => ({ ...d, secondInningsStarted: true, secondInningsOpeners: openers }));
+      setDoc((d) => {
+        const next = { ...d, secondInningsStarted: true, secondInningsOpeners: openers };
+        broadcastDoc(next);
+        return next;
+      });
     },
-    [],
+    [broadcastDoc],
   );
 
-  const reset = useCallback(() => setDoc(emptyDoc(matchId)), [matchId]);
+  const reset = useCallback(() => {
+    const empty = emptyDoc(matchId);
+    setDoc(empty);
+    broadcastDoc(empty);
+  }, [matchId, broadcastDoc]);
 
   return {
     doc,

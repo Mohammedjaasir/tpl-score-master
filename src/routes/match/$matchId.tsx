@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
+import { useScorerAuth } from "@/lib/auth";
+import { ScorerPinGate } from "@/components/auth/ScorerPinGate";
 import { Logo } from "@/components/brand/Logo";
 import { PreMatchScreen } from "@/components/match/PreMatchScreen";
 import { PlayingXIScreen } from "@/components/match/PlayingXIScreen";
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/match/$matchId")({
 
 function MatchPage() {
   const { matchId } = Route.useParams();
+  const { isAuthenticated } = useScorerAuth();
   const store = useMatchStore(matchId);
   const { match, state, doc, hydrated } = store;
 
@@ -42,8 +45,19 @@ function MatchPage() {
     );
   }
 
-  // ── Derive sub-screen from phase ─────────────────────────────────────────
+  const teamA = lookup.team(match.teamAId);
+  const teamB = lookup.team(match.teamBId);
 
+  // ── Scorer Protection Gate ───────────────────────────────────────────────
+  if (!isAuthenticated) {
+    return (
+      <ScorerPinGate
+        matchTitle={`Match #${match.matchNumber} (${teamA?.shortName ?? "Team A"} vs ${teamB?.shortName ?? "Team B"})`}
+      />
+    );
+  }
+
+  // ── Derive sub-screen from phase ─────────────────────────────────────────
   const phase = state?.phase ?? "setup";
 
   // During setup, determine which step we're on
@@ -76,14 +90,11 @@ function MatchPage() {
     }
   }
 
-  const teamA = lookup.team(match.teamAId);
-  const teamB = lookup.team(match.teamBId);
-
   // ── Minimal top bar for non-scoring screens ───────────────────────────────
   const topBar = screen !== "scoring" && (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
-        <Link to="/matches" className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground">
+        <Link to="/home" className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground">
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <Logo compact />
@@ -97,7 +108,7 @@ function MatchPage() {
   // ── Scoring top bar ───────────────────────────────────────────────────────
   const scoringTopBar = screen === "scoring" && (
     <header className="sticky top-0 z-40 flex items-center gap-3 bg-background/95 backdrop-blur border-b border-border/60 px-4 py-3">
-      <Link to="/matches" className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground">
+      <Link to="/home" className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground">
         <ChevronLeft className="h-5 w-5" />
       </Link>
       <div className="min-w-0 flex-1">
@@ -110,7 +121,7 @@ function MatchPage() {
       </div>
       <div className="shrink-0 flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1">
         <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest">Live</span>
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest">Scorer Live</span>
       </div>
     </header>
   );
