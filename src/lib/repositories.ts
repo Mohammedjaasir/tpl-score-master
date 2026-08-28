@@ -122,11 +122,13 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
 const CACHE_TEAMS_KEY = "tpl_cache_teams";
 const CACHE_PLAYERS_KEY = "tpl_cache_players";
 const CACHE_MATCHES_KEY = "tpl_cache_matches";
+const CACHE_MATCHES_MANAGED_KEY = "tpl_cache_matches_managed";
 
 class LookupCache {
   private teamsMap = new Map<string, Team>();
   private playersMap = new Map<string, Player>();
   private matchesMap = new Map<string, Match>();
+  private matchesManaged = false;
   private initialHydrated = false;
 
   constructor() {
@@ -138,10 +140,18 @@ class LookupCache {
           if (Array.isArray(parsed)) parsed.forEach((t) => this.teamsMap.set(t.id, t));
         }
 
+        const rawManaged = window.localStorage.getItem(CACHE_MATCHES_MANAGED_KEY);
+        if (rawManaged === "true") {
+          this.matchesManaged = true;
+        }
+
         const rawMatches = window.localStorage.getItem(CACHE_MATCHES_KEY);
         if (rawMatches) {
           const parsed = JSON.parse(rawMatches);
-          if (Array.isArray(parsed)) parsed.forEach((m) => this.matchesMap.set(m.id, m));
+          if (Array.isArray(parsed)) {
+            parsed.forEach((m) => this.matchesMap.set(m.id, m));
+            this.matchesManaged = true;
+          }
         }
 
         const rawPlayers = window.localStorage.getItem(CACHE_PLAYERS_KEY);
@@ -174,11 +184,17 @@ class LookupCache {
   setMatches(matches: Match[]) {
     this.matchesMap.clear();
     matches.forEach((m) => this.matchesMap.set(m.id, m));
+    this.matchesManaged = true;
     if (typeof window !== "undefined") {
       try {
         window.localStorage.setItem(CACHE_MATCHES_KEY, JSON.stringify(matches));
+        window.localStorage.setItem(CACHE_MATCHES_MANAGED_KEY, "true");
       } catch {}
     }
+  }
+
+  isMatchesManaged(): boolean {
+    return this.matchesManaged;
   }
 
   updateMatch(id: string, patch: Partial<Match>) {
@@ -415,10 +431,9 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
-    // If tournament fixtures have been generated or cached locally, use them
-    const cachedMatches = lookup.matches();
-    if (cachedMatches.length > 0) {
-      return cachedMatches;
+    // If the tournament match state has been set/managed by the application (including explicit reset to 0 matches)
+    if (lookup.isMatchesManaged()) {
+      return lookup.matches();
     }
 
     const startTime = Date.now();
