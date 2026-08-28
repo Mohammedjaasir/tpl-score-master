@@ -29,6 +29,7 @@ import {
   CloudRain,
 } from "lucide-react";
 import { formatMatchTime, formatDeliveryTimestamp } from "@/lib/utils";
+import { TeamLogo } from "@/components/team/TeamLogo";
 
 interface PublicMatchCentreProps {
   match: Match;
