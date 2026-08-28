@@ -11,6 +11,26 @@ import type {
 import { supabase } from "@/lib/supabase";
 
 export const TOURNAMENT_NAME = "TPL 2026";
+const REQUEST_TIMEOUT_MS = 6000; // 6 seconds maximum
+
+/**
+ * Strict timeout wrapper preventing infinite network hangs on mobile devices.
+ */
+async function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  fallbackMsg = "Request timed out",
+): Promise<T> {
+  let timer: any;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(fallbackMsg)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Generate a concise short name / abbreviation for a team name.
@@ -81,10 +101,9 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
   if (raw === "live") status = "LIVE";
   else if (raw === "completed") status = "COMPLETED";
   else if (raw === "scheduled") {
-    // If within next 2 hours or passed start time, mark as READY
     const start = new Date(row.start_time).getTime();
     const now = Date.now();
-    if (now >= start - 2 * 60 * 60 * 1000) {
+    if (!isNaN(start) && now >= start - 2 * 60 * 60 * 1000) {
       status = "READY";
     } else {
       status = "UPCOMING";
@@ -105,23 +124,66 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
   };
 }
 
-// ── In-Memory Lookup Cache ──────────────────────────────────────────────────
+// ── In-Memory & LocalStorage Persistent Lookup Cache ────────────────────────
+const CACHE_TEAMS_KEY = "tpl_cache_teams";
+const CACHE_PLAYERS_KEY = "tpl_cache_players";
+const CACHE_MATCHES_KEY = "tpl_cache_matches";
+
 class LookupCache {
   private teamsMap = new Map<string, Team>();
   private playersMap = new Map<string, Player>();
   private matchesMap = new Map<string, Match>();
   private initialHydrated = false;
 
+  constructor() {
+    if (typeof window !== "undefined") {
+      try {
+        const rawTeams = window.localStorage.getItem(CACHE_TEAMS_KEY);
+        if (rawTeams) {
+          const parsed = JSON.parse(rawTeams);
+          if (Array.isArray(parsed)) parsed.forEach((t) => this.teamsMap.set(t.id, t));
+        }
+
+        const rawMatches = window.localStorage.getItem(CACHE_MATCHES_KEY);
+        if (rawMatches) {
+          const parsed = JSON.parse(rawMatches);
+          if (Array.isArray(parsed)) parsed.forEach((m) => this.matchesMap.set(m.id, m));
+        }
+
+        const rawPlayers = window.localStorage.getItem(CACHE_PLAYERS_KEY);
+        if (rawPlayers) {
+          const parsed = JSON.parse(rawPlayers);
+          if (Array.isArray(parsed)) parsed.forEach((p) => this.playersMap.set(p.id, p));
+        }
+      } catch {}
+    }
+  }
+
   setTeams(teams: Team[]) {
     teams.forEach((t) => this.teamsMap.set(t.id, t));
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(CACHE_TEAMS_KEY, JSON.stringify(teams));
+      } catch {}
+    }
   }
 
   setPlayers(players: Player[]) {
     players.forEach((p) => this.playersMap.set(p.id, p));
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(CACHE_PLAYERS_KEY, JSON.stringify(players));
+      } catch {}
+    }
   }
 
   setMatches(matches: Match[]) {
     matches.forEach((m) => this.matchesMap.set(m.id, m));
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(CACHE_MATCHES_KEY, JSON.stringify(matches));
+      } catch {}
+    }
   }
 
   team(id?: string): Team | undefined {
@@ -157,7 +219,7 @@ class LookupCache {
   }
 
   isHydrated(): boolean {
-    return this.initialHydrated;
+    return this.initialHydrated || this.matchesMap.size > 0;
   }
 
   markHydrated() {
@@ -186,156 +248,205 @@ export interface MatchRepository {
   get(id: string): Promise<Match | undefined>;
 }
 
-// ── Supabase Repositories ────────────────────────────────────────────────────
+// ── Supabase Repositories with Strict Timeout & Resilient Fallbacks ─────────
 
 export class SupabaseTeamRepository implements TeamRepository {
   async list(): Promise<Team[]> {
-    const { data, error } = await supabase
-      .from("teams")
-      .select("*")
-      .order("name", { ascending: true });
+    try {
+      const response = await withTimeout(
+        supabase.from("teams").select("*").order("name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Teams load timed out",
+      );
 
-    if (error) {
-      console.error("[SupabaseTeamRepository] list error:", error);
-      throw new Error(`Failed to load teams: ${error.message}`);
+      const { data, error } = response;
+      if (error) {
+        console.warn("[SupabaseTeamRepository] list warning:", error.message);
+        if (lookup.teams().length > 0) return lookup.teams();
+        throw new Error(`Failed to load teams: ${error.message}`);
+      }
+
+      const domainTeams = (data as SupabaseTeam[] || []).map(toTeam);
+      lookup.setTeams(domainTeams);
+      return domainTeams;
+    } catch (err) {
+      if (lookup.teams().length > 0) {
+        return lookup.teams();
+      }
+      throw err;
     }
-
-    const domainTeams = (data as SupabaseTeam[] || []).map(toTeam);
-    lookup.setTeams(domainTeams);
-    return domainTeams;
   }
 
   async get(id: string): Promise<Team | undefined> {
     const cached = lookup.team(id);
     if (cached) return cached;
 
-    const { data, error } = await supabase
-      .from("teams")
-      .select("*")
-      .eq("id", id)
-      .single();
+    try {
+      const response = await withTimeout(
+        supabase.from("teams").select("*").eq("id", id).single(),
+        REQUEST_TIMEOUT_MS,
+      );
 
-    if (error || !data) {
-      return undefined;
+      const { data, error } = response;
+      if (error || !data) return undefined;
+
+      const team = toTeam(data as SupabaseTeam);
+      lookup.setTeams([team]);
+      return team;
+    } catch {
+      return lookup.team(id);
     }
-
-    const team = toTeam(data as SupabaseTeam);
-    lookup.setTeams([team]);
-    return team;
   }
 }
 
 export class SupabasePlayerRepository implements PlayerRepository {
   async list(): Promise<Player[]> {
-    const { data, error } = await supabase
-      .from("registrations")
-      .select("*")
-      .order("player_name", { ascending: true });
+    try {
+      const response = await withTimeout(
+        supabase.from("registrations").select("*").order("player_name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Players load timed out",
+      );
 
-    if (error) {
-      console.error("[SupabasePlayerRepository] list error:", error);
-      throw new Error(`Failed to load players: ${error.message}`);
+      const { data, error } = response;
+      if (error) {
+        console.warn("[SupabasePlayerRepository] list warning:", error.message);
+        if (lookup.players().length > 0) return lookup.players();
+        throw new Error(`Failed to load players: ${error.message}`);
+      }
+
+      const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+      lookup.setPlayers(domainPlayers);
+      return domainPlayers;
+    } catch (err) {
+      if (lookup.players().length > 0) return lookup.players();
+      throw err;
     }
-
-    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
-    lookup.setPlayers(domainPlayers);
-    return domainPlayers;
   }
 
   async listByTeam(teamId: string): Promise<Player[]> {
-    const { data, error } = await supabase
-      .from("registrations")
-      .select("*")
-      .eq("team_id", teamId)
-      .order("player_name", { ascending: true });
+    try {
+      const response = await withTimeout(
+        supabase.from("registrations").select("*").eq("team_id", teamId).order("player_name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+      );
 
-    if (error) {
-      console.error("[SupabasePlayerRepository] listByTeam error:", error);
-      throw new Error(`Failed to load players for team: ${error.message}`);
+      const { data, error } = response;
+      if (error) {
+        const cached = lookup.playersOf(teamId);
+        if (cached.length > 0) return cached;
+        throw new Error(`Failed to load players for team: ${error.message}`);
+      }
+
+      const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+      lookup.setPlayers(domainPlayers);
+      return domainPlayers;
+    } catch (err) {
+      const cached = lookup.playersOf(teamId);
+      if (cached.length > 0) return cached;
+      throw err;
     }
-
-    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
-    lookup.setPlayers(domainPlayers);
-    return domainPlayers;
   }
 
   async get(id: string): Promise<Player | undefined> {
     const cached = lookup.player(id);
     if (cached) return cached;
 
-    const { data, error } = await supabase
-      .from("registrations")
-      .select("*")
-      .eq("id", id)
-      .single();
+    try {
+      const response = await withTimeout(
+        supabase.from("registrations").select("*").eq("id", id).single(),
+        REQUEST_TIMEOUT_MS,
+      );
 
-    if (error || !data) {
-      return undefined;
+      const { data, error } = response;
+      if (error || !data) return undefined;
+
+      const player = toPlayer(data as SupabaseRegistration);
+      lookup.setPlayers([player]);
+      return player;
+    } catch {
+      return lookup.player(id);
     }
-
-    const player = toPlayer(data as SupabaseRegistration);
-    lookup.setPlayers([player]);
-    return player;
   }
 
   async search(query: string): Promise<Player[]> {
     const trimmed = query.trim();
     if (!trimmed) return this.list();
 
-    const { data, error } = await supabase
-      .from("registrations")
-      .select("*")
-      .or(`player_name.ilike.%${trimmed}%,reference_id.ilike.%${trimmed}%`)
-      .order("player_name", { ascending: true })
-      .limit(50);
+    try {
+      const response = await withTimeout(
+        supabase
+          .from("registrations")
+          .select("*")
+          .or(`player_name.ilike.%${trimmed}%,reference_id.ilike.%${trimmed}%`)
+          .order("player_name", { ascending: true })
+          .limit(50),
+        REQUEST_TIMEOUT_MS,
+      );
 
-    if (error) {
-      console.error("[SupabasePlayerRepository] search error:", error);
-      throw new Error(`Failed to search players: ${error.message}`);
+      const { data, error } = response;
+      if (error) throw new Error(`Failed to search players: ${error.message}`);
+
+      const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+      lookup.setPlayers(domainPlayers);
+      return domainPlayers;
+    } catch (err) {
+      const cachedMatches = lookup
+        .players()
+        .filter((p) => p.name.toLowerCase().includes(trimmed.toLowerCase()));
+      if (cachedMatches.length > 0) return cachedMatches;
+      throw err;
     }
-
-    const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
-    lookup.setPlayers(domainPlayers);
-    return domainPlayers;
   }
 }
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
-    const { data, error } = await supabase
-      .from("matches")
-      .select("*")
-      .order("start_time", { ascending: true });
+    try {
+      const response = await withTimeout(
+        supabase.from("matches").select("*").order("start_time", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+        "Matches load timed out",
+      );
 
-    if (error) {
-      console.error("[SupabaseMatchRepository] list error:", error);
-      throw new Error(`Failed to load matches: ${error.message}`);
+      const { data, error } = response;
+      if (error) {
+        console.warn("[SupabaseMatchRepository] list warning:", error.message);
+        if (lookup.matches().length > 0) return lookup.matches();
+        throw new Error(`Failed to load matches: ${error.message}`);
+      }
+
+      const domainMatches = (data as SupabaseMatch[] || []).map((m, idx) =>
+        toMatch(m, idx + 1),
+      );
+      lookup.setMatches(domainMatches);
+      return domainMatches;
+    } catch (err) {
+      if (lookup.matches().length > 0) {
+        return lookup.matches();
+      }
+      throw err;
     }
-
-    const domainMatches = (data as SupabaseMatch[] || []).map((m, idx) =>
-      toMatch(m, idx + 1),
-    );
-    lookup.setMatches(domainMatches);
-    return domainMatches;
   }
 
   async get(id: string): Promise<Match | undefined> {
     const cached = lookup.match(id);
     if (cached) return cached;
 
-    const { data, error } = await supabase
-      .from("matches")
-      .select("*")
-      .eq("id", id)
-      .single();
+    try {
+      const response = await withTimeout(
+        supabase.from("matches").select("*").eq("id", id).single(),
+        REQUEST_TIMEOUT_MS,
+      );
 
-    if (error || !data) {
-      return undefined;
+      const { data, error } = response;
+      if (error || !data) return undefined;
+
+      const matches = await this.list();
+      return matches.find((m) => m.id === id);
+    } catch {
+      return lookup.match(id);
     }
-
-    // Determine match index if possible
-    const matches = await this.list();
-    return matches.find((m) => m.id === id);
   }
 }
 
@@ -344,20 +455,21 @@ export const playerRepository: PlayerRepository = new SupabasePlayerRepository()
 export const matchRepository: MatchRepository = new SupabaseMatchRepository();
 
 /**
- * Preloads all baseline metadata (teams, assigned players, matches) into the lookup cache.
+ * Preloads baseline metadata in the background with timeout safety.
  */
 export async function prefetchCricketMetadata(): Promise<void> {
   try {
-    const [teams, players, matches] = await Promise.all([
+    const [teams, players, matches] = await Promise.allSettled([
       teamRepository.list(),
       playerRepository.list(),
       matchRepository.list(),
     ]);
-    lookup.setTeams(teams);
-    lookup.setPlayers(players);
-    lookup.setMatches(matches);
+
+    if (teams.status === "fulfilled") lookup.setTeams(teams.value);
+    if (players.status === "fulfilled") lookup.setPlayers(players.value);
+    if (matches.status === "fulfilled") lookup.setMatches(matches.value);
     lookup.markHydrated();
   } catch (err) {
-    console.error("Error prefetching cricket metadata:", err);
+    console.warn("Background prefetch finished with notice:", err);
   }
 }
