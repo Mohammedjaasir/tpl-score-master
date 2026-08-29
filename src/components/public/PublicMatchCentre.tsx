@@ -4,6 +4,9 @@ import type { Match, MatchState, InningsState, Delivery, OverGroup } from "@/typ
 import { lookup } from "@/lib/repositories";
 import { oversText, describeDelivery, ballLabel } from "@/lib/scoring/engine";
 import { calculateMatchMVP } from "@/lib/scoring/playerPerformance";
+import { WagonWheel } from "@/components/scoring/WagonWheel";
+import { calculateBatterWagonWheel } from "@/lib/scoring/wagon-wheel";
+import { formatMatchCondition, type MatchCondition } from "@/lib/scoring/weather";
 import {
   ChevronLeft,
   Radio,
@@ -27,6 +30,7 @@ import {
   ArrowRight,
   User,
   CloudRain,
+  Compass,
 } from "lucide-react";
 import { formatMatchTime, formatDeliveryTimestamp } from "@/lib/utils";
 import { TeamLogo } from "@/components/team/TeamLogo";
@@ -34,16 +38,18 @@ import { TeamLogo } from "@/components/team/TeamLogo";
 interface PublicMatchCentreProps {
   match: Match;
   state?: MatchState;
+  matchCondition?: MatchCondition;
 }
 
-type TabType = "overview" | "commentary" | "scorecard" | "stats" | "playingxi";
+type TabType = "overview" | "commentary" | "scorecard" | "stats" | "wagonwheel" | "playingxi";
 type CommentaryFilter = "all" | "wickets" | "fours" | "sixes" | "extras";
 
-export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
+export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchCentreProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [commentaryFilter, setCommentaryFilter] = useState<CommentaryFilter>("all");
   const [copiedShare, setCopiedShare] = useState(false);
   const [showAllOvers, setShowAllOvers] = useState(false);
+  const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string | null>(null);
 
   const teamA = lookup.team(match.teamAId);
   const teamB = lookup.team(match.teamBId);
@@ -499,12 +505,38 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
         </div>
       </div>
 
+      {/* ── WEATHER / RAIN DELAY BANNER ────────────────────────────────── */}
+      {matchCondition && matchCondition !== "NORMAL" && (
+        <div className="p-4 rounded-2xl bg-blue-900/40 border border-blue-500/30 flex items-center justify-between gap-4 text-blue-100 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-300">
+              <CloudRain className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-white">
+                {formatMatchCondition(matchCondition).label}
+              </p>
+              <p className="text-[11px] text-blue-200">
+                Official tournament match condition updated by match referee.
+              </p>
+            </div>
+          </div>
+          {currentInnings?.isTargetRevised && currentInnings.target && (
+            <div className="text-right">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#D9A928]">ARR REVISED TARGET</span>
+              <p className="text-lg font-black text-white">{currentInnings.target} Runs</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── MATCH NAVIGATION TABS ──────────────────────────────────────── */}
       <div className="flex items-center gap-2 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar pb-1">
         {[
           { id: "overview", label: "Overview", icon: Activity },
           { id: "commentary", label: "Commentary", icon: Zap },
           { id: "scorecard", label: "Scorecard", icon: Layers },
+          { id: "wagonwheel", label: "Wagon Wheel", icon: Compass },
           { id: "stats", label: "Stats & Highlights", icon: BarChart3 },
           { id: "playingxi", label: "Playing XI", icon: Users },
         ].map((tab) => {
@@ -1003,13 +1035,25 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
                         return (
                           <tr key={b.playerId} className={b.out ? "hover:bg-[#FAFAF8]" : "bg-[#D9A928]/5"}>
                             <td className="px-4 py-3">
-                              <Link
-                                to="/players/$playerId"
-                                params={{ playerId: b.playerId }}
-                                className="font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline"
-                              >
-                                {p?.name ?? b.playerId}
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                <Link
+                                  to="/players/$playerId"
+                                  params={{ playerId: b.playerId }}
+                                  className="font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline truncate"
+                                >
+                                  {p?.name ?? b.playerId}
+                                </Link>
+                                <button
+                                  onClick={() => {
+                                    setSelectedWagonBatterId(b.playerId);
+                                    setActiveTab("wagonwheel");
+                                  }}
+                                  className="shrink-0 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 hover:bg-[#D9A928] text-slate-700 hover:text-black border border-slate-200 transition-colors"
+                                  title="View Wagon Wheel"
+                                >
+                                  Wagon Wheel ↗
+                                </button>
+                              </div>
                               <p className="text-[10px] text-[#5F6368] mt-0.5">
                                 {b.out ? b.dismissal : <span className="text-[#16A34A] font-bold">not out</span>}
                               </p>
@@ -1133,7 +1177,101 @@ export function PublicMatchCentre({ match, state }: PublicMatchCentreProps) {
         </div>
       )}
 
-      {/* ── TAB 4: STATS & HIGHLIGHTS ──────────────────────────────────── */}
+      {/* ── TAB 4: WAGON WHEEL ─────────────────────────────────────────── */}
+      {activeTab === "wagonwheel" && (
+        <div className="flex flex-col gap-6">
+          {(() => {
+            const allBatters: { id: string; name: string; runs: number; balls: number; teamName: string }[] = [];
+            state?.innings.forEach((inn) => {
+              const team = lookup.team(inn.battingTeamId);
+              inn.batters.forEach((b) => {
+                const p = lookup.player(b.playerId);
+                allBatters.push({
+                  id: b.playerId,
+                  name: p?.name ?? b.playerId,
+                  runs: b.runs,
+                  balls: b.balls,
+                  teamName: team?.shortName ?? "Team",
+                });
+              });
+            });
+
+            const currentSelectedId = selectedWagonBatterId || allBatters[0]?.id;
+            const currentBatter = allBatters.find((b) => b.id === currentSelectedId) || allBatters[0];
+
+            // Extract deliveries for selected batter
+            const deliveries = allDeliveries
+              .filter((d) => d.delivery.strikerId === currentSelectedId)
+              .map((d) => ({
+                strikerId: d.delivery.strikerId,
+                runsOffBat: d.delivery.runsOffBat ?? 0,
+                shotZone: (d.delivery as any).shotZone ?? null,
+                overNumber: d.delivery.overNumber,
+                ballNumber: d.delivery.ballNumber,
+              }));
+
+            const summary = currentBatter
+              ? calculateBatterWagonWheel(currentBatter.id, currentBatter.name, deliveries)
+              : null;
+
+            return (
+              <div className="flex flex-col gap-5">
+                {/* Batter Pills */}
+                <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                      Select Batter for Wagon Wheel
+                    </span>
+                    <span className="text-[10px] font-bold text-[#5F6368]">
+                      {allBatters.length} Batters
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {allBatters.map((b) => {
+                      const isSelected = b.id === currentSelectedId;
+                      return (
+                        <button
+                          key={b.id}
+                          onClick={() => setSelectedWagonBatterId(b.id)}
+                          className={`tap shrink-0 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                            isSelected
+                              ? "bg-[#D9A928] text-black shadow-sm"
+                              : "bg-[#F7F7F5] text-[#5F6368] hover:text-[#111111] border border-[#E5E5E5]"
+                          }`}
+                        >
+                          <span>{b.name}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSelected ? "bg-black/10 text-black" : "bg-white text-[#5F6368]"}`}>
+                            {b.runs} ({b.balls})
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {allBatters.length === 0 && (
+                      <p className="text-xs text-[#5F6368] italic py-2">
+                        No batting data recorded yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Wagon Wheel Component */}
+                {summary ? (
+                  <WagonWheel summary={summary} />
+                ) : (
+                  <div className="card-surface p-12 text-center bg-white border border-[#E5E5E5] rounded-3xl">
+                    <p className="text-xs text-[#5F6368] font-bold">
+                      Select a batter above to view their Wagon Wheel.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── TAB 5: STATS & HIGHLIGHTS ──────────────────────────────────── */}
       {activeTab === "stats" && (
         <div className="flex flex-col gap-6">
           {/* Player of the Match Section */}

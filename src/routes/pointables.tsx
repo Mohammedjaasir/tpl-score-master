@@ -68,104 +68,256 @@ function PointablesPage() {
           </div>
         )}
 
-        {/* Standings Table (Real Data) */}
+        {/* Standings Tables by Group */}
         {!isLoading && standings.length > 0 && (
-          <div className="bg-white border border-[#E5E5E5] rounded-3xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-[#111111] text-white border-b border-black text-[10px] font-black uppercase tracking-wider">
-                    <th className="px-3 sm:px-4 py-3.5 text-center w-12">POS</th>
-                    <th className="px-3 sm:px-4 py-3.5 text-left min-w-[160px]">TEAM</th>
-                    <th className="px-2.5 sm:px-3 py-3.5 text-center">P</th>
-                    <th className="px-2.5 sm:px-3 py-3.5 text-center">W</th>
-                    <th className="px-2.5 sm:px-3 py-3.5 text-center">L</th>
-                    <th className="px-2 sm:px-3 py-3.5 text-center">T</th>
-                    <th className="px-2 sm:px-3 py-3.5 text-center">NR</th>
-                    <th className="px-3 sm:px-4 py-3.5 text-center font-black text-[#D9A928] bg-white/10">PTS</th>
-                    <th className="px-3 sm:px-4 py-3.5 text-right font-black">NRR</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E5E5]">
-                  {standings.map((team, idx) => {
-                    const isTop4 = idx < 4;
-                    const nrrFormatted = (team.nrr > 0 ? `+${team.nrr.toFixed(3)}` : team.nrr.toFixed(3));
+          <div className="flex flex-col gap-8">
+            {/* Group 1 Points Table */}
+            {(() => {
+              const group1Teams = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
+              const g1TeamIds = new Set(group1Teams.length > 0 ? group1Teams.map((t) => t.id) : teams.slice(0, 3).map((t) => t.id));
+              const group1Standings = calculateStandings(
+                teams.filter((t) => g1TeamIds.has(t.id)),
+                matches
+              );
 
-                    return (
-                      <tr
-                        key={team.teamId}
-                        className={`hover:bg-[#FAFAF8] transition-colors ${
-                          idx === 0 ? "bg-[#D9A928]/5" : ""
-                        }`}
-                      >
-                        <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">
-                          <span
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
-                              idx === 0
-                                ? "bg-[#D9A928] text-black shadow-xs"
-                                : isTop4
-                                ? "bg-black text-white"
-                                : "text-[#5F6368]"
-                            }`}
-                          >
-                            {team.pos}
-                          </span>
-                        </td>
+              return (
+                <div className="bg-white border border-[#E5E5E5] rounded-3xl overflow-hidden shadow-sm flex flex-col">
+                  {/* Group 1 Header */}
+                  <div className="px-5 py-4 bg-[#111111] text-white flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#D9A928]" />
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
+                        GROUP 1 STANDINGS
+                      </h2>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-[#D9A928]/20 text-[#D9A928] border border-[#D9A928]/30">
+                      Top 2 Qualify
+                    </span>
+                  </div>
 
-                        <td className="px-3 sm:px-4 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <TeamLogo
-                              logoUrl={team.logoUrl}
-                              name={team.teamName}
-                              shortName={team.teamShortName}
-                              size="xs"
-                            />
-                            <div className="min-w-0">
-                              <p className="font-extrabold text-[#111111] uppercase truncate">
-                                {team.teamName}
-                              </p>
-                              <p className="text-[10px] text-[#5F6368] font-bold uppercase">
-                                {team.teamShortName}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-[#F9FAFB] text-[#4B5563] border-b border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider">
+                          <th className="px-3 sm:px-4 py-3.5 text-center w-12">POS</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-left min-w-[160px]">TEAM</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">P</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">W</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">L</th>
+                          <th className="px-2 sm:px-3 py-3.5 text-center">T</th>
+                          <th className="px-2 sm:px-3 py-3.5 text-center">NR</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] bg-[#D9A928]/15">PTS</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-right font-black">NRR</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E5E5]">
+                        {group1Standings.map((team, idx) => {
+                          const isQualified = idx < 2;
+                          const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(3)}` : team.nrr.toFixed(3);
 
-                        <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
-                          {team.played}
-                        </td>
-                        <td className="px-2.5 sm:px-3 py-3.5 text-center font-black text-emerald-700 tabular-nums">
-                          {team.won}
-                        </td>
-                        <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-rose-700 tabular-nums">
-                          {team.lost}
-                        </td>
-                        <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
-                          {team.tied}
-                        </td>
-                        <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
-                          {team.noResult}
-                        </td>
-                        <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-sm">
-                          {team.points}
-                        </td>
-                        <td className="px-3 sm:px-4 py-3.5 text-right font-black tabular-nums text-[#111111]">
-                          {team.played > 0 ? nrrFormatted : "0.000"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          return (
+                            <tr
+                              key={team.teamId}
+                              className={`hover:bg-[#FAFAF8] transition-colors ${
+                                idx === 0 ? "bg-[#D9A928]/5" : ""
+                              }`}
+                            >
+                              <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">
+                                <span
+                                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+                                    isQualified
+                                      ? "bg-[#D9A928] text-black shadow-xs"
+                                      : "bg-slate-200 text-[#5F6368]"
+                                  }`}
+                                >
+                                  {team.pos}
+                                </span>
+                              </td>
 
-            {/* Rules explanation footer */}
-            <div className="bg-[#F7F7F5] border-t border-[#E5E5E5] px-4 py-3 text-[10px] text-[#5F6368] flex flex-wrap items-center justify-between gap-2">
+                              <td className="px-3 sm:px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <TeamLogo
+                                    logoUrl={team.logoUrl}
+                                    name={team.teamName}
+                                    shortName={team.teamShortName}
+                                    size="xs"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-extrabold text-[#111111] uppercase truncate">
+                                        {team.teamName}
+                                      </p>
+                                      {isQualified && (
+                                        <span className="hidden sm:inline-block text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                          QUALIFIED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                      {team.teamShortName}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.played}
+                              </td>
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-black text-emerald-700 tabular-nums">
+                                {team.won}
+                              </td>
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-rose-700 tabular-nums">
+                                {team.lost}
+                              </td>
+                              <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.tied}
+                              </td>
+                              <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.noResult}
+                              </td>
+                              <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-sm">
+                                {team.points}
+                              </td>
+                              <td className="px-3 sm:px-4 py-3.5 text-right font-black tabular-nums text-[#111111]">
+                                {team.played > 0 ? nrrFormatted : "0.000"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Group 2 Points Table */}
+            {(() => {
+              const group2Teams = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
+              const g2TeamIds = new Set(group2Teams.length > 0 ? group2Teams.map((t) => t.id) : teams.slice(3, 6).map((t) => t.id));
+              const group2Standings = calculateStandings(
+                teams.filter((t) => g2TeamIds.has(t.id)),
+                matches
+              );
+
+              return (
+                <div className="bg-white border border-[#E5E5E5] rounded-3xl overflow-hidden shadow-sm flex flex-col">
+                  {/* Group 2 Header */}
+                  <div className="px-5 py-4 bg-[#111111] text-white flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-purple-400" />
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
+                        GROUP 2 STANDINGS
+                      </h2>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                      Top 2 Qualify
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-[#F9FAFB] text-[#4B5563] border-b border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider">
+                          <th className="px-3 sm:px-4 py-3.5 text-center w-12">POS</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-left min-w-[160px]">TEAM</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">P</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">W</th>
+                          <th className="px-2.5 sm:px-3 py-3.5 text-center">L</th>
+                          <th className="px-2 sm:px-3 py-3.5 text-center">T</th>
+                          <th className="px-2 sm:px-3 py-3.5 text-center">NR</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] bg-[#D9A928]/15">PTS</th>
+                          <th className="px-3 sm:px-4 py-3.5 text-right font-black">NRR</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E5E5]">
+                        {group2Standings.map((team, idx) => {
+                          const isQualified = idx < 2;
+                          const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(3)}` : team.nrr.toFixed(3);
+
+                          return (
+                            <tr
+                              key={team.teamId}
+                              className={`hover:bg-[#FAFAF8] transition-colors ${
+                                idx === 0 ? "bg-purple-500/5" : ""
+                              }`}
+                            >
+                              <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">
+                                <span
+                                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+                                    isQualified
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "bg-slate-200 text-[#5F6368]"
+                                  }`}
+                                >
+                                  {team.pos}
+                                </span>
+                              </td>
+
+                              <td className="px-3 sm:px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <TeamLogo
+                                    logoUrl={team.logoUrl}
+                                    name={team.teamName}
+                                    shortName={team.teamShortName}
+                                    size="xs"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-extrabold text-[#111111] uppercase truncate">
+                                        {team.teamName}
+                                      </p>
+                                      {isQualified && (
+                                        <span className="hidden sm:inline-block text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                          QUALIFIED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                      {team.teamShortName}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.played}
+                              </td>
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-black text-emerald-700 tabular-nums">
+                                {team.won}
+                              </td>
+                              <td className="px-2.5 sm:px-3 py-3.5 text-center font-bold text-rose-700 tabular-nums">
+                                {team.lost}
+                              </td>
+                              <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.tied}
+                              </td>
+                              <td className="px-2 sm:px-3 py-3.5 text-center font-bold text-[#5F6368] tabular-nums">
+                                {team.noResult}
+                              </td>
+                              <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-sm">
+                                {team.points}
+                              </td>
+                              <td className="px-3 sm:px-4 py-3.5 text-right font-black tabular-nums text-[#111111]">
+                                {team.played > 0 ? nrrFormatted : "0.000"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Standings Rules Summary Footer */}
+            <div className="bg-white border border-[#E5E5E5] rounded-2xl px-5 py-3.5 text-xs text-[#5F6368] flex flex-wrap items-center justify-between gap-3 shadow-xs">
               <span className="font-bold">
-                Win: <strong className="text-[#111111]">2 pts</strong> • Tie/NR: <strong className="text-[#111111]">1 pt</strong> • Loss: <strong className="text-[#111111]">0 pts</strong>
+                Points: <strong className="text-[#111111]">Win = 2 pts</strong> • <strong className="text-[#111111]">Tie / No Result = 1 pt</strong> • <strong className="text-[#111111]">Loss = 0 pts</strong>
               </span>
               <span className="font-bold">
-                Sorted by Points $\to$ Net Run Rate (NRR) $\to$ Wins
+                Official Sort: <strong className="text-[#111111]">Points → Net Run Rate (NRR) → Total Wins</strong>
               </span>
             </div>
           </div>

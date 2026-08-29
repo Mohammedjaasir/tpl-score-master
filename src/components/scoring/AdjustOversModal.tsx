@@ -75,15 +75,17 @@ export function AdjustOversModal({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-white/70 mb-1">Reason</label>
+            <label className="block text-xs font-bold text-white/70 mb-1">Match / Ground Condition</label>
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#D9A928]"
             >
-              <option value="Rain Delay">Rain Delay</option>
-              <option value="Unavoidable Delay">Unavoidable Delay</option>
-              <option value="Match Time Restriction">Match Time Restriction</option>
+              <option value="NORMAL">NORMAL — Play in Progress</option>
+              <option value="RAIN DELAY">RAIN DELAY — Play Suspended</option>
+              <option value="RAIN RESUMED">RAIN RESUMED — Play Active</option>
+              <option value="REDUCED OVERS">REDUCED OVERS — Overs Revised</option>
+              <option value="MATCH ABANDONED">MATCH ABANDONED — No Result</option>
             </select>
           </div>
         </div>
@@ -102,7 +104,7 @@ export function AdjustOversModal({
             className="flex-1 py-2.5 rounded-xl bg-[#D9A928] text-xs font-black text-black hover:bg-[#c49822] transition-colors flex items-center justify-center gap-1.5"
           >
             <Check className="h-4 w-4" />
-            Apply Overs
+            Apply Conditions
           </button>
         </div>
       </div>
