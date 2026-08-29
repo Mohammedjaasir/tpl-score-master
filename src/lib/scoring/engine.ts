@@ -144,8 +144,8 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   let extras = 0;
   let wickets = 0;
   let legalBalls = 0;
-  let strikerId = config.openers?.strikerId;
-  let nonStrikerId = config.openers?.nonStrikerId;
+  let strikerId = config.openers?.strikerId || deliveries[0]?.strikerId;
+  let nonStrikerId = config.openers?.nonStrikerId || deliveries[0]?.nonStrikerId;
   let position = 0;
   let partnershipRuns = 0;
   let partnershipBalls = 0;
@@ -173,6 +173,16 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   };
 
   for (const d of deliveries) {
+    // If openers were not in setup, dynamically infer from delivery sequence
+    if (!strikerId && d.strikerId) {
+      strikerId = d.strikerId;
+      ensureBatter(strikerId);
+    }
+    if (!nonStrikerId && d.nonStrikerId) {
+      nonStrikerId = d.nonStrikerId;
+      ensureBatter(nonStrikerId);
+    }
+
     const overNumber = Math.floor(legalBalls / 6);
     let group = overGroups[overGroups.length - 1];
     if (!group || group.overNumber !== overNumber || group.complete) {
@@ -192,7 +202,9 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     extras += d.extraRuns;
     if (d.extraType) extras += 0;
 
-    const striker = ensureBatter(strikerId);
+    const striker = ensureBatter(strikerId || d.strikerId);
+    if (d.nonStrikerId) ensureBatter(d.nonStrikerId);
+
     if (striker) {
       striker.runs += batterRunsOf(d);
       if (facesBall(d)) striker.balls += 1;
@@ -304,7 +316,8 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   }
 
   const maxBalls = config.maxOvers * 6;
-  const allOut = wickets >= Math.max(1, config.battingXI.length - 1);
+  const maxWickets = config.battingXI.length >= 2 ? config.battingXI.length - 1 : 10;
+  const allOut = wickets >= maxWickets;
   const chased = config.target !== undefined && runs >= config.target;
   const isComplete = allOut || legalBalls >= maxBalls || chased;
 
@@ -313,6 +326,15 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   const previousBowlerId = overInProgress
     ? overGroups[overGroups.length - 2]?.bowlerId
     : lastGroup?.bowlerId;
+
+  // Derive currentBowlerId:
+  // If an over is in progress, currentBowlerId is overInProgress.bowlerId.
+  // If the over just completed, currentBowlerId is undefined (needsBowler is true).
+  const currentBowlerId =
+    overInProgress?.bowlerId ??
+    (deliveries.length > 0 && legalBalls % 6 !== 0
+      ? deliveries[deliveries.length - 1]?.bowlerId
+      : undefined);
 
   const battedIds = new Set(batters.keys());
   const yetToBat = config.battingXI.filter((id) => !battedIds.has(id));
@@ -334,7 +356,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     maxOvers: config.maxOvers,
     strikerId,
     nonStrikerId,
-    currentBowlerId: overInProgress?.bowlerId,
+    currentBowlerId,
     previousBowlerId,
     batters: battersList,
     bowlers: bowlersList,
@@ -349,7 +371,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
       batterBId: nonStrikerId,
     },
     isComplete,
-    needsBowler: !isComplete && !overInProgress,
+    needsBowler: !isComplete && !currentBowlerId,
     yetToBat,
   };
 
@@ -378,16 +400,23 @@ export interface MatchInput {
 
 export function buildMatchState(input: MatchInput): MatchState {
   const { match, setup, deliveries } = input;
-  const battingFirstId = setup.battingFirstId;
-  const teamAId = battingFirstId ?? match.teamAId;
+  
+  // Authoritatively derive battingFirstId if setup is empty or partial
+  const firstDeliv = deliveries.find((d) => d.inningsIndex === 0);
+  const battingFirstId = setup.battingFirstId || match.teamAId;
+  const teamAId = battingFirstId;
   const teamBId = teamAId === match.teamAId ? match.teamBId : match.teamAId;
 
-  const xiOf = (teamId: string) => setup.playingXI[teamId]?.playerIds ?? [];
+  const xiOf = (teamId: string) => setup?.playingXI?.[teamId]?.playerIds ?? [];
 
   // Scenario A: Rain before or during 1st innings -> equal overs reduction
   const maxOvers1 = input.reducedOvers ?? setup.reducedOvers ?? match.overs;
 
   const innings: InningsState[] = [];
+
+  const firstOpeners =
+    setup.openers ||
+    (firstDeliv ? { strikerId: firstDeliv.strikerId, nonStrikerId: firstDeliv.nonStrikerId } : undefined);
 
   const first = buildInnings(
     {
@@ -396,7 +425,7 @@ export function buildMatchState(input: MatchInput): MatchState {
       bowlingTeamId: teamBId,
       battingXI: xiOf(teamAId),
       bowlingXI: xiOf(teamBId),
-      openers: setup.openers,
+      openers: firstOpeners,
       maxOvers: maxOvers1,
     },
     deliveries.filter((d) => d.inningsIndex === 0),
@@ -404,7 +433,7 @@ export function buildMatchState(input: MatchInput): MatchState {
   innings.push(first);
 
   let phase: MatchState["phase"] = "innings1";
-  if (!setup.battingFirstId || !setup.openers || (deliveries.length === 0 && match.status !== "LIVE")) {
+  if (deliveries.length === 0 && match.status !== "LIVE" && match.status !== "COMPLETED" && (!setup.battingFirstId || !setup.openers)) {
     phase = "setup";
   }
 
@@ -425,9 +454,22 @@ export function buildMatchState(input: MatchInput): MatchState {
   }
 
   let second: InningsState | undefined;
-  if (first.isComplete) {
-    phase = input.secondInningsStarted ? "innings2" : "break";
-    if (input.secondInningsStarted) {
+  const hasSecondInnings = Boolean(
+    input.secondInningsStarted ||
+    deliveries.some((d) => d.inningsIndex === 1)
+  );
+
+  if (first.isComplete || hasSecondInnings) {
+    phase = hasSecondInnings ? "innings2" : "break";
+    if (hasSecondInnings) {
+      const secondDelivs = deliveries.filter((d) => d.inningsIndex === 1);
+      const firstSecondDeliv = secondDelivs[0];
+      const secondOpeners =
+        input.secondInningsOpeners ||
+        (firstSecondDeliv
+          ? { strikerId: firstSecondDeliv.strikerId, nonStrikerId: firstSecondDeliv.nonStrikerId }
+          : undefined);
+
       second = buildInnings(
         {
           index: 1,
@@ -435,11 +477,11 @@ export function buildMatchState(input: MatchInput): MatchState {
           bowlingTeamId: teamAId,
           battingXI: xiOf(teamBId),
           bowlingXI: xiOf(teamAId),
-          openers: input.secondInningsOpeners,
+          openers: secondOpeners,
           maxOvers: maxOvers2,
           target,
         },
-        deliveries.filter((d) => d.inningsIndex === 1),
+        secondDelivs,
       );
       second.originalTarget = first.runs + 1;
       second.isTargetRevised = isTargetRevised;

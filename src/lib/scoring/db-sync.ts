@@ -127,6 +127,7 @@ export function supabaseBallToDelivery(ball: SupabaseBall, inningsIndex: 0 | 1):
     extraRuns: ball.extras ?? 0,
     extraType,
     wicket,
+    shotZone: ball.shot_zone || (ball as any).shotZone || null,
     timestamp: Number(ball.client_timestamp || Date.now()),
   };
 }
@@ -214,6 +215,7 @@ export async function persistBall(params: {
   extras: number;
   extraType: ExtraType;
   wicket?: WicketInfo;
+  shotZone?: string | null;
   totalRuns: number;
   totalWickets: number;
   oversCompleted: number;
@@ -246,6 +248,7 @@ export async function persistBall(params: {
       wicketType: mapToSupabaseWicketType(params.wicket?.type),
       playerOutId: params.wicket?.batterOutId || null,
       fielderId: params.wicket?.fielderId || null,
+      shotZone: params.shotZone || null,
       totalRuns: params.totalRuns,
       totalWickets: params.totalWickets,
       oversCompleted: params.oversCompleted,

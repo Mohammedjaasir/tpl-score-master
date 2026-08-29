@@ -47,7 +47,11 @@ interface PublicMatchCentreProps {
 type TabType = "overview" | "commentary" | "scorecard" | "stats" | "wagonwheel" | "playingxi";
 type CommentaryFilter = "all" | "wickets" | "fours" | "sixes" | "extras";
 
-export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchCentreProps) {
+export function PublicMatchCentre({
+  match,
+  state,
+  matchCondition: propMatchCondition,
+}: PublicMatchCentreProps) {
   const [activeTab, setActiveTab] = useState<TabType>("scorecard");
   const [commentaryFilter, setCommentaryFilter] = useState<CommentaryFilter>("all");
   const [copiedShare, setCopiedShare] = useState(false);
@@ -63,12 +67,10 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
   const teamB = lookup.team(match.teamBId);
 
   // Exact Innings Order: 1st batting team always on top / first
-  const battingFirstId = state?.innings[0]?.battingTeamId ?? state?.setup?.battingFirstId;
-  const firstTeamId = battingFirstId ? battingFirstId : match.teamAId;
+  const firstTeamId = state?.innings[0]?.battingTeamId ?? match.teamAId;
   const secondTeamId = firstTeamId === match.teamAId ? match.teamBId : match.teamAId;
-
-  const teamFirst = lookup.team(firstTeamId);
-  const teamSecond = lookup.team(secondTeamId);
+  const teamFirst = lookup.team(firstTeamId) ?? teamA;
+  const teamSecond = lookup.team(secondTeamId) ?? teamB;
 
   const isLive = match.status === "LIVE" || state?.phase === "innings1" || state?.phase === "innings2";
   const isDone = match.status === "COMPLETED" || state?.phase === "complete";
@@ -90,6 +92,25 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
   const activeBowler = currentInnings?.bowlers.find(
     (b) => b.playerId === currentInnings?.currentBowlerId,
   );
+
+  // Weather / Match Condition
+  const effectiveMatchCondition = (
+    propMatchCondition ||
+    (match.status === "ABANDONED"
+      ? "MATCH_ABANDONED"
+      : state?.setup?.weatherCondition ||
+        (state?.setup?.targetRevisionReason === "RAIN DELAY"
+          ? "RAIN_DELAY"
+          : state?.setup?.targetRevisionReason === "RAIN RESUMED"
+          ? "RAIN_RESUMED"
+          : state?.setup?.targetRevisionReason === "REDUCED OVERS"
+          ? "REDUCED_OVERS"
+          : state?.setup?.targetRevisionReason === "MATCH ABANDONED"
+          ? "MATCH_ABANDONED"
+          : state?.isRainAffected
+          ? "REDUCED_OVERS"
+          : "NORMAL"))
+  ) as MatchCondition;
 
   // Deliveries list (flattened & chronological for commentary)
   const allDeliveries = useMemo(() => {
@@ -604,7 +625,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
       </div>
 
       {/* ── WEATHER / RAIN DELAY BANNER ────────────────────────────────── */}
-      {matchCondition && matchCondition !== "NORMAL" && (
+      {effectiveMatchCondition && effectiveMatchCondition !== "NORMAL" && (
         <div className="p-4 rounded-2xl bg-blue-900/40 border border-blue-500/30 flex items-center justify-between gap-4 text-blue-100 shadow-md">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-300">
@@ -612,7 +633,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
             </div>
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-white">
-                {formatMatchCondition(matchCondition).label}
+                {formatMatchCondition(effectiveMatchCondition).label}
               </p>
               <p className="text-[11px] text-blue-200">
                 Official tournament match condition updated by match referee.
@@ -690,20 +711,119 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
 
       {/* ── TAB 1: OVERVIEW ────────────────────────────────────────────── */}
       {activeTab === "overview" && (
-        <div className="flex flex-col gap-6">
-          {/* Current Batters & Bowler Grid */}
+        <div className="flex flex-col gap-4">
+          {/* 1. MATCH RESULT / STATUS CARD */}
+          {isDone ? (
+            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] bg-black px-2.5 py-0.5 rounded-full">
+                  MATCH RESULT
+                </span>
+                <span className="text-[11px] font-bold text-[#5F6368]">Match #{match.matchNumber}</span>
+              </div>
+
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black uppercase text-[#111111] tracking-tight">
+                  {state?.resultText ? state.resultText.split(" won by ")[0] : (lookup.team(match.winnerId ?? "")?.name ?? "MATCH COMPLETED")}
+                </h2>
+                <p className="text-sm font-black text-[#D9A928] uppercase mt-0.5">
+                  {state?.resultText ?? (match.winnerId ? `${lookup.team(match.winnerId)?.name ?? "Team"} Won` : "Match Completed")}
+                </p>
+              </div>
+
+              {/* Final Score Summary Strip */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <div className="bg-[#F7F7F5] p-3 rounded-2xl border border-[#E5E5E5]/60">
+                  <p className="text-xs font-black uppercase text-[#111111] truncate">
+                    {teamFirst?.shortName ?? teamFirst?.name}
+                  </p>
+                  <p className="text-lg font-black text-[#111111] tabular-nums mt-0.5">
+                    {firstInnings?.runs ?? 0}/{firstInnings?.wickets ?? 0}
+                    <span className="text-xs text-[#5F6368] font-bold ml-1">
+                      ({firstInnings?.oversText ?? "0.0"} ov)
+                    </span>
+                  </p>
+                </div>
+                <div className="bg-[#F7F7F5] p-3 rounded-2xl border border-[#E5E5E5]/60">
+                  <p className="text-xs font-black uppercase text-[#111111] truncate">
+                    {teamSecond?.shortName ?? teamSecond?.name}
+                  </p>
+                  <p className="text-lg font-black text-[#111111] tabular-nums mt-0.5">
+                    {secondInnings ? (
+                      <>
+                        {secondInnings.runs}/{secondInnings.wickets}
+                        <span className="text-xs text-[#5F6368] font-bold ml-1">
+                          ({secondInnings.oversText} ov)
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-[#5F6368] font-bold uppercase">Yet to bat</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {matchMVP && (
+                <div className="flex items-center justify-between pt-2.5 border-t border-[#E5E5E5] text-xs">
+                  <span className="font-bold text-[#5F6368]">Player of the Match:</span>
+                  <button
+                    onClick={() => setSelectedPerformancePlayerId(matchMVP.player.id)}
+                    className="font-black text-[#111111] hover:text-[#D9A928] hover:underline flex items-center gap-1"
+                  >
+                    <span>{matchMVP.player.name}</span>
+                    <span className="text-[10px] text-[#5F6368] font-normal">
+                      ({lookup.team(matchMVP.player.teamId)?.shortName})
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : match.status === "ABANDONED" ? (
+            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 text-center shadow-sm">
+              <span className="text-[10px] font-black uppercase tracking-widest text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1 rounded-full">
+                MATCH ABANDONED
+              </span>
+              <h2 className="text-lg font-black uppercase text-[#111111] mt-3">NO RESULT</h2>
+              <p className="text-xs text-[#5F6368] mt-1">Match abandoned due to weather / ground conditions.</p>
+            </div>
+          ) : !isLive && (
+            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-2.5">
+              <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                  MATCH SCHEDULE
+                </span>
+                <span className="text-[11px] font-bold text-[#5F6368]">Match #{match.matchNumber}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pt-1">
+                <div className="bg-[#F7F7F5] p-2.5 rounded-xl">
+                  <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Start Time</span>
+                  <span className="font-black text-[#111111]">{formatMatchTime(match.startTime)}</span>
+                </div>
+                <div className="bg-[#F7F7F5] p-2.5 rounded-xl">
+                  <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Overs</span>
+                  <span className="font-black text-[#111111]">{match.overs} Overs / Side</span>
+                </div>
+                <div className="bg-[#F7F7F5] p-2.5 rounded-xl col-span-2 sm:col-span-1">
+                  <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Venue</span>
+                  <span className="font-black text-[#111111]">TPL Ground</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. CURRENT BATTERS & CURRENT BOWLER (ONLY WHEN LIVE) */}
           {isLive && currentInnings && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {/* Current Batters */}
-              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-3 border-b border-[#E5E5E5] pb-2">
+              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2.5 border-b border-[#E5E5E5] pb-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928]" />
                     Current Batters
                   </span>
                   <span className="text-[10px] font-bold text-[#5F6368]">R (B) • 4s • 6s • SR</span>
                 </div>
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2.5">
                   {[striker, nonStriker].filter(Boolean).map((b) => {
                     const p = lookup.player(b!.playerId);
                     const isStriker = b!.playerId === currentInnings.strikerId;
@@ -713,7 +833,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                         <div className="min-w-0 flex-1">
                           <button
                             onClick={() => setSelectedPerformancePlayerId(b!.playerId)}
-                            className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] flex items-center gap-1.5 truncate group"
+                            className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] flex items-center gap-1.5 truncate group cursor-pointer"
                             title="View Player Performance & Wagon Wheel"
                           >
                             <span className="group-hover:underline">{p?.name ?? "Batter"}</span>
@@ -725,7 +845,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-black text-[#111111] tabular-nums">
-                            {b!.runs} <span className="text-xs text-[#5F6368]">({b!.balls})</span>
+                            {b!.runs} <span className="text-xs text-[#5F6368] font-normal">({b!.balls})</span>
                           </p>
                           <p className="text-[10px] text-[#5F6368] font-bold tabular-nums">
                             4s: {b!.fours} • 6s: {b!.sixes} • SR: {sr}
@@ -735,15 +855,15 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                     );
                   })}
                   {!striker && !nonStriker && (
-                    <p className="text-xs text-[#5F6368] italic py-2">No active batters on crease.</p>
+                    <p className="text-xs text-[#5F6368] italic py-1">No active batters on crease.</p>
                   )}
                 </div>
               </div>
 
-              {/* Current Bowler */}
-              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 shadow-sm flex flex-col justify-between gap-3">
+              {/* Current Bowler & This Over Balls */}
+              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col justify-between gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-3 border-b border-[#E5E5E5] pb-2">
+                  <div className="flex items-center justify-between mb-2.5 border-b border-[#E5E5E5] pb-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928]" />
                       Current Bowler
@@ -758,7 +878,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                           <div>
                             <button
                               onClick={() => setSelectedPerformancePlayerId(activeBowler.playerId)}
-                              className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate"
+                              className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate cursor-pointer"
                               title="View Player Performance & Wagon Wheel"
                             >
                               {p?.name ?? "Bowler"}
@@ -768,7 +888,9 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                           <div className="text-right">
                             <p className="text-sm font-black text-[#111111] tabular-nums">
                               <span className="text-[#9A6A05] font-black">{activeBowler.wickets}</span>/{activeBowler.runs}{" "}
-                              <span className="text-xs text-[#5F6368]">({oversText(activeBowler.legalBalls)} ov)</span>
+                              <span className="text-xs text-[#5F6368] font-normal">
+                                ({oversText(activeBowler.legalBalls)} ov)
+                              </span>
                             </p>
                             <p className="text-[10px] text-[#5F6368] font-bold tabular-nums">
                               M: {activeBowler.maidens} • Econ: {(activeBowler.economy ?? 0).toFixed(2)}
@@ -778,13 +900,13 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                       );
                     })()
                   ) : (
-                    <p className="text-xs text-[#5F6368] italic py-2">Next bowler awaiting selection</p>
+                    <p className="text-xs text-[#5F6368] italic py-1">Next bowler awaiting selection</p>
                   )}
                 </div>
 
-                {/* Recent Balls Strip */}
+                {/* 3. THIS OVER BALLS STRIP */}
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] mb-1.5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] mb-1">
                     This Over Balls
                   </p>
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -804,7 +926,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                         </span>
                       );
                     })}
-                    {(!currentInnings.recentBalls?.length) && (
+                    {!currentInnings.recentBalls?.length && (
                       <span className="text-xs text-[#5F6368] italic">Over yet to start</span>
                     )}
                   </div>
@@ -813,54 +935,198 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
             </div>
           )}
 
-          {/* Current & Historical Partnerships Section */}
-          <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-3">
+          {/* 4. CURRENT PARTNERSHIP (ONLY WHEN LIVE) */}
+          {isLive && currentInnings && (
+            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] block mb-1">
+                  CURRENT PARTNERSHIP
+                </span>
+                <p className="text-sm font-black text-[#111111]">
+                  {lookup.player(currentInnings.partnership.batterAId ?? "")?.name ?? "Striker"} &{" "}
+                  {lookup.player(currentInnings.partnership.batterBId ?? "")?.name ?? "Non-Striker"}
+                </p>
+                <p className="text-xs font-bold text-[#5F6368] mt-0.5">
+                  {currentInnings.partnership.runs} runs • {currentInnings.partnership.balls} balls
+                </p>
+              </div>
+              <div className="text-right bg-[#F7F7F5] border border-[#E5E5E5] px-3.5 py-2 rounded-2xl">
+                <span className="text-xl font-black text-[#111111] tabular-nums block">
+                  {currentInnings.partnership.runs}
+                </span>
+                <span className="text-[9px] font-bold text-[#5F6368] uppercase block leading-none">
+                  Runs
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 5. RUNS PER OVER (BMR) VISUALIZATION */}
+          {(() => {
+            const activeInningsForOvers = (secondInnings?.legalBalls ? secondInnings : firstInnings) ?? currentInnings;
+            const overGroups = activeInningsForOvers?.overGroups ?? [];
+            const maxOverRuns = overGroups.reduce((max, og) => Math.max(max, og.runs), 1);
+            const inningsBatTeam = activeInningsForOvers ? lookup.team(activeInningsForOvers.battingTeamId) : null;
+
+            if (overGroups.length === 0) {
+              return (
+                <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-[#D9A928]" />
+                      <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                        RUNS PER OVER
+                      </h3>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#5F6368] italic py-2">No over data available yet.</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-[#D9A928]" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                      RUNS PER OVER ({inningsBatTeam?.shortName ?? "INNINGS"})
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#5F6368]">
+                    {overGroups.length} Overs Bowled
+                  </span>
+                </div>
+
+                {/* Compact Responsive Bar Chart */}
+                <div className="flex items-end gap-1.5 sm:gap-2 h-24 pt-4 pb-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar">
+                  {overGroups.map((og) => {
+                    const heightPercent = Math.max(14, Math.round((og.runs / Math.max(maxOverRuns, 1)) * 100));
+                    const hasWicket = og.wickets > 0;
+                    const isHighOver = og.runs >= 10;
+
+                    return (
+                      <div
+                        key={og.overNumber}
+                        className="flex-1 min-w-[22px] max-w-[36px] flex flex-col items-center justify-end h-full group"
+                      >
+                        <span className="text-[9px] font-black text-[#111111] tabular-nums mb-0.5 group-hover:text-[#D9A928]">
+                          {og.runs}
+                        </span>
+                        <div
+                          style={{ height: `${heightPercent}%` }}
+                          className={`w-full rounded-t transition-all ${
+                            hasWicket
+                              ? "bg-red-500"
+                              : isHighOver
+                              ? "bg-[#D9A928]"
+                              : "bg-[#111111]"
+                          }`}
+                        />
+                        <span className="text-[9px] font-bold text-[#5F6368] mt-1 tabular-nums">
+                          {og.overNumber + 1}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 6. RECENT OVER BREAKDOWN */}
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                      Recent Over Breakdown
+                    </p>
+                    {overGroups.length > 5 && (
+                      <button
+                        onClick={() => setShowAllOvers((prev) => !prev)}
+                        className="text-[10px] font-black uppercase text-[#D9A928] hover:underline cursor-pointer"
+                      >
+                        {showAllOvers ? "Show Recent 5" : `View All (${overGroups.length})`}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col divide-y divide-[#E5E5E5]">
+                    {(showAllOvers ? overGroups : overGroups.slice(-5)).reverse().map((og) => {
+                      const bowler = lookup.player(og.bowlerId);
+                      return (
+                        <div
+                          key={og.overNumber}
+                          className="py-2 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-black text-[#111111] truncate">
+                              OVER {og.overNumber + 1}{" "}
+                              <span className="text-[#5F6368] font-normal ml-1">
+                                • {bowler?.shortName ?? "Bowler"}
+                              </span>
+                            </p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {og.balls.map((b, bi) => {
+                                let bg = "bg-[#F7F7F5] text-[#111111] border-[#E5E5E5]";
+                                if (b.kind === "wicket") bg = "bg-red-600 text-white border-red-700";
+                                else if (b.delivery.batterRuns === 4) bg = "bg-[#D9A928] text-black border-[#C7961A]";
+                                else if (b.delivery.batterRuns === 6) bg = "bg-purple-600 text-white border-purple-700";
+                                else if (b.kind === "extra") bg = "bg-blue-50 text-blue-800 border-blue-200";
+
+                                return (
+                                  <span
+                                    key={bi}
+                                    className={`h-5 w-5 rounded text-[10px] font-black flex items-center justify-center border ${bg}`}
+                                  >
+                                    {b.label}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="font-black text-sm text-[#111111] tabular-nums">{og.runs}</span>
+                            <span className="text-[10px] font-bold text-[#5F6368] uppercase ml-1">RUNS</span>
+                            {og.wickets > 0 && (
+                              <p className="text-[10px] font-black text-red-600 uppercase tabular-nums">
+                                {og.wickets} {og.wickets === 1 ? "Wicket" : "Wickets"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 7. COMPLETED PARTNERSHIPS */}
+          <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-[#D9A928]" />
-                <h2 className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                  PARTNERSHIPS ({battingTeam?.name ?? "INNINGS"})
-                </h2>
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                  COMPLETED PARTNERSHIPS
+                </h3>
               </div>
-              <span className="text-[10px] font-bold text-[#5F6368] uppercase">TPL 2026</span>
+              <span className="text-[10px] font-bold text-[#5F6368]">
+                {state?.innings.reduce((acc, inn) => acc + (inn.partnerships?.length ?? 0), 0) ?? 0} Total
+              </span>
             </div>
 
-            {/* Current Ongoing Partnership */}
-            {currentInnings && (
-              <div className="p-4 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#D9A928] bg-black px-2 py-0.5 rounded-full">
-                    Current Partnership
-                  </span>
-                  <p className="text-sm font-black text-[#111111] mt-2">
-                    {lookup.player(currentInnings.partnership.batterAId ?? "")?.name ?? "Striker"} &{" "}
-                    {lookup.player(currentInnings.partnership.batterBId ?? "")?.name ?? "Non-Striker"}
-                  </p>
-                  <p className="text-xs text-[#5F6368] font-bold">
-                    {currentInnings.partnership.runs} runs off {currentInnings.partnership.balls} balls
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-black text-[#111111] tabular-nums">{currentInnings.partnership.runs}</p>
-                  <p className="text-[10px] text-[#5F6368] uppercase font-bold">Runs</p>
-                </div>
-              </div>
-            )}
-
-            {/* Historical Completed Partnerships */}
             {state?.innings.map((inn, idx) => (
-              <div key={inn.index} className="flex flex-col gap-2 pt-2">
-                <h3 className="text-[11px] font-black uppercase tracking-wider text-[#5F6368]">
-                  {idx === 0 ? "1st Innings" : "2nd Innings"} Completed Partnerships
-                </h3>
+              <div key={inn.index} className="flex flex-col gap-1.5 pt-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                  {idx === 0 ? (teamFirst?.name ?? "1st Innings") : (teamSecond?.name ?? "2nd Innings")} ({inn.runs}/{inn.wickets})
+                </p>
                 {inn.partnerships && inn.partnerships.length > 0 ? (
-                  <div className="flex flex-col divide-y divide-[#E5E5E5] border border-[#E5E5E5] rounded-2xl px-4 bg-white">
+                  <div className="flex flex-col divide-y divide-[#E5E5E5] bg-[#F7F7F5] border border-[#E5E5E5] rounded-2xl px-3.5">
                     {inn.partnerships.map((p, pi) => {
                       const batterA = lookup.player(p.batterAId);
                       const batterB = lookup.player(p.batterBId);
                       const batterOut = lookup.player(p.batterOutId);
                       return (
-                        <div key={pi} className="py-3 flex items-center justify-between text-xs">
+                        <div key={pi} className="py-2.5 flex items-center justify-between text-xs">
                           <div>
                             <p className="font-bold text-[#111111]">
                               <span className="font-black text-[#D9A928]">Wicket {p.wicketNumber}:</span>{" "}
@@ -872,141 +1138,18 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                           </div>
                           <div className="text-right">
                             <span className="font-black text-[#111111] tabular-nums">{p.runs} runs</span>{" "}
-                            <span className="text-[#5F6368]">({p.balls}b)</span>
+                            <span className="text-[#5F6368] font-bold">({p.balls}b)</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#5F6368] italic">No completed partnerships in this innings yet.</p>
+                  <p className="text-xs text-[#5F6368] italic py-1 px-1">No completed wickets in this innings.</p>
                 )}
               </div>
             ))}
           </div>
-
-          {/* Over Summary & Runs-Per-Over Visualization */}
-          {currentOverGroups.length > 0 && (
-            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-5">
-              <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-[#D9A928]" />
-                  <h2 className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                    RUNS PER OVER ({battingTeam?.shortName ?? "INNINGS"})
-                  </h2>
-                </div>
-                <span className="text-[10px] font-bold text-[#5F6368] uppercase">
-                  {currentOverGroups.length} Overs Bowled
-                </span>
-              </div>
-
-              {/* Simple Responsive Bar Chart */}
-              <div className="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-20 gap-2 items-end min-h-[100px] pt-4 pb-2 border-b border-[#E5E5E5]">
-                {currentOverGroups.map((og) => {
-                  const heightPercent = Math.max(12, Math.round((og.runs / maxOverInInnings) * 100));
-                  const isHighOver = og.runs >= 10;
-                  const hasWicket = og.wickets > 0;
-
-                  return (
-                    <div key={og.overNumber} className="flex flex-col items-center gap-1 group">
-                      <span className="text-[9px] font-bold text-[#5F6368] opacity-0 group-hover:opacity-100 transition-opacity">
-                        {og.runs}r
-                      </span>
-                      <div
-                        style={{ height: `${heightPercent}%` }}
-                        className={`w-full max-w-[20px] rounded-t-md transition-all ${
-                          hasWicket
-                            ? "bg-red-500"
-                            : isHighOver
-                            ? "bg-[#D9A928]"
-                            : "bg-[#111111]/80 hover:bg-[#D9A928]"
-                        }`}
-                      />
-                      <span className="text-[9px] font-bold text-[#5F6368]">
-                        {og.overNumber + 1}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Over-by-Over Detailed Strip */}
-              <div className="flex flex-col gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
-                  Recent Over Breakdowns
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(showAllOvers ? currentOverGroups : currentOverGroups.slice(-6)).reverse().map((og) => {
-                    const bowler = lookup.player(og.bowlerId);
-                    return (
-                      <div key={og.overNumber} className="p-3 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] flex flex-col gap-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-black text-[#111111]">
-                            Over {og.overNumber + 1} • <span className="text-[#5F6368]">{bowler?.shortName ?? "Bowler"}</span>
-                          </span>
-                          <span className="font-black text-[#D9A928] bg-black px-2 py-0.5 rounded-full text-[10px]">
-                            {og.runs} Runs {og.wickets > 0 ? `• ${og.wickets} Wkts` : ""}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {og.balls.map((b, bi) => (
-                            <span
-                              key={bi}
-                              className={`h-6 w-6 rounded-md text-[10px] font-black flex items-center justify-center border ${
-                                b.kind === "wicket"
-                                  ? "bg-red-600 text-white border-red-700"
-                                  : b.delivery.batterRuns === 4
-                                  ? "bg-[#D9A928] text-black border-[#C7961A]"
-                                  : b.delivery.batterRuns === 6
-                                  ? "bg-purple-600 text-white border-purple-700"
-                                  : "bg-white text-[#111111] border-[#E5E5E5]"
-                              }`}
-                            >
-                              {b.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {currentOverGroups.length > 6 && (
-                  <button
-                    onClick={() => setShowAllOvers(!showAllOvers)}
-                    className="self-center mt-2 text-xs font-black uppercase text-[#D9A928] hover:underline"
-                  >
-                    {showAllOvers ? "Show Less Overs" : `View All ${currentOverGroups.length} Overs →`}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Quick Fall of Wickets Timeline */}
-          {currentInnings && currentInnings.fallOfWickets.length > 0 && (
-            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 shadow-sm">
-              <h3 className="text-xs font-black uppercase tracking-wider text-[#111111] mb-3">
-                Fall of Wickets ({battingTeam?.name})
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {currentInnings.fallOfWickets.map((w, wi) => {
-                  const p = lookup.player(w.batterOutId);
-                  return (
-                    <Link
-                      to="/players/$playerId"
-                      params={{ playerId: w.batterOutId }}
-                      key={wi}
-                      className="tap px-3 py-1.5 rounded-xl bg-[#F7F7F5] border border-[#E5E5E5] text-xs font-bold text-[#111111] hover:border-[#D9A928] transition-colors"
-                    >
-                      <span className="text-[#9A6A05] font-black">{wi + 1}-{w.runs}</span>{" "}
-                      <span className="text-[#5F6368]">({p?.shortName ?? "Batter"}, {w.oversText} ov)</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1332,10 +1475,10 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
               .filter((d) => d.delivery.strikerId === currentSelectedId)
               .map((d) => ({
                 strikerId: d.delivery.strikerId,
-                runsOffBat: d.delivery.runsOffBat ?? 0,
-                shotZone: (d.delivery as any).shotZone ?? null,
-                overNumber: d.delivery.overNumber,
-                ballNumber: d.delivery.ballNumber,
+                runsOffBat: d.delivery.batterRuns ?? (d.delivery as any).runsOffBat ?? (d.delivery as any).runs_off_bat ?? 0,
+                shotZone: d.delivery.shotZone ?? (d.delivery as any).shot_zone ?? null,
+                overNumber: (d.delivery as any).overNumber ?? 0,
+                ballNumber: (d.delivery as any).ballNumber ?? 0,
               }));
 
             const summary = currentBatter
@@ -1388,7 +1531,23 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
 
                 {/* Wagon Wheel Component */}
                 {summary ? (
-                  <WagonWheel summary={summary} />
+                  <WagonWheel
+                    summary={summary}
+                    batterStat={
+                      currentBatter
+                        ? {
+                            runs: currentBatter.runs,
+                            balls: currentBatter.balls,
+                            fours: currentBatter.fours,
+                            sixes: currentBatter.sixes,
+                            strikeRate:
+                              currentBatter.balls > 0
+                                ? (currentBatter.runs / currentBatter.balls) * 100
+                                : 0,
+                          }
+                        : undefined
+                    }
+                  />
                 ) : (
                   <div className="card-surface p-12 text-center bg-white border border-[#E5E5E5] rounded-3xl">
                     <p className="text-xs text-[#5F6368] font-bold">

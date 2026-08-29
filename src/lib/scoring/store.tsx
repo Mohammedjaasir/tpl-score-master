@@ -191,12 +191,41 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       setDoc((curr) => {
         // If DB has authoritative deliveries, reconcile with local state
         if (deliveries.length > 0) {
+          const firstDeliv = deliveries.find((d) => d.inningsIndex === 0);
+          const secondDeliv = deliveries.find((d) => d.inningsIndex === 1);
           const hasSecondInnings = deliveries.some((d) => d.inningsIndex === 1);
+
+          const battingFirstId =
+            curr.setup.battingFirstId ||
+            inn1?.batting_team_id ||
+            (firstDeliv?.strikerId ? lookup.player(firstDeliv.strikerId)?.teamId : undefined);
+
+          const openers =
+            curr.setup.openers ||
+            (firstDeliv
+              ? { strikerId: firstDeliv.strikerId, nonStrikerId: firstDeliv.nonStrikerId }
+              : undefined);
+
+          const openingBowlerId = curr.setup.openingBowlerId || firstDeliv?.bowlerId;
+
+          const secondInningsOpeners =
+            curr.secondInningsOpeners ||
+            (secondDeliv
+              ? { strikerId: secondDeliv.strikerId, nonStrikerId: secondDeliv.nonStrikerId }
+              : undefined);
+
           const next: MatchDoc = {
             ...curr,
             deliveries,
             inningsDbIds: dbInningsIds,
+            setup: {
+              ...curr.setup,
+              ...(battingFirstId ? { battingFirstId } : {}),
+              ...(openers ? { openers } : {}),
+              ...(openingBowlerId ? { openingBowlerId } : {}),
+            },
             secondInningsStarted: curr.secondInningsStarted || hasSecondInnings,
+            ...(secondInningsOpeners ? { secondInningsOpeners } : {}),
             isStarted: curr.isStarted || deliveries.length > 0,
             syncStatus: "synced",
           };
@@ -333,10 +362,21 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const currentInningsIndex: 0 | 1 = state?.currentInningsIndex ?? 0;
   const innings = state?.innings[currentInningsIndex];
   const pendingBowlerId = doc.pendingBowlerIds[currentInningsIndex];
+
+  const currentInningsDeliveries = doc.deliveries.filter((d) => d.inningsIndex === currentInningsIndex);
+  const isOverInProgress = innings ? innings.legalBalls % 6 !== 0 : false;
+  const latestOverBowlerId =
+    currentInningsDeliveries.length > 0 && isOverInProgress
+      ? currentInningsDeliveries[currentInningsDeliveries.length - 1]?.bowlerId
+      : undefined;
+
   const activeBowlerId =
     innings?.currentBowlerId ??
+    latestOverBowlerId ??
     pendingBowlerId ??
-    (innings?.legalBalls === 0 && currentInningsIndex === 0 ? doc.setup.openingBowlerId : undefined);
+    (innings?.legalBalls === 0 && currentInningsIndex === 0
+      ? doc.setup.openingBowlerId ?? currentInningsDeliveries[0]?.bowlerId
+      : undefined);
 
   const updateSetup = useCallback(
     (patch: Partial<MatchSetup>) => {
@@ -392,10 +432,20 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       const inn = built.innings[idx];
       if (!inn || inn.isComplete) return;
 
+      const currentInnDeliveries = doc.deliveries.filter((d) => d.inningsIndex === idx);
+      const innOverInProgress = inn.legalBalls % 6 !== 0;
+      const latestInnBowlerId =
+        currentInnDeliveries.length > 0 && innOverInProgress
+          ? currentInnDeliveries[currentInnDeliveries.length - 1]?.bowlerId
+          : undefined;
+
       const bowlerId =
         inn.currentBowlerId ??
+        latestInnBowlerId ??
         doc.pendingBowlerIds[idx] ??
-        (inn.legalBalls === 0 && idx === 0 ? doc.setup.openingBowlerId : undefined);
+        (inn.legalBalls === 0 && idx === 0
+          ? doc.setup.openingBowlerId ?? currentInnDeliveries[0]?.bowlerId
+          : undefined);
       if (!bowlerId || !inn.strikerId || !inn.nonStrikerId) return;
 
       // Disallow consecutive overs by the same bowler
@@ -505,9 +555,10 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
             extras: delivery.extraRuns,
             extraType: delivery.extraType,
             wicket: delivery.wicket,
-            totalRuns: nextInn?.score ?? 0,
+            shotZone: delivery.shotZone,
+            totalRuns: nextInn?.runs ?? 0,
             totalWickets: nextInn?.wickets ?? 0,
-            oversCompleted: nextInn?.overs ?? 0,
+            oversCompleted: nextInn?.legalBalls ? Number((nextInn.legalBalls / 6).toFixed(2)) : 0,
             isInningsComplete: nextInn?.isComplete,
           });
 

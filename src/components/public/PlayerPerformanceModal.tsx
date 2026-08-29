@@ -68,7 +68,7 @@ export function PlayerPerformanceModal({
       .filter((d) => d.delivery.strikerId === playerId)
       .map((d) => ({
         strikerId: d.delivery.strikerId,
-        runsOffBat: d.delivery.runsOffBat ?? 0,
+        runsOffBat: d.delivery.batterRuns ?? (d.delivery as any).runsOffBat ?? (d.delivery as any).runs_off_bat ?? 0,
         shotZone: d.delivery.shotZone ?? (d.delivery as any).shot_zone ?? null,
         overNumber: (d.delivery as any).overNumber ?? 0,
         ballNumber: (d.delivery as any).ballNumber ?? 0,

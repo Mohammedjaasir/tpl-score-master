@@ -31,6 +31,7 @@ export interface RecordBallInput {
   wicketType: SupabaseWicketType;
   playerOutId?: string | null;
   fielderId?: string | null;
+  shotZone?: string | null;
   totalRuns: number;
   totalWickets: number;
   oversCompleted: number;
@@ -151,6 +152,7 @@ export const recordBallServerFn = createServerFn({ method: "POST" })
         wicket_type: input.wicketType,
         player_out_id: input.playerOutId || null,
         fielder_id: input.fielderId || null,
+        shot_zone: input.shotZone || null,
       };
 
       const { data: insertedBall, error: ballError } = await supabaseAdmin
