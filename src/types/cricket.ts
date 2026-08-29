@@ -84,6 +84,51 @@ export interface SupabaseMatch {
   updated_at?: string;
 }
 
+export interface SupabaseInnings {
+  id: string;
+  match_id: string;
+  innings_number: 1 | 2;
+  batting_team_id: string;
+  bowling_team_id: string;
+  total_runs: number;
+  total_wickets: number;
+  overs_completed: number;
+  is_completed: boolean;
+}
+
+export type SupabaseExtraType = "none" | "wide" | "no-ball" | "bye" | "leg-bye";
+
+export type SupabaseWicketType =
+  | "none"
+  | "bowled"
+  | "caught"
+  | "lbw"
+  | "run-out"
+  | "stumped"
+  | "hit-wicket"
+  | "retired-hurt"
+  | "other";
+
+export interface SupabaseBall {
+  id: string;
+  match_id?: string | null;
+  innings_id: string;
+  client_timestamp: number;
+  over_number: number;
+  ball_number: number;
+  striker_id?: string | null;
+  non_striker_id?: string | null;
+  bowler_id?: string | null;
+  runs_off_bat: number;
+  extras: number;
+  extra_type: SupabaseExtraType;
+  is_wicket: boolean;
+  wicket_type: SupabaseWicketType;
+  player_out_id?: string | null;
+  fielder_id?: string | null;
+  created_at?: string;
+}
+
 export type MatchStatus = "UPCOMING" | "READY" | "LIVE" | "COMPLETED";
 
 export interface Match {

@@ -86,7 +86,7 @@ function getEffectiveMatch(m: Match): Match {
     const raw = window.localStorage.getItem("tpl-scoring:" + m.id);
     if (raw) {
       const doc = JSON.parse(raw);
-      if (doc.isCompleted) {
+      if (doc.isCompleted || m.status === "COMPLETED") {
         const computed = buildMatchState({
           match: m,
           setup: doc.setup || { playingXI: {} },
@@ -101,7 +101,7 @@ function getEffectiveMatch(m: Match): Match {
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
-      if (doc.isStarted || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId) {
+      if (doc.isStarted || m.status === "LIVE" || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId) {
         const computed = buildMatchState({
           match: m,
           setup: doc.setup || { playingXI: {} },
@@ -126,14 +126,6 @@ function getEffectiveMatch(m: Match): Match {
       }
     }
   } catch {}
-
-  // A match without explicit scorer start/deliveries is strictly UPCOMING / SCHEDULED
-  if (m.status === "LIVE") {
-    return {
-      ...m,
-      status: "UPCOMING",
-    };
-  }
 
   return m;
 }

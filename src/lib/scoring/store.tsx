@@ -3,6 +3,12 @@ import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } f
 import { buildMatchState, setTeamNameResolver } from "@/lib/scoring/engine";
 import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
 import { supabase } from "@/lib/supabase";
+import {
+  ensureInningsPersisted,
+  fetchMatchDeliveriesFromSupabase,
+  persistBall,
+  undoPersistedBall,
+} from "@/lib/scoring/db-sync";
 
 setTeamNameResolver((id) => lookup.team(id)?.name ?? id);
 
@@ -13,11 +19,14 @@ export interface MatchDoc {
   secondInningsStarted: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
   pendingBowlerIds: [string | null, string | null];
+  inningsDbIds?: [string | null, string | null];
   playerOfTheMatchId?: string;
   isStarted?: boolean;
   isCompleted?: boolean;
   startedAt?: string;
   syncQueue: string[];
+  syncStatus?: "synced" | "syncing" | "unsynced" | "error";
+  syncError?: string;
 }
 
 const STORAGE_PREFIX = "tpl-scoring:";
@@ -29,7 +38,9 @@ function emptyDoc(matchId: string): MatchDoc {
     deliveries: [],
     secondInningsStarted: false,
     pendingBowlerIds: [null, null],
+    inningsDbIds: [null, null],
     syncQueue: [],
+    syncStatus: "synced",
   };
 }
 
@@ -79,14 +90,19 @@ export function startMatchSession(matchId: string) {
     window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(next));
   } catch {}
 
-  // Broadcast to other tabs & windows
+  // 1. Authoritative DB status transition to LIVE
+  matchRepository.updateStatus(matchId, "LIVE").catch((err) => {
+    console.warn("[startMatchSession] DB status update notice:", err);
+  });
+
+  // 2. Broadcast to other tabs & windows
   try {
     const bc = new BroadcastChannel(`tpl_match_${matchId}`);
     bc.postMessage(next);
     bc.close();
   } catch {}
 
-  // Broadcast to supabase realtime channel
+  // 3. Broadcast to supabase realtime channel
   try {
     const channel = supabase.channel(`match-live:${matchId}`);
     channel.subscribe((status) => {
@@ -119,10 +135,15 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const bcRef = useRef<BroadcastChannel | null>(null);
+  const inningsDbIdsRef = useRef<[string | null, string | null]>([null, null]);
 
-  // ── Load initial state ────────────────────────────────────────────────────
+  // ── Load initial local storage state ──────────────────────────────────────
   useEffect(() => {
-    setDoc(loadMatchDoc(matchId));
+    const local = loadMatchDoc(matchId);
+    setDoc(local);
+    if (local.inningsDbIds) {
+      inningsDbIdsRef.current = local.inningsDbIds;
+    }
     setHydrated(true);
   }, [matchId]);
 
@@ -148,6 +169,57 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     }
   }, [matchId, initialMatch]);
 
+  // ── Reconcile authoritative scoring state from Supabase DB on load ────────
+  useEffect(() => {
+    if (!matchId) return;
+
+    let isCancelled = false;
+
+    fetchMatchDeliveriesFromSupabase(matchId).then(({ deliveries, innings }) => {
+      if (isCancelled) return;
+
+      const inn1 = innings.find((i) => i.innings_number === 1);
+      const inn2 = innings.find((i) => i.innings_number === 2);
+      const dbInningsIds: [string | null, string | null] = [
+        inn1?.id || null,
+        inn2?.id || null,
+      ];
+      inningsDbIdsRef.current = dbInningsIds;
+
+      setDoc((curr) => {
+        // If DB has authoritative deliveries, reconcile with local state
+        if (deliveries.length > 0) {
+          const hasSecondInnings = deliveries.some((d) => d.inningsIndex === 1);
+          const next: MatchDoc = {
+            ...curr,
+            deliveries,
+            inningsDbIds: dbInningsIds,
+            secondInningsStarted: curr.secondInningsStarted || hasSecondInnings,
+            isStarted: curr.isStarted || deliveries.length > 0,
+            syncStatus: "synced",
+          };
+          try {
+            window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(next));
+          } catch {}
+          return next;
+        }
+
+        if (dbInningsIds[0] || dbInningsIds[1]) {
+          return {
+            ...curr,
+            inningsDbIds: dbInningsIds,
+          };
+        }
+
+        return curr;
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [matchId]);
+
   // ── Live Realtime Sync (Supabase Realtime Channel + BroadcastChannel + Storage)
   useEffect(() => {
     if (!matchId) return;
@@ -162,6 +234,9 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       .on("broadcast", { event: "score_update" }, ({ payload }) => {
         if (payload?.doc && payload.doc.matchId === matchId) {
           setDoc(payload.doc);
+          if (payload.doc.inningsDbIds) {
+            inningsDbIdsRef.current = payload.doc.inningsDbIds;
+          }
           try {
             window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(payload.doc));
           } catch {}
@@ -177,6 +252,9 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       bc.onmessage = (event) => {
         if (event.data && event.data.matchId === matchId) {
           setDoc(event.data);
+          if (event.data.inningsDbIds) {
+            inningsDbIdsRef.current = event.data.inningsDbIds;
+          }
         }
       };
       bcRef.current = bc;
@@ -189,6 +267,9 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           const parsed = JSON.parse(e.newValue);
           if (parsed && parsed.matchId === matchId) {
             setDoc(parsed);
+            if (parsed.inningsDbIds) {
+              inningsDbIdsRef.current = parsed.inningsDbIds;
+            }
           }
         } catch {}
       }
@@ -262,8 +343,20 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         broadcastDoc(next);
         return next;
       });
+
+      // If toss is updated, authoritatively persist toss info to matches table
+      if (patch.tossWinnerId || patch.decision) {
+        matchRepository
+          .updateStatus(matchId, "LIVE", {
+            tossWinnerId: patch.tossWinnerId,
+            tossDecision: patch.decision,
+          })
+          .catch((err) => {
+            console.warn("[updateSetup] toss persist notice:", err);
+          });
+      }
     },
-    [broadcastDoc],
+    [matchId, broadcastDoc],
   );
 
   const setBowler = useCallback(
@@ -284,84 +377,198 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
   const record = useCallback(
     (input: DeliveryInput) => {
-      setDoc((d) => {
-        const built = buildMatchState({
-          match: match!,
-          setup: d.setup,
-          deliveries: d.deliveries,
-          secondInningsStarted: d.secondInningsStarted,
-          ...(d.secondInningsOpeners ? { secondInningsOpeners: d.secondInningsOpeners } : {}),
-        });
-        const idx = built.currentInningsIndex;
-        const inn = built.innings[idx];
-        if (!inn || inn.isComplete) return d;
-        const bowlerId =
-          inn.currentBowlerId ??
-          d.pendingBowlerIds[idx] ??
-          (inn.legalBalls === 0 && idx === 0 ? d.setup.openingBowlerId : undefined);
-        if (!bowlerId || !inn.strikerId || !inn.nonStrikerId) return d;
+      if (!match) return;
 
-        // Disallow consecutive overs by the same bowler
-        if (
-          inn.needsBowler &&
-          inn.previousBowlerId &&
-          bowlerId === inn.previousBowlerId &&
-          inn.overGroups.length > 0
-        ) {
-          return d;
-        }
-
-        const delivery: Delivery = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          inningsIndex: idx,
-          bowlerId,
-          strikerId: inn.strikerId,
-          nonStrikerId: inn.nonStrikerId,
-          batterRuns: input.batterRuns,
-          extraRuns: input.extraRuns,
-          extraType: input.extraType,
-          ...(input.wicket ? { wicket: input.wicket } : {}),
-          timestamp: Date.now(),
-        };
-
-        const isLegalBall = input.extraType !== "wide" && input.extraType !== "noball";
-        const willCompleteOver = isLegalBall && (inn.legalBalls + 1) % 6 === 0;
-
-        // When over completes, clear pendingBowlerId so next over forces bowler change
-        const nextPending: [string | null, string | null] = [...d.pendingBowlerIds] as [
-          string | null,
-          string | null,
-        ];
-        if (willCompleteOver) {
-          nextPending[idx] = null;
-        }
-
-        const next = {
-          ...d,
-          pendingBowlerIds: nextPending,
-          deliveries: [...d.deliveries, delivery],
-          syncQueue: [...d.syncQueue, delivery.id],
-        };
-        broadcastDoc(next);
-        return next;
+      const built = buildMatchState({
+        match,
+        setup: doc.setup,
+        deliveries: doc.deliveries,
+        secondInningsStarted: doc.secondInningsStarted,
+        ...(doc.secondInningsOpeners ? { secondInningsOpeners: doc.secondInningsOpeners } : {}),
       });
+      const idx = built.currentInningsIndex;
+      const inn = built.innings[idx];
+      if (!inn || inn.isComplete) return;
+
+      const bowlerId =
+        inn.currentBowlerId ??
+        doc.pendingBowlerIds[idx] ??
+        (inn.legalBalls === 0 && idx === 0 ? doc.setup.openingBowlerId : undefined);
+      if (!bowlerId || !inn.strikerId || !inn.nonStrikerId) return;
+
+      // Disallow consecutive overs by the same bowler
+      if (
+        inn.needsBowler &&
+        inn.previousBowlerId &&
+        bowlerId === inn.previousBowlerId &&
+        inn.overGroups.length > 0
+      ) {
+        return;
+      }
+
+      const clientTimestamp = Date.now();
+      const delivery: Delivery = {
+        id: `${clientTimestamp}-${Math.random().toString(36).slice(2, 8)}`,
+        inningsIndex: idx,
+        bowlerId,
+        strikerId: inn.strikerId,
+        nonStrikerId: inn.nonStrikerId,
+        batterRuns: input.batterRuns,
+        extraRuns: input.extraRuns,
+        extraType: input.extraType,
+        ...(input.wicket ? { wicket: input.wicket } : {}),
+        timestamp: clientTimestamp,
+      };
+
+      const isLegalBall = input.extraType !== "wide" && input.extraType !== "noball";
+      const willCompleteOver = isLegalBall && (inn.legalBalls + 1) % 6 === 0;
+
+      // When over completes, clear pendingBowlerId so next over forces bowler change
+      const nextPending: [string | null, string | null] = [...doc.pendingBowlerIds] as [
+        string | null,
+        string | null,
+      ];
+      if (willCompleteOver) {
+        nextPending[idx] = null;
+      }
+
+      // Compute resulting state for DB totals
+      const projectedDeliveries = [...doc.deliveries, delivery];
+      const nextBuilt = buildMatchState({
+        match,
+        setup: doc.setup,
+        deliveries: projectedDeliveries,
+        secondInningsStarted: doc.secondInningsStarted,
+        ...(doc.secondInningsOpeners ? { secondInningsOpeners: doc.secondInningsOpeners } : {}),
+      });
+      const nextInn = nextBuilt.innings[idx];
+
+      const nextDoc: MatchDoc = {
+        ...doc,
+        pendingBowlerIds: nextPending,
+        deliveries: projectedDeliveries,
+        syncQueue: [...doc.syncQueue, delivery.id],
+        syncStatus: "syncing",
+      };
+
+      // 1. Instant optimistic state update + local broadcast
+      setDoc(nextDoc);
+      broadcastDoc(nextDoc);
+
+      // 2. Asynchronously persist delivery to Supabase DB
+      const overNumber = Math.floor(inn.legalBalls / 6) + 1;
+      const ballNumber = (inn.legalBalls % 6) + 1;
+
+      const battingTeamId = inn.battingTeamId;
+      const bowlingTeamId = inn.bowlingTeamId;
+
+      (async () => {
+        try {
+          // Ensure innings row exists in Supabase
+          let inningsId = inningsDbIdsRef.current[idx];
+          if (!inningsId) {
+            const dbInnings = await ensureInningsPersisted(
+              match.id,
+              (idx + 1) as 1 | 2,
+              battingTeamId,
+              bowlingTeamId,
+            );
+            inningsId = dbInnings.id;
+            inningsDbIdsRef.current[idx] = inningsId;
+          }
+
+          // Persist ball delivery record to balls table
+          const res = await persistBall({
+            matchId: match.id,
+            inningsId,
+            clientTimestamp,
+            overNumber,
+            ballNumber,
+            strikerId: delivery.strikerId,
+            nonStrikerId: delivery.nonStrikerId,
+            bowlerId: delivery.bowlerId,
+            runsOffBat: delivery.batterRuns,
+            extras: delivery.extraRuns,
+            extraType: delivery.extraType,
+            wicket: delivery.wicket,
+            totalRuns: nextInn?.score ?? 0,
+            totalWickets: nextInn?.wickets ?? 0,
+            oversCompleted: nextInn?.overs ?? 0,
+            isInningsComplete: nextInn?.isComplete,
+          });
+
+          // Confirm DB persistence success
+          setDoc((current) => {
+            const updated = {
+              ...current,
+              inningsDbIds: inningsDbIdsRef.current,
+              syncQueue: current.syncQueue.filter((id) => id !== delivery.id),
+              syncStatus: "synced" as const,
+              syncError: undefined,
+            };
+            broadcastDoc(updated);
+            return updated;
+          });
+        } catch (err: any) {
+          console.error("[useMatchStore] DB delivery persistence error:", err?.message);
+          setDoc((current) => ({
+            ...current,
+            syncStatus: "error",
+            syncError: "UNABLE TO SAVE SCORE TO DATABASE",
+          }));
+        }
+      })();
     },
-    [match, broadcastDoc],
+    [match, doc, broadcastDoc],
   );
 
   const undo = useCallback(() => {
-    setDoc((d) => {
-      if (d.deliveries.length === 0) return d;
-      const last = d.deliveries[d.deliveries.length - 1]!;
-      const next = {
-        ...d,
-        deliveries: d.deliveries.slice(0, -1),
-        syncQueue: d.syncQueue.filter((id) => id !== last.id),
-      };
-      broadcastDoc(next);
-      return next;
+    if (!match || doc.deliveries.length === 0) return;
+
+    const last = doc.deliveries[doc.deliveries.length - 1]!;
+    const remaining = doc.deliveries.slice(0, -1);
+
+    const built = buildMatchState({
+      match,
+      setup: doc.setup,
+      deliveries: remaining,
+      secondInningsStarted: doc.secondInningsStarted,
+      ...(doc.secondInningsOpeners ? { secondInningsOpeners: doc.secondInningsOpeners } : {}),
     });
-  }, [broadcastDoc]);
+    const inn = built.innings[last.inningsIndex];
+
+    const nextDoc: MatchDoc = {
+      ...doc,
+      deliveries: remaining,
+      syncQueue: doc.syncQueue.filter((id) => id !== last.id),
+      syncStatus: "syncing",
+    };
+
+    setDoc(nextDoc);
+    broadcastDoc(nextDoc);
+
+    const inningsId = inningsDbIdsRef.current[last.inningsIndex];
+    if (inningsId) {
+      undoPersistedBall({
+        inningsId,
+        clientTimestamp: last.timestamp,
+        totalRuns: inn?.score ?? 0,
+        totalWickets: inn?.wickets ?? 0,
+        oversCompleted: inn?.overs ?? 0,
+        isInningsComplete: inn?.isComplete,
+      })
+        .then(() => {
+          setDoc((curr) => {
+            const updated = { ...curr, syncStatus: "synced" as const };
+            broadcastDoc(updated);
+            return updated;
+          });
+        })
+        .catch((err) => {
+          console.warn("[undo] server undo notice:", err?.message);
+        });
+    }
+  }, [match, doc, broadcastDoc]);
 
   const editDelivery = useCallback(
     (deliveryId: string, patch: Partial<Delivery>) => {
@@ -384,6 +591,11 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         const next = { ...d, playerOfTheMatchId: playerId };
         broadcastDoc(next);
         lookup.updateMatch(matchId, { manOfTheMatchId: playerId });
+        matchRepository
+          .updateStatus(matchId, undefined, { manOfTheMatchId: playerId })
+          .catch((err) => {
+            console.warn("[setPlayerOfTheMatch] DB update notice:", err);
+          });
         return next;
       });
     },
@@ -400,6 +612,16 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           resultText: resultText ?? state?.resultText,
           manOfTheMatchId: d.playerOfTheMatchId,
         });
+
+        // Authoritatively persist COMPLETED status to Supabase DB
+        matchRepository
+          .updateStatus(matchId, "COMPLETED", {
+            manOfTheMatchId: d.playerOfTheMatchId,
+          })
+          .catch((err) => {
+            console.warn("[completeMatch] DB completion notice:", err);
+          });
+
         broadcastTournamentUpdate();
         return next;
       });

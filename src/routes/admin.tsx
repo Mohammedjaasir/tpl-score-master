@@ -82,6 +82,7 @@ function AdminPortalPage() {
   const { data: teams = [], refetch: refetchTeams } = useTeams();
   const { data: players = [], refetch: refetchPlayers } = usePlayers();
 
+
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 

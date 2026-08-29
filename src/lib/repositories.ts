@@ -9,6 +9,12 @@ import type {
   Team,
 } from "@/types/cricket";
 import { supabase } from "@/lib/supabase";
+import {
+  saveScheduleServerFn,
+  resetScheduleServerFn,
+  createMatchServerFn,
+  updateMatchStatusServerFn,
+} from "@/lib/server-fns/matches";
 
 export const TOURNAMENT_NAME = "TPL 2026";
 const REQUEST_TIMEOUT_MS = 6000; // 6 seconds maximum
@@ -95,12 +101,22 @@ export function toPlayer(row: SupabaseRegistration): Player {
   };
 }
 
+/**
+ * Maps a raw Supabase `match_status` enum value to the application domain MatchStatus.
+ *
+ * Valid database enum:  "scheduled" | "live" | "completed" | "abandoned"
+ * Valid domain status:  "UPCOMING"  | "LIVE"  | "COMPLETED"
+ *
+ * NOTE: "READY" is a scorer-session-only UI concept derived from localStorage
+ * (startMatchSession flag), never from the database. The database never contains
+ * the value "ready" or "upcoming" — those are application-layer labels only.
+ */
 export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
   let status: MatchStatus = "UPCOMING";
   const raw = (row.status || "").toLowerCase().trim();
   if (raw === "live") status = "LIVE";
-  else if (raw === "completed" || raw === "complete" || raw === "finished") status = "COMPLETED";
-  else if (raw === "ready") status = "READY";
+  else if (raw === "completed" || raw === "finished" || raw === "abandoned") status = "COMPLETED";
+  // "scheduled" and anything unrecognised → UPCOMING (the safe default)
   else status = "UPCOMING";
 
   return {
@@ -117,6 +133,7 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
     manOfTheMatchId: row.man_of_the_match_id ?? undefined,
   };
 }
+
 
 // ── In-Memory & LocalStorage Persistent Lookup Cache ────────────────────────
 const CACHE_TEAMS_KEY = "tpl_cache_teams";
@@ -278,6 +295,15 @@ export interface MatchRepository {
   saveSchedule(matches: Match[]): Promise<Match[]>;
   resetSchedule(): Promise<void>;
   createMatch(match: Match): Promise<Match>;
+  updateStatus(
+    matchId: string,
+    status?: MatchStatus,
+    options?: {
+      tossWinnerId?: string | null;
+      tossDecision?: "bat" | "bowl" | null;
+      manOfTheMatchId?: string | null;
+    },
+  ): Promise<Match>;
 }
 
 // ── Supabase Repositories with Explicit Diagnostics & Timeouts ───────────────
@@ -482,179 +508,92 @@ export class SupabaseMatchRepository implements MatchRepository {
   }
 
   async saveSchedule(fixtures: Match[]): Promise<Match[]> {
-    // 1. Fetch current database state to ensure we protect live/completed records
-    const { data: existingData, error: fetchError } = await supabase
-      .from("matches")
-      .select("*");
+    try {
+      const serverFixtures = fixtures.map((f) => ({
+        id: f.id,
+        teamAId: f.teamAId,
+        teamBId: f.teamBId,
+        scheduledAt: f.scheduledAt,
+        overs: f.overs || 5,
+      }));
 
-    if (fetchError) {
-      console.error("[SupabaseMatchRepository] saveSchedule fetch error:", fetchError.message);
-      throw new Error(`Unable to load existing matches from database: ${fetchError.message}`);
+      const updatedRows = await saveScheduleServerFn({ data: serverFixtures });
+      const domainMatches = updatedRows.map((row, idx) => toMatch(row, idx + 1));
+      lookup.setMatches(domainMatches);
+      return domainMatches;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] saveSchedule server error:", err?.message);
+      throw new Error(`Failed to persist schedule: ${err?.message || "Server error"}`);
     }
-
-    const existingRows = (existingData as SupabaseMatch[]) || [];
-
-    // Separate into protected (LIVE, COMPLETED, ABANDONED) and scheduled fixtures
-    const protectedMatches = existingRows.filter((m) => {
-      const s = (m.status || "").toLowerCase().trim();
-      return s === "live" || s === "completed" || s === "abandoned";
-    });
-
-    const scheduledRows = existingRows.filter((m) => {
-      const s = (m.status || "").toLowerCase().trim();
-      return s === "scheduled" || s === "ready" || s === "upcoming";
-    });
-
-    // Helper to generate a match identity key considering team pairings and start time
-    const getFixtureKey = (teamA: string, teamB: string, startTime?: string) => {
-      const timeKey = startTime ? new Date(startTime).toISOString().slice(0, 16) : "";
-      return `${teamA}__${teamB}__${timeKey}`;
-    };
-
-    // Track existing scheduled fixtures by key
-    const existingScheduledByKey = new Map<string, SupabaseMatch>();
-    scheduledRows.forEach((row) => {
-      const key = getFixtureKey(row.team_a_id, row.team_b_id, row.start_time);
-      existingScheduledByKey.set(key, row);
-    });
-
-    const matchedExistingIds = new Set<string>();
-    const rowsToInsert: any[] = [];
-    const updatesToPerform: { id: string; patch: Partial<SupabaseMatch> }[] = [];
-
-    // 2. Reconcile incoming fixtures against existing database records
-    for (const fixture of fixtures) {
-      const key = getFixtureKey(fixture.teamAId, fixture.teamBId, fixture.scheduledAt);
-      const existingMatch = existingScheduledByKey.get(key);
-
-      if (existingMatch) {
-        // UNCHANGED: Exact match found -> PRESERVE CANONICAL DATABASE ID!
-        matchedExistingIds.add(existingMatch.id);
-
-        if (existingMatch.total_overs !== (fixture.overs || 5)) {
-          updatesToPerform.push({
-            id: existingMatch.id,
-            patch: { total_overs: fixture.overs || 5 },
-          });
-        }
-      } else {
-        // Check if there is an existing scheduled match with same teams but changed time/overs
-        const pairingMatch = scheduledRows.find(
-          (m) =>
-            m.team_a_id === fixture.teamAId &&
-            m.team_b_id === fixture.teamBId &&
-            !matchedExistingIds.has(m.id),
-        );
-
-        if (pairingMatch) {
-          // CHANGED: Same pairing, updated time/overs -> UPDATE in place and PRESERVE CANONICAL ID!
-          matchedExistingIds.add(pairingMatch.id);
-          updatesToPerform.push({
-            id: pairingMatch.id,
-            patch: {
-              start_time: fixture.scheduledAt,
-              total_overs: fixture.overs || 5,
-            },
-          });
-        } else {
-          // NEW FIXTURE: Genuinely new fixture to insert
-          rowsToInsert.push({
-            team_a_id: fixture.teamAId,
-            team_b_id: fixture.teamBId,
-            start_time: fixture.scheduledAt,
-            status: "scheduled",
-            total_overs: fixture.overs || 5,
-            balls_per_over: 6,
-          });
-        }
-      }
-    }
-
-    // 3. Execute updates for CHANGED fixtures (preserving IDs)
-    for (const update of updatesToPerform) {
-      const { error: updateError } = await supabase
-        .from("matches")
-        .update(update.patch)
-        .eq("id", update.id);
-
-      if (updateError) {
-        console.error("[SupabaseMatchRepository] saveSchedule update error:", updateError.message);
-        throw new Error(`Failed to update fixture ${update.id}: ${updateError.message}`);
-      }
-    }
-
-    // 4. Insert NEW fixtures
-    if (rowsToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("matches")
-        .insert(rowsToInsert);
-
-      if (insertError) {
-        console.error("[SupabaseMatchRepository] saveSchedule insert error:", insertError.message);
-        throw new Error(`Failed to persist new fixtures: ${insertError.message}`);
-      }
-    }
-
-    // 5. Remove any old scheduled fixtures that are no longer part of the generated schedule
-    const unneededScheduledIds = scheduledRows
-      .filter((m) => !matchedExistingIds.has(m.id))
-      .map((m) => m.id);
-
-    if (unneededScheduledIds.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("matches")
-        .delete()
-        .in("id", unneededScheduledIds);
-
-      if (deleteError) {
-        console.warn("[SupabaseMatchRepository] saveSchedule delete obsolete fixtures notice:", deleteError.message);
-      }
-    }
-
-    // 6. Return fresh authoritative state with canonical IDs
-    return await this.list();
   }
 
   async resetSchedule(): Promise<void> {
-    // 1. Target ONLY eligible scheduled/upcoming fixtures.
-    // Live, Completed, and Abandoned records are strictly protected!
-    const { error } = await supabase
-      .from("matches")
-      .delete()
-      .in("status", ["scheduled", "ready", "upcoming"]);
-
-    if (error) {
-      console.error("[SupabaseMatchRepository] resetSchedule error:", error.message);
-      throw new Error(`Failed to reset upcoming fixtures: ${error.message}`);
+    try {
+      const remainingRows = await resetScheduleServerFn();
+      const domainMatches = remainingRows.map((row, idx) => toMatch(row, idx + 1));
+      lookup.setMatches(domainMatches);
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] resetSchedule server error:", err?.message);
+      throw new Error(`Failed to reset upcoming fixtures: ${err?.message || "Server error"}`);
     }
-
-    // 2. Fetch the remaining protected authoritative records (live, completed, etc.)
-    await this.list();
   }
 
   async createMatch(match: Match): Promise<Match> {
-    const row = {
-      team_a_id: match.teamAId,
-      team_b_id: match.teamBId,
-      start_time: match.scheduledAt,
-      status: (match.status || "scheduled").toLowerCase(),
-      total_overs: match.overs || 5,
-      balls_per_over: 6,
-    };
-    const { data, error } = await supabase
-      .from("matches")
-      .insert([row])
-      .select("*")
-      .single();
+    try {
+      const createdRow = await createMatchServerFn({
+        data: {
+          teamAId: match.teamAId,
+          teamBId: match.teamBId,
+          scheduledAt: match.scheduledAt,
+          overs: match.overs || 5,
+        },
+      });
 
-    if (error || !data) {
-      console.error("[SupabaseMatchRepository] createMatch error:", error?.message);
-      throw new Error(`Failed to create match: ${error?.message || "Unknown error"}`);
+      const created = toMatch(createdRow, match.matchNumber);
+      lookup.updateMatch(created.id, created);
+      return created;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] createMatch server error:", err?.message);
+      throw new Error(`Failed to create match: ${err?.message || "Server error"}`);
     }
+  }
 
-    const created = toMatch(data as SupabaseMatch, match.matchNumber);
-    lookup.updateMatch(created.id, created);
-    return created;
+  async updateStatus(
+    matchId: string,
+    status?: MatchStatus,
+    options?: {
+      tossWinnerId?: string | null;
+      tossDecision?: "bat" | "bowl" | null;
+      manOfTheMatchId?: string | null;
+    },
+  ): Promise<Match> {
+    try {
+      const dbStatus =
+        status === "LIVE"
+          ? "live"
+          : status === "COMPLETED"
+          ? "completed"
+          : status === "UPCOMING"
+          ? "scheduled"
+          : undefined;
+
+      const updatedRow = await updateMatchStatusServerFn({
+        data: {
+          matchId,
+          status: dbStatus,
+          tossWinnerId: options?.tossWinnerId,
+          tossDecision: options?.tossDecision,
+          manOfTheMatchId: options?.manOfTheMatchId,
+        },
+      });
+
+      const updated = toMatch(updatedRow);
+      lookup.updateMatch(matchId, updated);
+      return updated;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] updateStatus server error:", err?.message);
+      throw new Error(`Failed to update match status: ${err?.message || "Server error"}`);
+    }
   }
 }
 
