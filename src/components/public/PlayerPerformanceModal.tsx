@@ -287,7 +287,16 @@ export function PlayerPerformanceModal({
             </div>
 
             {summary ? (
-              <WagonWheel summary={summary} />
+              <WagonWheel
+                summary={summary}
+                batterStat={batterStat ? {
+                  runs: batterStat.runs,
+                  balls: batterStat.balls,
+                  fours: batterStat.fours,
+                  sixes: batterStat.sixes,
+                  strikeRate: batterStat.strikeRate ?? (batterStat.balls > 0 ? (batterStat.runs / batterStat.balls) * 100 : 0),
+                } : undefined}
+              />
             ) : (
               <div className="p-8 text-center bg-slate-900/50 border border-slate-800 rounded-3xl">
                 <p className="text-xs text-slate-400 font-bold">

@@ -136,7 +136,8 @@ export const recordBallServerFn = createServerFn({ method: "POST" })
     if (existingBall) {
       savedBallId = existingBall.id;
     } else {
-      const ballRow: Omit<SupabaseBall, "id" | "created_at"> = {
+      // ── Build the base ball row ──────────────────────────────────────────
+      const ballRowBase = {
         match_id: input.matchId,
         innings_id: input.inningsId,
         client_timestamp: input.clientTimestamp,
@@ -152,14 +153,34 @@ export const recordBallServerFn = createServerFn({ method: "POST" })
         wicket_type: input.wicketType,
         player_out_id: input.playerOutId || null,
         fielder_id: input.fielderId || null,
-        shot_zone: input.shotZone || null,
       };
 
-      const { data: insertedBall, error: ballError } = await supabaseAdmin
+      // ── Attempt insert WITH shot_zone first ──────────────────────────────
+      // If the column hasn't been migrated yet (PGRST204), retry without it
+      // so scoring is never blocked by a missing DB migration.
+      let insertedBall: SupabaseBall | null = null;
+      let ballError: { code?: string; message?: string } | null = null;
+
+      const withZone = { ...ballRowBase, shot_zone: input.shotZone || null };
+      ({ data: insertedBall, error: ballError } = await supabaseAdmin
         .from("balls")
-        .insert([ballRow])
+        .insert([withZone])
         .select("*")
-        .single();
+        .single());
+
+      // PGRST204 = column not found in PostgREST schema cache (migration not applied)
+      if (ballError?.code === "PGRST204" || (ballError?.message ?? "").includes("shot_zone")) {
+        console.warn(
+          "[recordBallServerFn] ⚠ shot_zone column missing in Supabase balls table. " +
+          "Please run: ALTER TABLE public.balls ADD COLUMN IF NOT EXISTS shot_zone text; " +
+          "Retrying insert WITHOUT shot_zone so scoring is not blocked.",
+        );
+        ({ data: insertedBall, error: ballError } = await supabaseAdmin
+          .from("balls")
+          .insert([ballRowBase])
+          .select("*")
+          .single());
+      }
 
       if (ballError || !insertedBall) {
         throw new Error(`Failed to persist ball: ${ballError?.message || "Unknown error"}`);

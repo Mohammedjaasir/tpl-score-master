@@ -59,10 +59,12 @@ export const WagonWheel: React.FC<WagonWheelProps> = ({ summary, className = "",
   };
 
   const runsCount = batterStat?.runs ?? summary.totalRuns;
-  const ballsCount = batterStat?.balls ?? summary.shots.length;
-  const foursCount = batterStat?.fours ?? summary.zoneBreakdown ? Object.values(summary.zoneBreakdown).reduce((acc, z) => acc + z.fours, 0) : 0;
-  const sixesCount = batterStat?.sixes ?? summary.zoneBreakdown ? Object.values(summary.zoneBreakdown).reduce((acc, z) => acc + z.sixes, 0) : 0;
+  // Balls faced: use authoritative batterStat first, then summary.totalBalls (all balls including dots)
+  const ballsCount = batterStat?.balls ?? summary.totalBalls;
+  const foursCount = batterStat?.fours ?? Object.values(summary.zoneBreakdown).reduce((acc, z) => acc + z.fours, 0);
+  const sixesCount = batterStat?.sixes ?? Object.values(summary.zoneBreakdown).reduce((acc, z) => acc + z.sixes, 0);
   const srText = batterStat?.strikeRate ? batterStat.strikeRate.toFixed(1) : ballsCount > 0 ? ((runsCount / ballsCount) * 100).toFixed(1) : "-";
+
 
   return (
     <div className={`flex flex-col gap-4 bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-6 shadow-sm ${className}`}>
@@ -125,10 +127,10 @@ export const WagonWheel: React.FC<WagonWheelProps> = ({ summary, className = "",
           </div>
           <div className="flex flex-wrap justify-center gap-2 mt-2 pt-3 border-t border-[#E5E5E5] w-full max-w-xs text-xs">
             <div className="px-3 py-1.5 rounded-xl bg-white border border-[#E5E5E5] text-[#111111] font-bold">
-              Total Runs: <strong>{summary.totalRuns}</strong>
+              Total Runs: <strong>{runsCount}</strong>
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-white border border-[#E5E5E5] text-[#111111] font-bold">
-              Total Balls: <strong>{summary.shots.length}</strong>
+              Balls Faced: <strong>{ballsCount}</strong>
             </div>
           </div>
         </div>

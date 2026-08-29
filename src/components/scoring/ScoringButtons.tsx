@@ -15,6 +15,8 @@ interface Props {
   bowlingXI: string[];
   onRecord: (input: DeliveryInput) => void;
   disabled?: boolean;
+  /** When disabled, the specific reason: 'bowler' | 'striker' | 'non-striker' | 'innings-complete' */
+  disabledReason?: string | null;
 }
 
 // Run buttons config with official TPL palette
@@ -34,7 +36,7 @@ const EXTRA_BUTTONS: { mode: ExtraMode; label: string; cls: string }[] = [
   { mode: "legbye", label: "LB", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
 ];
 
-export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props) {
+export function ScoringButtons({ innings, bowlingXI, onRecord, disabled, disabledReason }: Props) {
   const [showWicket, setShowWicket] = useState(false);
   const [extraMode, setExtraMode] = useState<ExtraMode | null>(null);
   const [pendingRuns, setPendingRuns] = useState<number | null>(null);
@@ -79,11 +81,35 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
   };
 
   if (disabled) {
+    // Show contextual message based on exact blocking reason
+    const isNeedsBowler = disabledReason === "bowler";
+    const isInningsComplete = disabledReason === "innings-complete";
+
     return (
-      <div className="rounded-2xl bg-white border border-[#E5E5E5] px-4 py-6 text-center shadow-sm">
-        <p className="text-sm font-extrabold text-[#5F6368]">
-          Select a bowler to continue scoring
-        </p>
+      <div className="rounded-2xl bg-white border border-[#E5E5E5] px-4 py-6 text-center shadow-sm flex flex-col items-center gap-2">
+        {isNeedsBowler ? (
+          <>
+            <div className="h-8 w-8 rounded-full border-4 border-[#D9A928]/30 border-t-[#D9A928] animate-spin mb-1" />
+            <p className="text-sm font-extrabold text-[#111111]">
+              Select Bowler for Next Over
+            </p>
+            <p className="text-xs text-[#5F6368] max-w-xs">
+              The Bowler Selection panel is opening. Choose the bowler to start the next over.
+            </p>
+          </>
+        ) : isInningsComplete ? (
+          <p className="text-sm font-extrabold text-[#5F6368]">
+            Innings Complete
+          </p>
+        ) : (
+          <p className="text-sm font-extrabold text-[#5F6368]">
+            {disabledReason === "striker"
+              ? "Awaiting striker selection"
+              : disabledReason === "non-striker"
+              ? "Awaiting non-striker selection"
+              : "Scoring paused"}
+          </p>
+        )}
       </div>
     );
   }
