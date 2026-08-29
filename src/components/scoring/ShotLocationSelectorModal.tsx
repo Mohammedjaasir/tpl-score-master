@@ -10,6 +10,7 @@ interface Props {
   isOpen: boolean;
   onSelectZone: (zone: ShotZoneKey) => void;
   onSkip: () => void;
+  onTurnOff?: () => void;
   runLabel: string;
 }
 
@@ -17,6 +18,7 @@ export function ShotLocationSelectorModal({
   isOpen,
   onSelectZone,
   onSkip,
+  onTurnOff,
   runLabel,
 }: Props) {
   const [selectedZone, setSelectedZone] = useState<ShotZoneKey | null>(null);
@@ -231,27 +233,39 @@ export function ShotLocationSelectorModal({
         </div>
 
         {/* Action Controls */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-slate-800">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-800">
+          <div className="grid grid-cols-2 gap-2">
             <button
+              type="button"
               onClick={onSkip}
-              className="tap flex-1 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-black uppercase tracking-wider transition-all"
+              className="tap min-h-[48px] py-3 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-200 text-xs font-black uppercase tracking-wider transition-all border border-slate-700 cursor-pointer text-center"
             >
-              Skip (Not Recorded)
+              SKIP WAGON WHEEL
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={!selectedZone}
-              className={`tap flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+              className={`tap min-h-[48px] py-3 px-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 selectedZone
-                  ? "bg-[#D9A928] hover:bg-[#F4C542] text-black shadow-lg shadow-[#D9A928]/20"
-                  : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                  ? "bg-[#D9A928] hover:bg-[#F4C542] active:scale-98 text-black shadow-lg shadow-[#D9A928]/20"
+                  : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50"
               }`}
             >
               <Check className="h-4 w-4" />
-              <span>Confirm Shot</span>
+              <span>CONFIRM SHOT</span>
             </button>
           </div>
+
+          {onTurnOff && (
+            <button
+              type="button"
+              onClick={onTurnOff}
+              className="tap py-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-200 text-center transition-colors underline decoration-slate-600 underline-offset-4"
+            >
+              Skip & Turn OFF Wagon Wheel for next balls
+            </button>
+          )}
         </div>
       </div>
     </div>

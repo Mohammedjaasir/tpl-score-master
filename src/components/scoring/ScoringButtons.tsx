@@ -6,6 +6,7 @@ import { ExtraModal } from "@/components/scoring/ExtraModal";
 import { ShotLocationSelectorModal } from "@/components/scoring/ShotLocationSelectorModal";
 import type { ShotZoneKey } from "@/lib/scoring/wagon-wheel";
 import { TplButton } from "@/components/ui/tpl-button";
+import { Compass } from "lucide-react";
 
 type ExtraMode = Exclude<ExtraType, null>;
 
@@ -37,12 +38,14 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
   const [showWicket, setShowWicket] = useState(false);
   const [extraMode, setExtraMode] = useState<ExtraMode | null>(null);
   const [pendingRuns, setPendingRuns] = useState<number | null>(null);
+  const [wagonWheelEnabled, setWagonWheelEnabled] = useState(true);
 
   const handleRun = (runs: number) => {
-    // Only 1, 2, 4, 6 trigger the Wagon Wheel manual marker per lead requirement
-    if (runs === 1 || runs === 2 || runs === 4 || runs === 6) {
+    // If Wagon Wheel prompt is enabled and runs is 1, 2, 4, 6, open manual marker modal
+    if (wagonWheelEnabled && (runs === 1 || runs === 2 || runs === 4 || runs === 6)) {
       setPendingRuns(runs);
     } else {
+      // Immediately record delivery without forcing shot location
       onRecord({ batterRuns: runs, extraRuns: 0, extraType: null, shotZone: "unmapped" });
     }
   };
@@ -59,6 +62,11 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
       onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: "unmapped" });
       setPendingRuns(null);
     }
+  };
+
+  const handleTurnOffAndSkip = () => {
+    setWagonWheelEnabled(false);
+    handleSkipZone();
   };
 
   const handleWicket = (wicket: WicketInfo) => {
@@ -83,6 +91,47 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
   return (
     <>
       <div className="flex flex-col gap-3">
+        {/* Wagon Wheel Session Quick Toggle Bar */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-white border border-[#E5E5E5] shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`h-7 w-7 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                wagonWheelEnabled
+                  ? "bg-[#D9A928]/20 text-[#9A6A05] border border-[#D9A928]/30"
+                  : "bg-[#F3F4F6] text-[#5F6368]"
+              }`}
+            >
+              <Compass className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#111111] block leading-tight">
+                WAGON WHEEL
+              </span>
+              <span className="text-[9px] font-bold text-[#5F6368]">
+                {wagonWheelEnabled ? "Prompt on 1, 2, 4, 6 (Skippable)" : "OFF (Fast scoring, no prompts)"}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setWagonWheelEnabled(!wagonWheelEnabled)}
+            className={`tap min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+              wagonWheelEnabled
+                ? "bg-[#121316] text-[#D9A928] border-2 border-[#D9A928] shadow-xs"
+                : "bg-[#F3F4F6] text-[#5F6368] hover:text-[#111111] border border-[#E5E5E5]"
+            }`}
+            title={wagonWheelEnabled ? "Tap to Turn OFF Wagon Wheel" : "Tap to Turn ON Wagon Wheel"}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                wagonWheelEnabled ? "bg-[#D9A928] animate-pulse" : "bg-slate-400"
+              }`}
+            />
+            <span>{wagonWheelEnabled ? "WAGON WHEEL: ON" : "WAGON WHEEL: OFF"}</span>
+          </button>
+        </div>
+
         {/* Run buttons */}
         <div className="grid grid-cols-3 gap-3">
           {RUN_BUTTONS.map((b) => (
@@ -146,8 +195,10 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
           runLabel={`${pendingRuns} Runs`}
           onSelectZone={handleConfirmZone}
           onSkip={handleSkipZone}
+          onTurnOff={handleTurnOffAndSkip}
         />
       )}
     </>
   );
 }
+
