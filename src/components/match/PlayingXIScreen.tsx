@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { CheckSquare, Square, Star, Shield } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckSquare, Square, Star, Shield, RefreshCw } from "lucide-react";
 import type { Match, PlayingXI } from "@/types/cricket";
 import type { MatchStore } from "@/lib/scoring/store";
+import { usePlayers, useTeam } from "@/hooks/useCricketData";
 import { lookup } from "@/lib/repositories";
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
   store: MatchStore;
 }
 
-const MAX_PLAYING_XI = 11;
+const DEFAULT_XI_COUNT = 11;
 
 function TeamSection({
   teamId,
@@ -28,16 +29,39 @@ function TeamSection({
   captainId?: string;
   keeperId?: string;
 }) {
-  const team = lookup.team(teamId);
-  const players = lookup.playersOf(teamId);
+  const { data: team } = useTeam(teamId);
+  const { data: players = [], isLoading } = usePlayers(teamId);
+  const maxAllowed = Math.min(DEFAULT_XI_COUNT, Math.max(1, players.length));
   const selected = xi.size;
+
+  if (isLoading) {
+    return (
+      <div className="card-surface p-6 flex items-center justify-center gap-2">
+        <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-xs font-bold text-muted-foreground">Loading squad from Supabase...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-extrabold text-foreground">{team?.name}</p>
-        <span className={`text-xs font-bold tabular-nums ${selected === MAX_PLAYING_XI ? "text-success" : "text-muted-foreground"}`}>
-          {selected}/{MAX_PLAYING_XI}
+        <div className="flex items-center gap-2">
+          {team?.logoUrl && (
+            <img
+              src={team.logoUrl}
+              alt={team.name}
+              className="h-6 w-6 rounded-full object-cover border border-border"
+            />
+          )}
+          <p className="text-sm font-extrabold text-foreground">{team?.name || "Team"}</p>
+        </div>
+        <span
+          className={`text-xs font-bold tabular-nums ${
+            selected === maxAllowed ? "text-success" : "text-muted-foreground"
+          }`}
+        >
+          {selected}/{maxAllowed}
         </span>
       </div>
       <div className="card-surface divide-y divide-border/50">
@@ -45,7 +69,7 @@ function TeamSection({
           const isSelected = xi.has(p.id);
           const isCaptain = p.id === captainId;
           const isKeeper = p.id === keeperId;
-          const isDisabled = !isSelected && selected >= MAX_PLAYING_XI;
+          const isDisabled = !isSelected && selected >= maxAllowed;
 
           return (
             <div
@@ -66,34 +90,50 @@ function TeamSection({
                 )}
               </button>
 
+              {/* Avatar if present */}
+              {p.avatar && (
+                <img
+                  src={p.avatar}
+                  alt={p.name}
+                  className="h-7 w-7 rounded-full object-cover shrink-0 border border-border/60"
+                />
+              )}
+
               {/* Name + role */}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-foreground">{p.name}</p>
-                <p className="text-[10px] text-muted-foreground">{p.role}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {p.teamRole ? `${p.teamRole} · ` : ""}
+                  {p.role}
+                </p>
               </div>
 
-              {/* Captain / Keeper badges */}
+              {/* Captain (C) / Wicketkeeper (WK) badges */}
               {isSelected && (
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => onSetCaptain(p.id)}
-                    title="Set Captain"
-                    className={`tap grid h-7 w-7 place-items-center rounded-full transition-colors ${
-                      isCaptain ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"
+                    title="Set Captain (C)"
+                    className={`tap grid h-7 w-7 place-items-center rounded-full text-xs font-black transition-all ${
+                      isCaptain
+                        ? "bg-[#D9A928] text-black ring-2 ring-[#D9A928]/40 shadow-sm"
+                        : "bg-secondary text-muted-foreground hover:bg-[#D9A928]/20 hover:text-foreground"
                     }`}
-                    aria-label={isCaptain ? "Captain" : "Set as captain"}
+                    aria-label={isCaptain ? "Captain (C)" : "Set as captain (C)"}
                   >
-                    <Star className="h-3.5 w-3.5" fill={isCaptain ? "currentColor" : "none"} />
+                    C
                   </button>
                   <button
                     onClick={() => onSetKeeper(p.id)}
-                    title="Set Wicketkeeper"
-                    className={`tap grid h-7 w-7 place-items-center rounded-full transition-colors ${
-                      isKeeper ? "bg-blue-100 text-blue-600" : "bg-secondary text-muted-foreground hover:text-foreground"
+                    title="Set Wicketkeeper (WK)"
+                    className={`tap grid h-7 w-7 place-items-center rounded-full text-[10px] font-black transition-all ${
+                      isKeeper
+                        ? "bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-sm"
+                        : "bg-secondary text-muted-foreground hover:bg-blue-100 hover:text-foreground"
                     }`}
-                    aria-label={isKeeper ? "Wicketkeeper" : "Set as wicketkeeper"}
+                    aria-label={isKeeper ? "Wicketkeeper (WK)" : "Set as wicketkeeper (WK)"}
                   >
-                    <Shield className="h-3.5 w-3.5" fill={isKeeper ? "currentColor" : "none"} />
+                    WK
                   </button>
                 </div>
               )}
@@ -108,19 +148,40 @@ function TeamSection({
 export function PlayingXIScreen({ match, store }: Props) {
   const { doc, updateSetup } = store;
   const setup = doc.setup;
-  const battingFirstId = setup.battingFirstId!;
-  const bowlingFirstId =
-    battingFirstId === match.teamAId ? match.teamBId : match.teamAId;
 
-  // Initialize XI sets from existing setup or auto-select first 11
-  const initXI = (teamId: string): Set<string> => {
-    const saved = setup.playingXI[teamId]?.playerIds;
+  const { data: playersA = [] } = usePlayers(match.teamAId);
+  const { data: playersB = [] } = usePlayers(match.teamBId);
+
+  const maxA = Math.min(DEFAULT_XI_COUNT, Math.max(1, playersA.length));
+  const maxB = Math.min(DEFAULT_XI_COUNT, Math.max(1, playersB.length));
+
+  const [xiA, setXiA] = useState<Set<string>>(() => {
+    const saved = setup.playingXI[match.teamAId]?.playerIds;
     if (saved?.length) return new Set(saved);
-    return new Set(lookup.playersOf(teamId).slice(0, 11).map((p) => p.id));
-  };
+    const cached = lookup.playersOf(match.teamAId);
+    return new Set(cached.slice(0, DEFAULT_XI_COUNT).map((p) => p.id));
+  });
 
-  const [xiA, setXiA] = useState(() => initXI(match.teamAId));
-  const [xiB, setXiB] = useState(() => initXI(match.teamBId));
+  const [xiB, setXiB] = useState<Set<string>>(() => {
+    const saved = setup.playingXI[match.teamBId]?.playerIds;
+    if (saved?.length) return new Set(saved);
+    const cached = lookup.playersOf(match.teamBId);
+    return new Set(cached.slice(0, DEFAULT_XI_COUNT).map((p) => p.id));
+  });
+
+  // Auto-fill when players query finishes if empty
+  useEffect(() => {
+    if (xiA.size === 0 && playersA.length > 0) {
+      setXiA(new Set(playersA.slice(0, DEFAULT_XI_COUNT).map((p) => p.id)));
+    }
+  }, [playersA, xiA.size]);
+
+  useEffect(() => {
+    if (xiB.size === 0 && playersB.length > 0) {
+      setXiB(new Set(playersB.slice(0, DEFAULT_XI_COUNT).map((p) => p.id)));
+    }
+  }, [playersB, xiB.size]);
+
   const [captains, setCaptains] = useState<Record<string, string>>({
     [match.teamAId]: setup.playingXI[match.teamAId]?.captainId ?? "",
     [match.teamBId]: setup.playingXI[match.teamBId]?.captainId ?? "",
@@ -131,11 +192,13 @@ export function PlayingXIScreen({ match, store }: Props) {
   });
 
   const toggle = (teamId: string, pid: string) => {
-    const setter = teamId === match.teamAId ? setXiA : setXiB;
+    const isTeamA = teamId === match.teamAId;
+    const max = isTeamA ? maxA : maxB;
+    const setter = isTeamA ? setXiA : setXiB;
     setter((prev) => {
       const next = new Set(prev);
       if (next.has(pid)) next.delete(pid);
-      else if (next.size < MAX_PLAYING_XI) next.add(pid);
+      else if (next.size < max) next.add(pid);
       return next;
     });
   };
@@ -145,8 +208,7 @@ export function PlayingXIScreen({ match, store }: Props) {
   const setKeeper = (teamId: string, pid: string) =>
     setKeepers((p) => ({ ...p, [teamId]: pid }));
 
-  const canProceed =
-    xiA.size === MAX_PLAYING_XI && xiB.size === MAX_PLAYING_XI;
+  const canProceed = xiA.size >= 2 && xiA.size <= maxA && xiB.size >= 2 && xiB.size <= maxB;
 
   const handleConfirm = () => {
     const playingXI: Record<string, PlayingXI> = {
@@ -213,7 +275,7 @@ export function PlayingXIScreen({ match, store }: Props) {
           disabled={!canProceed}
           className="tap flex min-h-14 w-full items-center justify-center rounded-full bg-primary text-sm font-extrabold uppercase tracking-widest text-primary-foreground shadow-[var(--shadow-pop)] disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {canProceed ? "Confirm Playing XI" : `Select ${MAX_PLAYING_XI} players per team`}
+          {canProceed ? "Confirm Playing XI" : `Select squad (${maxA} & ${maxB} players)`}
         </button>
       </div>
     </div>

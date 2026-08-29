@@ -52,14 +52,14 @@ export function ScoreHeader({ innings, matchOvers }: Props) {
           <span>
             CRR&nbsp;
             <span className="text-background font-extrabold tabular-nums">
-              {innings.crr.toFixed(2)}
+              {(innings.crr ?? 0).toFixed(2)}
             </span>
           </span>
           {isChase && innings.requiredRunRate !== undefined && (
             <span>
               RRR&nbsp;
               <span className="text-background font-extrabold tabular-nums">
-                {innings.requiredRunRate.toFixed(2)}
+                {(innings.requiredRunRate ?? 0).toFixed(2)}
               </span>
             </span>
           )}

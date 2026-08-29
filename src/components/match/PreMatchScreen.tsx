@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { Match } from "@/types/cricket";
 import type { MatchStore } from "@/lib/scoring/store";
+import { useTeam } from "@/hooks/useCricketData";
 import { lookup } from "@/lib/repositories";
 import { MapPin, Clock } from "lucide-react";
+
+import { TeamLogo } from "@/components/team/TeamLogo";
 
 interface Props {
   match: Match;
@@ -10,8 +13,10 @@ interface Props {
 }
 
 export function PreMatchScreen({ match, store }: Props) {
-  const teamA = lookup.team(match.teamAId);
-  const teamB = lookup.team(match.teamBId);
+  const { data: teamAData } = useTeam(match.teamAId);
+  const { data: teamBData } = useTeam(match.teamBId);
+  const teamA = teamAData ?? lookup.team(match.teamAId);
+  const teamB = teamBData ?? lookup.team(match.teamBId);
 
   const { doc, updateSetup } = store;
   const setup = doc.setup;
@@ -51,10 +56,14 @@ export function PreMatchScreen({ match, store }: Props) {
 
           {/* Teams */}
           <div className="mt-8 flex items-center gap-4">
-            <div className="flex-1 text-center">
-              <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-2xl bg-background/10 text-lg font-extrabold text-background">
-                {teamA?.shortName}
-              </div>
+            <div className="flex-1 flex flex-col items-center text-center">
+              <TeamLogo
+                logoUrl={teamA?.logoUrl}
+                name={teamA?.name}
+                shortName={teamA?.shortName}
+                size="lg"
+                className="mb-2 shadow-lg"
+              />
               <p className="text-sm font-bold text-background leading-tight">{teamA?.name}</p>
             </div>
 
@@ -62,10 +71,14 @@ export function PreMatchScreen({ match, store }: Props) {
               <p className="font-display text-2xl font-extrabold text-background/40 uppercase">VS</p>
             </div>
 
-            <div className="flex-1 text-center">
-              <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-2xl bg-primary/20 text-lg font-extrabold text-primary">
-                {teamB?.shortName}
-              </div>
+            <div className="flex-1 flex flex-col items-center text-center">
+              <TeamLogo
+                logoUrl={teamB?.logoUrl}
+                name={teamB?.name}
+                shortName={teamB?.shortName}
+                size="lg"
+                className="mb-2 shadow-lg"
+              />
               <p className="text-sm font-bold text-background leading-tight">{teamB?.name}</p>
             </div>
           </div>
@@ -95,7 +108,7 @@ export function PreMatchScreen({ match, store }: Props) {
             </p>
             <div className="grid grid-cols-2 gap-3">
               {[match.teamAId, match.teamBId].map((id) => {
-                const team = lookup.team(id);
+                const team = id === match.teamAId ? teamA : teamB;
                 return (
                   <button
                     key={id}
@@ -107,13 +120,17 @@ export function PreMatchScreen({ match, store }: Props) {
                     }`}
                   >
                     <div
-                      className={`grid h-12 w-12 place-items-center rounded-xl text-sm font-extrabold ${
+                      className={`grid h-12 w-12 place-items-center rounded-xl text-sm font-extrabold overflow-hidden ${
                         tossWinnerId === id
                           ? "bg-primary text-primary-foreground"
                           : "bg-secondary text-foreground"
                       }`}
                     >
-                      {team?.shortName}
+                      {team?.logoUrl ? (
+                        <img src={team.logoUrl} alt={team?.name} className="h-full w-full object-cover" />
+                      ) : (
+                        team?.shortName
+                      )}
                     </div>
                     <span className="text-xs font-bold text-center leading-tight text-foreground">
                       {team?.name}
@@ -152,7 +169,7 @@ export function PreMatchScreen({ match, store }: Props) {
           {tossWinnerId && (
             <div className="animate-fade-in rounded-2xl bg-secondary px-4 py-4">
               <p className="text-sm font-bold text-foreground text-center">
-                {lookup.team(tossWinnerId)?.name} elected to{" "}
+                {(tossWinnerId === match.teamAId ? teamA : teamB)?.name} elected to{" "}
                 <span className="text-primary">{decision}</span> first
               </p>
             </div>

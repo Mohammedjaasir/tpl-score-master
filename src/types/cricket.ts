@@ -13,12 +13,121 @@ export interface Player {
   role: PlayerRole;
   teamId: string;
   avatar?: string | undefined;
+  referenceId?: string | undefined;
+  soldPrice?: number | undefined;
+  teamRole?: string | null | undefined;
+  auctionStatus?: string | undefined;
+  phone?: string | undefined;
+  dateOfBirth?: string | undefined;
 }
 
 export interface Team {
   id: string;
   name: string;
   shortName: string;
+  logoUrl?: string | undefined;
+  ownerName?: string | undefined;
+  groupName?: string | undefined;
+  purseBalance?: number | undefined;
+  slug?: string | undefined;
+}
+
+export interface SupabaseTeam {
+  id: string;
+  name: string;
+  slug?: string | null;
+  owner_name?: string | null;
+  logo_url?: string | null;
+  group_name?: string | null;
+  purse_balance?: number | null;
+  passcode?: string | null;
+  created_at?: string;
+}
+
+export interface SupabaseRegistration {
+  id: string;
+  reference_id?: string | null;
+  player_name: string;
+  player_phone?: string | null;
+  status?: string | null;
+  profile_photo_url?: string | null;
+  date_of_birth?: string | null;
+  team_id?: string | null;
+  player_role?: string | null;
+  team_role?: string | null;
+  slug?: string | null;
+  base_price?: number | null;
+  sold_price?: number | null;
+  auction_status?: string | null;
+  attendance_status?: string | null;
+  normalized_phone?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupabaseMatch {
+  id: string;
+  stage_id?: string | null;
+  group_id?: string | null;
+  team_a_id: string;
+  team_b_id: string;
+  start_time: string;
+  status: "scheduled" | "live" | "completed" | "abandoned";
+  total_overs: number;
+  balls_per_over?: number;
+  scorer_pin?: string | null;
+  toss_winner_id?: string | null;
+  toss_decision?: "bat" | "bowl" | null;
+  man_of_the_match_id?: string | null;
+  winner_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupabaseInnings {
+  id: string;
+  match_id: string;
+  innings_number: 1 | 2;
+  batting_team_id: string;
+  bowling_team_id: string;
+  total_runs: number;
+  total_wickets: number;
+  overs_completed: number;
+  is_completed: boolean;
+}
+
+export type SupabaseExtraType = "none" | "wide" | "no-ball" | "bye" | "leg-bye";
+
+export type SupabaseWicketType =
+  | "none"
+  | "bowled"
+  | "caught"
+  | "lbw"
+  | "run-out"
+  | "stumped"
+  | "hit-wicket"
+  | "retired-hurt"
+  | "other";
+
+export interface SupabaseBall {
+  id: string;
+  match_id?: string | null;
+  innings_id: string;
+  client_timestamp: number;
+  over_number: number;
+  ball_number: number;
+  striker_id?: string | null;
+  non_striker_id?: string | null;
+  bowler_id?: string | null;
+  runs_off_bat: number;
+  extras: number;
+  extra_type: SupabaseExtraType;
+  is_wicket: boolean;
+  wicket_type: SupabaseWicketType;
+  player_out_id?: string | null;
+  fielder_id?: string | null;
+  shot_zone?: string | null;
+  created_at?: string;
 }
 
 export type MatchStatus = "UPCOMING" | "READY" | "LIVE" | "COMPLETED";
@@ -34,6 +143,7 @@ export interface Match {
   scheduledAt: string;
   status: MatchStatus;
   resultText?: string | undefined;
+  manOfTheMatchId?: string | undefined;
 }
 
 export interface PlayingXI {
@@ -52,6 +162,9 @@ export interface MatchSetup {
   playingXI: Record<string, PlayingXI>;
   openers?: { strikerId: string; nonStrikerId: string } | undefined;
   openingBowlerId?: string | undefined;
+  reducedOvers?: number | undefined;
+  secondInningsReducedOvers?: number | undefined;
+  targetRevisionReason?: string | undefined;
 }
 
 export type ExtraType = "wide" | "noball" | "bye" | "legbye" | null;
@@ -89,6 +202,7 @@ export interface Delivery {
   extraRuns: number;
   extraType: ExtraType;
   wicket?: WicketInfo | undefined;
+  shotZone?: string | null | undefined;
   timestamp: number;
 }
 
@@ -118,6 +232,9 @@ export interface FallOfWicket {
   runs: number;
   oversText: string;
   batterOutId: string;
+  dismissalType?: string | undefined;
+  bowlerId?: string | undefined;
+  fielderId?: string | undefined;
 }
 
 export interface BallSummary {
@@ -144,6 +261,16 @@ export interface Partnership {
   batterBId?: string | undefined;
 }
 
+export interface CompletedPartnership {
+  wicketNumber: number;
+  runs: number;
+  balls: number;
+  batterAId: string;
+  batterBId: string;
+  batterOutId: string;
+  oversText: string;
+}
+
 export interface InningsState {
   index: 0 | 1;
   battingTeamId: string;
@@ -155,6 +282,7 @@ export interface InningsState {
   oversText: string;
   oversFloat: number;
   crr: number;
+  maxOvers: number;
   strikerId?: string | undefined;
   nonStrikerId?: string | undefined;
   currentBowlerId?: string | undefined;
@@ -162,6 +290,7 @@ export interface InningsState {
   batters: BatterStat[];
   bowlers: BowlerStat[];
   fallOfWickets: FallOfWicket[];
+  partnerships: CompletedPartnership[];
   overGroups: OverGroup[];
   recentBalls: BallSummary[];
   partnership: Partnership;
@@ -169,6 +298,9 @@ export interface InningsState {
   needsBowler: boolean;
   yetToBat: string[];
   target?: number | undefined;
+  originalTarget?: number | undefined;
+  isTargetRevised?: boolean | undefined;
+  arr?: number | undefined;
   runsNeeded?: number | undefined;
   ballsRemaining?: number | undefined;
   requiredRunRate?: number | undefined;
@@ -181,4 +313,6 @@ export interface MatchState {
   currentInningsIndex: 0 | 1;
   phase: "setup" | "innings1" | "break" | "innings2" | "complete";
   resultText?: string | undefined;
+  isRainAffected?: boolean | undefined;
+  revisedOvers?: number | undefined;
 }

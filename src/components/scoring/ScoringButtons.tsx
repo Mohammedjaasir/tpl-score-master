@@ -3,6 +3,8 @@ import type { ExtraType, InningsState, WicketInfo } from "@/types/cricket";
 import type { DeliveryInput } from "@/lib/scoring/store";
 import { WicketModal } from "@/components/scoring/WicketModal";
 import { ExtraModal } from "@/components/scoring/ExtraModal";
+import { ShotLocationSelectorModal } from "@/components/scoring/ShotLocationSelectorModal";
+import type { ShotZoneKey } from "@/lib/scoring/wagon-wheel";
 import { TplButton } from "@/components/ui/tpl-button";
 
 type ExtraMode = Exclude<ExtraType, null>;
@@ -34,9 +36,29 @@ const EXTRA_BUTTONS: { mode: ExtraMode; label: string; cls: string }[] = [
 export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props) {
   const [showWicket, setShowWicket] = useState(false);
   const [extraMode, setExtraMode] = useState<ExtraMode | null>(null);
+  const [pendingRuns, setPendingRuns] = useState<number | null>(null);
 
   const handleRun = (runs: number) => {
-    onRecord({ batterRuns: runs, extraRuns: 0, extraType: null });
+    // Only 1, 2, 4, 6 trigger the Wagon Wheel manual marker per lead requirement
+    if (runs === 1 || runs === 2 || runs === 4 || runs === 6) {
+      setPendingRuns(runs);
+    } else {
+      onRecord({ batterRuns: runs, extraRuns: 0, extraType: null, shotZone: "unmapped" });
+    }
+  };
+
+  const handleConfirmZone = (zone: ShotZoneKey) => {
+    if (pendingRuns !== null) {
+      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: zone });
+      setPendingRuns(null);
+    }
+  };
+
+  const handleSkipZone = () => {
+    if (pendingRuns !== null) {
+      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: "unmapped" });
+      setPendingRuns(null);
+    }
   };
 
   const handleWicket = (wicket: WicketInfo) => {
@@ -116,6 +138,14 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
           mode={extraMode}
           onConfirm={handleExtra}
           onClose={() => setExtraMode(null)}
+        />
+      )}
+      {pendingRuns !== null && (
+        <ShotLocationSelectorModal
+          isOpen={pendingRuns !== null}
+          runLabel={`${pendingRuns} Runs`}
+          onSelectZone={handleConfirmZone}
+          onSkip={handleSkipZone}
         />
       )}
     </>

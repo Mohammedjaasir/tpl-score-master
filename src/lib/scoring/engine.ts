@@ -50,47 +50,56 @@ export function oversText(legalBalls: number): string {
   return `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`;
 }
 
-export function ballLabel(d: Delivery): { label: string; kind: BallSummary["kind"] } {
+export function ballLabel(d?: Delivery | null): { label: string; kind: BallSummary["kind"] } {
+  if (!d) return { label: "", kind: "dot" };
   if (d.wicket) return { label: "W", kind: "wicket" };
+  const extraRuns = d.extraRuns ?? 0;
+  const batterRuns = d.batterRuns ?? 0;
   switch (d.extraType) {
     case "wide":
-      return { label: d.extraRuns > 1 ? `${d.extraRuns - 1}wd` : "wd", kind: "extra" };
+      return { label: extraRuns > 1 ? `${extraRuns - 1}wd` : "wd", kind: "extra" };
     case "noball":
-      return { label: d.batterRuns > 0 ? `${d.batterRuns}nb` : "nb", kind: "extra" };
+      return { label: batterRuns > 0 ? `${batterRuns}nb` : "nb", kind: "extra" };
     case "bye":
-      return { label: `${d.extraRuns}b`, kind: "extra" };
+      return { label: `${extraRuns}b`, kind: "extra" };
     case "legbye":
-      return { label: `${d.extraRuns}lb`, kind: "extra" };
+      return { label: `${extraRuns}lb`, kind: "extra" };
     default:
-      if (d.batterRuns === 4 || d.batterRuns === 6)
-        return { label: String(d.batterRuns), kind: "boundary" };
-      return { label: String(d.batterRuns), kind: d.batterRuns === 0 ? "dot" : "run" };
+      if (batterRuns === 4 || batterRuns === 6)
+        return { label: String(batterRuns), kind: "boundary" };
+      return { label: String(batterRuns), kind: batterRuns === 0 ? "dot" : "run" };
   }
 }
 
-export function describeDelivery(d: Delivery): string {
+export function describeDelivery(d?: Delivery | null): string {
+  if (!d) return "";
   const parts: string[] = [];
-  if (d.wicket) parts.push(`WICKET (${d.wicket.type})`);
+  if (d.wicket) {
+    const wicketType = d.wicket.type || "Out";
+    parts.push(`WICKET (${wicketType})`);
+  }
+  const extraRuns = d.extraRuns ?? 0;
+  const batterRuns = d.batterRuns ?? 0;
   switch (d.extraType) {
     case "wide":
-      parts.push(d.extraRuns > 1 ? `WIDE + ${d.extraRuns - 1}` : "WIDE");
+      parts.push(extraRuns > 1 ? `WIDE + ${extraRuns - 1}` : "WIDE");
       break;
     case "noball":
-      parts.push(d.batterRuns > 0 ? `NO BALL + ${d.batterRuns}` : "NO BALL");
+      parts.push(batterRuns > 0 ? `NO BALL + ${batterRuns}` : "NO BALL");
       break;
     case "bye":
-      parts.push(`${d.extraRuns} BYE${d.extraRuns > 1 ? "S" : ""}`);
+      parts.push(`${extraRuns} BYE${extraRuns > 1 ? "S" : ""}`);
       break;
     case "legbye":
-      parts.push(`${d.extraRuns} LEG BYE${d.extraRuns > 1 ? "S" : ""}`);
+      parts.push(`${extraRuns} LEG BYE${extraRuns > 1 ? "S" : ""}`);
       break;
     default:
-      if (d.batterRuns === 4) parts.push("FOUR");
-      else if (d.batterRuns === 6) parts.push("SIX");
-      else if (d.batterRuns === 0) parts.push("DOT BALL");
-      else parts.push(`${d.batterRuns} RUN${d.batterRuns > 1 ? "S" : ""}`);
+      if (batterRuns === 4) parts.push("FOUR");
+      else if (batterRuns === 6) parts.push("SIX");
+      else if (batterRuns === 0 && !d.wicket) parts.push("DOT BALL");
+      else if (batterRuns > 0) parts.push(`${batterRuns} RUN${batterRuns > 1 ? "S" : ""}`);
   }
-  return parts.join(" · ");
+  return parts.join(" · ") || "0 RUNS";
 }
 
 /** ---------- innings reduction ---------- */
@@ -127,6 +136,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   const batters = new Map<string, BatterStat>();
   const bowlers = new Map<string, BowlerStat>();
   const fallOfWickets: FallOfWicket[] = [];
+  const completedPartnerships: import("@/types/cricket").CompletedPartnership[] = [];
   const overGroups: OverGroup[] = [];
   const recent: BallSummary[] = [];
 
@@ -225,13 +235,43 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
         group.wickets += 1;
         if (outBatter) {
           outBatter.out = true;
-          outBatter.dismissal = d.wicket.type;
+          const bName = playerNameOf(d.bowlerId);
+          const fName = d.wicket.fielderId ? playerNameOf(d.wicket.fielderId) : undefined;
+          
+          if (d.wicket.type === "Caught") {
+            outBatter.dismissal = fName ? `c ${fName} b ${bName}` : `c & b ${bName}`;
+          } else if (d.wicket.type === "Bowled") {
+            outBatter.dismissal = `b ${bName}`;
+          } else if (d.wicket.type === "LBW") {
+            outBatter.dismissal = `lbw b ${bName}`;
+          } else if (d.wicket.type === "Run Out") {
+            outBatter.dismissal = fName ? `run out (${fName})` : "run out";
+          } else if (d.wicket.type === "Stumped") {
+            outBatter.dismissal = fName ? `st ${fName} b ${bName}` : `stumped b ${bName}`;
+          } else if (d.wicket.type === "Hit Wicket") {
+            outBatter.dismissal = `hit wicket b ${bName}`;
+          } else {
+            outBatter.dismissal = d.wicket.type;
+          }
         }
         fallOfWickets.push({
           wicketNumber: wickets,
           runs,
           oversText: ballOversText,
           batterOutId: outId,
+          dismissalType: d.wicket?.type,
+          bowlerId: d.bowlerId,
+          fielderId: d.wicket?.fielderId,
+        });
+        // Preserve completed partnership in history before resetting
+        completedPartnerships.push({
+          wicketNumber: wickets,
+          runs: partnershipRuns,
+          balls: partnershipBalls,
+          batterAId: strikerId || "",
+          batterBId: nonStrikerId || "",
+          batterOutId: outId,
+          oversText: ballOversText,
         });
       } else if (outBatter) {
         outBatter.dismissal = "Retired Hurt";
@@ -291,6 +331,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     oversText: oversText(legalBalls),
     oversFloat: legalBalls / 6,
     crr: legalBalls > 0 ? runs / (legalBalls / 6) : 0,
+    maxOvers: config.maxOvers,
     strikerId,
     nonStrikerId,
     currentBowlerId: overInProgress?.bowlerId,
@@ -298,6 +339,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     batters: battersList,
     bowlers: bowlersList,
     fallOfWickets,
+    partnerships: completedPartnerships,
     overGroups,
     recentBalls: recent.slice(-12),
     partnership: {
@@ -328,8 +370,10 @@ export interface MatchInput {
   match: Match;
   setup: MatchSetup;
   deliveries: Delivery[];
-  secondInningsStarted: boolean;
+  secondInningsStarted?: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
+  reducedOvers?: number;
+  secondInningsReducedOvers?: number;
 }
 
 export function buildMatchState(input: MatchInput): MatchState {
@@ -339,6 +383,9 @@ export function buildMatchState(input: MatchInput): MatchState {
   const teamBId = teamAId === match.teamAId ? match.teamBId : match.teamAId;
 
   const xiOf = (teamId: string) => setup.playingXI[teamId]?.playerIds ?? [];
+
+  // Scenario A: Rain before or during 1st innings -> equal overs reduction
+  const maxOvers1 = input.reducedOvers ?? setup.reducedOvers ?? match.overs;
 
   const innings: InningsState[] = [];
 
@@ -350,14 +397,32 @@ export function buildMatchState(input: MatchInput): MatchState {
       battingXI: xiOf(teamAId),
       bowlingXI: xiOf(teamBId),
       openers: setup.openers,
-      maxOvers: match.overs,
+      maxOvers: maxOvers1,
     },
     deliveries.filter((d) => d.inningsIndex === 0),
   );
   innings.push(first);
 
   let phase: MatchState["phase"] = "innings1";
-  if (!setup.battingFirstId || !setup.openers) phase = "setup";
+  if (!setup.battingFirstId || !setup.openers || (deliveries.length === 0 && match.status !== "LIVE")) {
+    phase = "setup";
+  }
+
+  // Scenario B: Rain during 2nd innings -> ARR target revision
+  const secondReduced = input.secondInningsReducedOvers ?? setup.secondInningsReducedOvers;
+  const isSecondReduced = typeof secondReduced === "number" && secondReduced > 0 && secondReduced < maxOvers1;
+  const maxOvers2 = isSecondReduced ? secondReduced : maxOvers1;
+
+  let target = first.runs + 1;
+  let isTargetRevised = false;
+  let arr: number | undefined;
+
+  if (isSecondReduced) {
+    // Official Formula: (Team A Total / Team A Overs) × Team B Reduced Overs = Revised Target
+    arr = maxOvers1 > 0 ? first.runs / maxOvers1 : 0;
+    target = Math.round(arr * maxOvers2);
+    isTargetRevised = true;
+  }
 
   let second: InningsState | undefined;
   if (first.isComplete) {
@@ -371,11 +436,14 @@ export function buildMatchState(input: MatchInput): MatchState {
           battingXI: xiOf(teamBId),
           bowlingXI: xiOf(teamAId),
           openers: input.secondInningsOpeners,
-          maxOvers: match.overs,
-          target: first.runs + 1,
+          maxOvers: maxOvers2,
+          target,
         },
         deliveries.filter((d) => d.inningsIndex === 1),
       );
+      second.originalTarget = first.runs + 1;
+      second.isTargetRevised = isTargetRevised;
+      second.arr = arr;
       innings.push(second);
     }
   }
@@ -383,17 +451,18 @@ export function buildMatchState(input: MatchInput): MatchState {
   let resultText: string | undefined;
   if (second?.isComplete) {
     phase = "complete";
-    const target = first.runs + 1;
     if (second.runs >= target) {
       const wicketsLeft = Math.max(0, xiOf(teamBId).length - 1 - second.wickets);
-      resultText = `${nameOf(teamBId)} won by ${wicketsLeft} wicket${wicketsLeft === 1 ? "" : "s"}`;
-    } else if (second.runs === first.runs) {
+      resultText = `${nameOf(teamBId)} won by ${wicketsLeft} wicket${wicketsLeft === 1 ? "" : "s"}${isTargetRevised ? " (ARR)" : ""}`;
+    } else if (second.runs === first.runs && !isTargetRevised) {
       resultText = "Match tied";
     } else {
-      const margin = first.runs - second.runs;
-      resultText = `${nameOf(teamAId)} won by ${margin} run${margin === 1 ? "" : "s"}`;
+      const margin = isTargetRevised ? Math.max(1, target - second.runs) : first.runs - second.runs;
+      resultText = `${nameOf(teamAId)} won by ${margin} run${margin === 1 ? "" : "s"}${isTargetRevised ? " (ARR)" : ""}`;
     }
   }
+
+  const isRainAffected = maxOvers1 < match.overs || isSecondReduced;
 
   return {
     match,
@@ -402,6 +471,8 @@ export function buildMatchState(input: MatchInput): MatchState {
     currentInningsIndex: second ? 1 : 0,
     phase,
     resultText,
+    isRainAffected,
+    revisedOvers: isSecondReduced ? maxOvers2 : maxOvers1 < match.overs ? maxOvers1 : undefined,
   };
 }
 
@@ -412,4 +483,13 @@ export function setTeamNameResolver(fn: (teamId: string) => string) {
 }
 function nameOf(teamId: string) {
   return nameResolver(teamId);
+}
+
+/** Player name resolver is injected lazily for dismissal formatting. */
+let playerNameResolver: (playerId: string) => string = (id) => id;
+export function setPlayerNameResolver(fn: (playerId: string) => string) {
+  playerNameResolver = fn;
+}
+function playerNameOf(playerId: string) {
+  return playerNameResolver(playerId);
 }

@@ -1,36 +1,27 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { MatchCard } from "@/components/match/MatchCard";
-import { lookup } from "@/lib/repositories";
-import { Radio } from "lucide-react";
+import { Trophy, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/live")({
-  component: LivePage,
+  component: LiveRedirectPage,
 });
 
-function LivePage() {
-  const liveMatches = lookup.matches().filter((m) => m.status === "LIVE");
+function LiveRedirectPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    navigate({ to: "/pointables", replace: true });
+  }, [navigate]);
 
   return (
-    <AppShell title="Live">
-      <div className="max-w-2xl mx-auto flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <Radio className="h-5 w-5 text-primary animate-pulse" />
-          <h1 className="font-display text-3xl font-extrabold uppercase text-foreground">Live</h1>
-        </div>
-
-        {liveMatches.length === 0 ? (
-          <div className="card-surface px-6 py-12 text-center">
-            <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-            <p className="text-sm font-bold text-muted-foreground">No live matches right now.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {liveMatches.map((m) => (
-              <MatchCard key={m.id} match={m} />
-            ))}
-          </div>
-        )}
+    <AppShell title="Pointables">
+      <div className="card-surface p-12 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl max-w-md mx-auto my-12">
+        <Trophy className="h-8 w-8 text-[#D9A928] animate-bounce" />
+        <p className="text-sm font-black text-[#111111] uppercase tracking-wide">
+          Navigating to Pointables...
+        </p>
+        <RefreshCw className="h-4 w-4 text-[#5F6368] animate-spin" />
       </div>
     </AppShell>
   );
