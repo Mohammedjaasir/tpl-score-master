@@ -369,10 +369,13 @@ export interface PlayerMVPScore {
   teamName: string;
   teamShortName: string;
   totalPoints: number;
+  isWinner?: boolean;
+  performanceSummary: string;
   breakdown: {
     battingPoints: number;
     bowlingPoints: number;
     fieldingPoints: number;
+    winningBonus: number;
     runs: number;
     balls: number;
     fours: number;
@@ -380,15 +383,52 @@ export interface PlayerMVPScore {
     wickets: number;
     oversText: string;
     runsConceded: number;
+    maidens: number;
+    economy: number;
+    dotBalls: number;
     catches: number;
     runOuts: number;
     stumpings: number;
   };
 }
 
+export function formatMOTMPerformanceSummary(player: PlayerMVPScore): string {
+  const parts: string[] = [];
+  if (player.breakdown.runs > 0) {
+    parts.push(`${player.breakdown.runs} runs (${player.breakdown.balls}b)`);
+  }
+  if (player.breakdown.wickets > 0) {
+    parts.push(`${player.breakdown.wickets}/${player.breakdown.runsConceded} (${player.breakdown.oversText} ov)`);
+  } else if (player.breakdown.runsConceded > 0 && player.breakdown.oversText !== "0.0") {
+    parts.push(`0/${player.breakdown.runsConceded} (${player.breakdown.oversText} ov)`);
+  }
+  const fieldingCount = player.breakdown.catches + player.breakdown.runOuts + player.breakdown.stumpings;
+  if (fieldingCount > 0) {
+    const fParts: string[] = [];
+    if (player.breakdown.catches > 0) fParts.push(`${player.breakdown.catches} catch${player.breakdown.catches > 1 ? "es" : ""}`);
+    if (player.breakdown.runOuts > 0) fParts.push(`${player.breakdown.runOuts} run out${player.breakdown.runOuts > 1 ? "s" : ""}`);
+    if (player.breakdown.stumpings > 0) fParts.push(`${player.breakdown.stumpings} stumping${player.breakdown.stumpings > 1 ? "s" : ""}`);
+    parts.push(fParts.join(", "));
+  }
+  return parts.join(" • ") || "Match Contribution";
+}
+
 export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
   if (!state) return [];
   const map = new Map<string, PlayerMVPScore>();
+
+  // Determine winning team if match is completed
+  let winningTeamId: string | null = null;
+  const first = state.innings[0];
+  const second = state.innings[1];
+  if (first && second && (second.isComplete || state.phase === "complete")) {
+    const target = second.target ?? (first.runs + 1);
+    if (second.runs >= target) {
+      winningTeamId = second.battingTeamId;
+    } else if (second.isComplete && second.runs < target - 1) {
+      winningTeamId = first.battingTeamId;
+    }
+  }
 
   const getOrCreate = (playerId: string, teamId: string) => {
     if (!map.has(playerId)) {
@@ -403,10 +443,13 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
         teamName: t?.name ?? "Team",
         teamShortName: t?.shortName ?? "TPL",
         totalPoints: 0,
+        isWinner: winningTeamId === teamId,
+        performanceSummary: "",
         breakdown: {
           battingPoints: 0,
           bowlingPoints: 0,
           fieldingPoints: 0,
+          winningBonus: 0,
           runs: 0,
           balls: 0,
           fours: 0,
@@ -414,6 +457,9 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
           wickets: 0,
           oversText: "0.0",
           runsConceded: 0,
+          maidens: 0,
+          economy: 0,
+          dotBalls: 0,
           catches: 0,
           runOuts: 0,
           stumpings: 0,
@@ -423,15 +469,30 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
     return map.get(playerId)!;
   };
 
+  // 1. Batting performance
   state.innings.forEach((inn) => {
-    // Batting
     inn.batters.forEach((b) => {
+      if (b.balls === 0 && b.runs === 0 && !b.out) return;
       const entry = getOrCreate(b.playerId, inn.battingTeamId);
-      const batPts =
-        b.runs * 1 +
-        b.fours * 1 +
-        b.sixes * 2 +
-        (b.runs >= 50 ? 25 : b.runs >= 30 ? 10 : 0);
+      
+      // Base points
+      let batPts = b.runs * 1;
+      batPts += b.fours * 1;
+      batPts += b.sixes * 2;
+
+      // Major Milestones
+      if (b.runs >= 100) batPts += 50;
+      else if (b.runs >= 50) batPts += 25;
+      else if (b.runs >= 30) batPts += 10;
+
+      // Strike Rate Impact (Min 6 balls faced)
+      if (b.balls >= 6) {
+        const sr = (b.runs / b.balls) * 100;
+        if (sr >= 200) batPts += 10;
+        else if (sr >= 150) batPts += 5;
+        else if (sr < 70 && b.out) batPts -= 5;
+      }
+
       entry.breakdown.runs += b.runs;
       entry.breakdown.balls += b.balls;
       entry.breakdown.fours += b.fours;
@@ -440,21 +501,38 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
       entry.totalPoints += batPts;
     });
 
-    // Bowling
+    // 2. Bowling performance
     inn.bowlers.forEach((bw) => {
+      if (bw.legalBalls === 0 && bw.runs === 0) return;
       const entry = getOrCreate(bw.playerId, inn.bowlingTeamId);
-      const bowlPts =
-        bw.wickets * 25 +
-        bw.maidens * 20 +
-        (bw.legalBalls >= 6 && bw.economy <= 6.0 ? 15 : 0);
+      
+      let bowlPts = bw.wickets * 25;
+      
+      // Haul bonuses
+      if (bw.wickets >= 5) bowlPts += 30;
+      else if (bw.wickets >= 3) bowlPts += 15;
+
+      // Maidens
+      bowlPts += bw.maidens * 20;
+
+      // Economy bonuses (min 1 completed over / 6 legal balls)
+      if (bw.legalBalls >= 6) {
+        if (bw.economy <= 5.0) bowlPts += 15;
+        else if (bw.economy <= 6.5) bowlPts += 10;
+        else if (bw.economy >= 12.0) bowlPts -= 10;
+      }
+
       entry.breakdown.wickets += bw.wickets;
       entry.breakdown.oversText = oversText(bw.legalBalls);
       entry.breakdown.runsConceded += bw.runs;
+      entry.breakdown.maidens += bw.maidens;
+      entry.breakdown.economy = bw.economy;
+      entry.breakdown.dotBalls += bw.dots;
       entry.breakdown.bowlingPoints += bowlPts;
       entry.totalPoints += bowlPts;
     });
 
-    // Fielding
+    // 3. Fielding performance
     inn.overGroups.forEach((og) => {
       og.balls.forEach((bs) => {
         const w = bs.delivery.wicket;
@@ -478,9 +556,52 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
     });
   });
 
-  return Array.from(map.values())
-    .filter((p) => p.totalPoints > 0)
-    .sort((a, b) => b.totalPoints - a.totalPoints);
+  // 4. Winning Team Context & Final Summary
+  const playerList = Array.from(map.values()).filter((p) => p.totalPoints > 0);
+
+  playerList.forEach((p) => {
+    if (winningTeamId && p.teamId === winningTeamId && p.totalPoints > 0) {
+      const winBonus = 10;
+      p.breakdown.winningBonus = winBonus;
+      p.totalPoints += winBonus;
+      p.isWinner = true;
+    }
+    p.performanceSummary = formatMOTMPerformanceSummary(p);
+  });
+
+  // 5. Deterministic Cross-Discipline Sorting & Tie-Breaking
+  return playerList.sort((a, b) => {
+    // 1. Total Points
+    if (b.totalPoints !== a.totalPoints) {
+      return b.totalPoints - a.totalPoints;
+    }
+    // 2. Winning Team Affiliation
+    if ((b.isWinner ? 1 : 0) !== (a.isWinner ? 1 : 0)) {
+      return (b.isWinner ? 1 : 0) - (a.isWinner ? 1 : 0);
+    }
+    // 3. Higher Wickets
+    if (b.breakdown.wickets !== a.breakdown.wickets) {
+      return b.breakdown.wickets - a.breakdown.wickets;
+    }
+    // 4. Higher Runs
+    if (b.breakdown.runs !== a.breakdown.runs) {
+      return b.breakdown.runs - a.breakdown.runs;
+    }
+    // 5. Lower Bowling Economy (if bowled)
+    if (a.breakdown.oversText !== "0.0" && b.breakdown.oversText !== "0.0") {
+      if (a.breakdown.economy !== b.breakdown.economy) {
+        return a.breakdown.economy - b.breakdown.economy;
+      }
+    }
+    // 6. Higher Fielding Dismissals
+    const aField = a.breakdown.catches + a.breakdown.runOuts + a.breakdown.stumpings;
+    const bField = b.breakdown.catches + b.breakdown.runOuts + b.breakdown.stumpings;
+    if (bField !== aField) {
+      return bField - aField;
+    }
+    // 7. Deterministic Canonical ID Sort
+    return a.playerId.localeCompare(b.playerId);
+  });
 }
 
 // ── Tournament-Wide Stats & Leaderboards ────────────────────────────────────

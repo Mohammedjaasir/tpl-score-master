@@ -69,9 +69,12 @@ export const WagonWheel: React.FC<WagonWheelProps> = ({ summary, className = "" 
         </div>
 
         {/* Aggregate Badges */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 font-bold">
             Total Runs: <strong className="text-white">{summary.totalRuns}</strong>
+          </span>
+          <span className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold">
+            Mapped: <strong className="text-emerald-200">{summary.mappedRuns}</strong>
           </span>
           {summary.unmappedRuns > 0 && (
             <span className="px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-[11px]">
@@ -89,7 +92,7 @@ export const WagonWheel: React.FC<WagonWheelProps> = ({ summary, className = "" 
           </div>
           <div>
             <h4 className="text-sm font-black uppercase tracking-wider text-white">
-              WAGON WHEEL
+              NO SHOT LOCATION DATA RECORDED
             </h4>
             <p className="text-xs text-slate-400 max-w-sm mt-1">
               Shot-location data is not available for this innings.

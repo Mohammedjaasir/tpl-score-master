@@ -44,6 +44,15 @@ import {
   Menu,
 } from "lucide-react";
 
+import {
+  TPL_STATISTICS_METHODOLOGY,
+  getAllMethodologiesByCategory,
+  METHODOLOGY_VERSION,
+  METHODOLOGY_LAST_UPDATED,
+  OFFICIAL_RULES_REFERENCE_URL,
+  type MetricCategory,
+} from "@/lib/scoring/statistics-methodology";
+
 export const Route = createFileRoute("/admin")({
   component: AdminPortalPage,
 });
@@ -53,6 +62,7 @@ type AdminSection =
   | "players"
   | "teams"
   | "tournament"
+  | "methodology"
   | "manuals"
   | "auction"
   | "reports"
@@ -65,7 +75,8 @@ const ADMIN_NAV_ITEMS = [
   { id: "players", label: "Players", icon: Users },
   { id: "teams", label: "Teams", icon: Shield },
   { id: "tournament", label: "Tournament Control", icon: Calendar },
-  { id: "manuals", label: "System Manuals", icon: BookOpen },
+  { id: "methodology", label: "Stats Methodology", icon: BookOpen },
+  { id: "manuals", label: "System Manuals", icon: FileText },
   { id: "auction", label: "Auction Manager", icon: Gavel },
   { id: "reports", label: "Print Reports", icon: Printer },
   { id: "changelog", label: "Changelog", icon: History },
@@ -1235,10 +1246,99 @@ function AdminPortalPage() {
                   type="text"
                   defaultValue="5 Overs per innings"
                   disabled
-                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-2.5 text-[#111827] font-bold"
+                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E5E5] rounded-xl px-4 py-2.5 text-[#111827] font-bold"
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── SECTION: STATISTICS & AWARDS METHODOLOGY ───────────────────── */}
+        {activeSection === "methodology" && (
+          <div className="flex flex-col gap-6">
+            {/* Header Showcase Card */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#121316] via-black to-[#1E1B11] border-2 border-[#D9A928] text-white shadow-xl flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-[#D9A928]/20 flex items-center justify-center text-[#D9A928]">
+                    <BookOpen className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] bg-[#D9A928]/10 px-2.5 py-0.5 rounded-full border border-[#D9A928]/20">
+                        Methodology Version {METHODOLOGY_VERSION}
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-bold uppercase">
+                        Audited & Deterministic
+                      </span>
+                    </div>
+                    <h2 className="text-base sm:text-xl font-black uppercase tracking-wide text-white mt-1">
+                      Official Statistics & Awards Methodology Specification
+                    </h2>
+                  </div>
+                </div>
+
+                <a
+                  href={OFFICIAL_RULES_REFERENCE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tap px-4 py-2 rounded-xl bg-[#D9A928] text-black font-black text-xs uppercase tracking-wider shadow-md hover:bg-[#E5B537] flex items-center gap-1.5"
+                >
+                  <span>Official Rules Page</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+
+              <p className="text-xs text-white/80 leading-relaxed">
+                Every statistic, award, ranking, net run rate (NRR), and points table value in TPL 2026 is evaluated purely from authoritative match deliveries (<code className="text-[#D9A928]">balls</code>) and completed match events. Master player, team, and roster data remain strictly read-only.
+              </p>
+            </div>
+
+            {/* Methodology Categories */}
+            {Object.entries(getAllMethodologiesByCategory()).map(([categoryKey, metrics]) => {
+              if (metrics.length === 0) return null;
+              return (
+                <div key={categoryKey} className="p-6 rounded-3xl bg-white border border-[#E5E7EB] shadow-sm flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-[#111827]">
+                      {categoryKey.replace("_", " ")} SPECIFICATION
+                    </h3>
+                    <span className="text-[10px] font-bold text-[#6B7280]">
+                      {metrics.length} Defined Metrics
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {metrics.map((m) => (
+                      <div key={m.key} className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E7EB] flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-black uppercase text-[#111827]">{m.name}</h4>
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-200 text-[#4B5563]">
+                              {m.scope}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-mono text-[#6B7280]">{m.methodologyVersion}</span>
+                        </div>
+
+                        <p className="text-xs text-[#4B5563] font-medium leading-relaxed">{m.description}</p>
+
+                        <div className="p-2.5 rounded-xl bg-white border border-[#E5E7EB] flex flex-col gap-1">
+                          <span className="text-[9px] font-black uppercase text-[#9A6A05]">Formula</span>
+                          <code className="text-[11px] font-mono text-[#111827] font-bold">{m.formula}</code>
+                        </div>
+
+                        <div className="flex flex-col gap-1 text-[11px] text-[#6B7280]">
+                          <p><strong className="text-[#111827]">Qualification:</strong> {m.qualification}</p>
+                          <p><strong className="text-[#111827]">Tie-Breaker:</strong> {m.tieBreakRule}</p>
+                          <p><strong className="text-[#111827]">Edge Cases:</strong> {m.edgeCases}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>

@@ -219,6 +219,16 @@ export async function persistBall(params: {
   oversCompleted: number;
   isInningsComplete?: boolean;
 }): Promise<{ success: boolean; ballId: string }> {
+  // STRICT CLIENT PRE-PERSIST VALIDATION: Caught / Run Out / Stumped must have an explicit fielder
+  if (
+    params.wicket &&
+    (params.wicket.type === "Caught" || params.wicket.type === "Run Out" || params.wicket.type === "Stumped")
+  ) {
+    if (!params.wicket.fielderId || params.wicket.fielderId.trim() === "") {
+      throw new Error(`[persistBall] Fielder is strictly mandatory for ${params.wicket.type} dismissal.`);
+    }
+  }
+
   return await recordBallServerFn({
     data: {
       matchId: params.matchId,

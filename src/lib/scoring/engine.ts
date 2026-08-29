@@ -235,7 +235,24 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
         group.wickets += 1;
         if (outBatter) {
           outBatter.out = true;
-          outBatter.dismissal = d.wicket.type;
+          const bName = playerNameOf(d.bowlerId);
+          const fName = d.wicket.fielderId ? playerNameOf(d.wicket.fielderId) : undefined;
+          
+          if (d.wicket.type === "Caught") {
+            outBatter.dismissal = fName ? `c ${fName} b ${bName}` : `c & b ${bName}`;
+          } else if (d.wicket.type === "Bowled") {
+            outBatter.dismissal = `b ${bName}`;
+          } else if (d.wicket.type === "LBW") {
+            outBatter.dismissal = `lbw b ${bName}`;
+          } else if (d.wicket.type === "Run Out") {
+            outBatter.dismissal = fName ? `run out (${fName})` : "run out";
+          } else if (d.wicket.type === "Stumped") {
+            outBatter.dismissal = fName ? `st ${fName} b ${bName}` : `stumped b ${bName}`;
+          } else if (d.wicket.type === "Hit Wicket") {
+            outBatter.dismissal = `hit wicket b ${bName}`;
+          } else {
+            outBatter.dismissal = d.wicket.type;
+          }
         }
         fallOfWickets.push({
           wicketNumber: wickets,
@@ -466,4 +483,13 @@ export function setTeamNameResolver(fn: (teamId: string) => string) {
 }
 function nameOf(teamId: string) {
   return nameResolver(teamId);
+}
+
+/** Player name resolver is injected lazily for dismissal formatting. */
+let playerNameResolver: (playerId: string) => string = (id) => id;
+export function setPlayerNameResolver(fn: (playerId: string) => string) {
+  playerNameResolver = fn;
+}
+function playerNameOf(playerId: string) {
+  return playerNameResolver(playerId);
 }

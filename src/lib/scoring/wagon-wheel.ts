@@ -139,15 +139,15 @@ export function calculateBatterWagonWheel(
     if (isFour) zoneBreakdown[zoneKey].fours += 1;
     if (isSix) zoneBreakdown[zoneKey].sixes += 1;
 
-    if (runs > 0 || isMapped) {
+    if (isMapped && runs > 0) {
       shots.push({
         id: `shot-${idx}`,
         zone: zoneKey,
         runs,
         isFour,
         isSix,
-        over: d.overNumber || 0,
-        ball: d.ballNumber || 0,
+        over: d.overNumber ?? 0,
+        ball: d.ballNumber ?? 0,
       });
     }
   });

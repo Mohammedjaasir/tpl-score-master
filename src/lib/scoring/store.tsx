@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
-import { buildMatchState, setTeamNameResolver } from "@/lib/scoring/engine";
+import { buildMatchState, setPlayerNameResolver, setTeamNameResolver } from "@/lib/scoring/engine";
 import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
 import { supabase } from "@/lib/supabase";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/scoring/db-sync";
 
 setTeamNameResolver((id) => lookup.team(id)?.name ?? id);
+setPlayerNameResolver((id) => lookup.player(id)?.name ?? id);
 
 export interface MatchDoc {
   matchId: string;
@@ -124,6 +125,7 @@ export interface DeliveryInput {
   extraRuns: number;
   extraType: ExtraType;
   wicket?: WicketInfo;
+  shotZone?: string | null;
 }
 
 export function useMatchStore(matchId: string, initialMatch?: Match) {
@@ -406,6 +408,17 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         return;
       }
 
+      // STRICT MULTI-LEVEL VALIDATION: Fielder is mandatory for Caught, Run Out, Stumped
+      if (
+        input.wicket &&
+        (input.wicket.type === "Caught" || input.wicket.type === "Run Out" || input.wicket.type === "Stumped")
+      ) {
+        if (!input.wicket.fielderId || input.wicket.fielderId.trim() === "") {
+          console.error(`[useMatchStore.record] Blocked: Fielder is strictly mandatory for ${input.wicket.type}.`);
+          return;
+        }
+      }
+
       const clientTimestamp = Date.now();
       const delivery: Delivery = {
         id: `${clientTimestamp}-${Math.random().toString(36).slice(2, 8)}`,
@@ -417,6 +430,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         extraRuns: input.extraRuns,
         extraType: input.extraType,
         ...(input.wicket ? { wicket: input.wicket } : {}),
+        shotZone: input.shotZone ?? "unmapped",
         timestamp: clientTimestamp,
       };
 

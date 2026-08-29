@@ -110,6 +110,16 @@ export const startInningsServerFn = createServerFn({ method: "POST" })
 export const recordBallServerFn = createServerFn({ method: "POST" })
   .validator((input: RecordBallInput) => input)
   .handler(async ({ data: input }) => {
+    // STRICT SERVER-SIDE VALIDATION: Reject caught/run-out/stumped without explicit fielder
+    if (
+      input.isWicket &&
+      (input.wicketType === "caught" || input.wicketType === "run-out" || input.wicketType === "stumped")
+    ) {
+      if (!input.fielderId || input.fielderId.trim() === "") {
+        throw new Error(`[recordBallServerFn] Fielder is strictly mandatory for ${input.wicketType} dismissal.`);
+      }
+    }
+
     const supabaseAdmin = getServerSupabaseAdmin();
 
     // 1. Deduplication check: prevent inserting the exact same delivery twice

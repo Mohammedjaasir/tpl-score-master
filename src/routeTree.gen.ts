@@ -16,6 +16,7 @@ import { Route as LiveRouteImport } from './routes/live'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PointablesRouteImport } from './routes/pointables'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as RecordsRouteImport } from './routes/records'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as ScorecardsRouteImport } from './routes/scorecards'
 import { Route as ScorerRouteImport } from './routes/scorer'
@@ -57,6 +58,11 @@ const PointablesRoute = PointablesRouteImport.update({
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecordsRoute = RecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RulesRoute = RulesRouteImport.update({
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/matches': typeof MatchesRoute
   '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
+  '/records': typeof RecordsRoute
   '/rules': typeof RulesRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/matches': typeof MatchesRoute
   '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
+  '/records': typeof RecordsRoute
   '/rules': typeof RulesRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/matches': typeof MatchesRoute
   '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
+  '/records': typeof RecordsRoute
   '/rules': typeof RulesRoute
   '/scorecards': typeof ScorecardsRoute
   '/scorer': typeof ScorerRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/matches'
     | '/pointables'
     | '/profile'
+    | '/records'
     | '/rules'
     | '/scorecards'
     | '/scorer'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/matches'
     | '/pointables'
     | '/profile'
+    | '/records'
     | '/rules'
     | '/scorecards'
     | '/scorer'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/matches'
     | '/pointables'
     | '/profile'
+    | '/records'
     | '/rules'
     | '/scorecards'
     | '/scorer'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   MatchesRoute: typeof MatchesRoute
   PointablesRoute: typeof PointablesRoute
   ProfileRoute: typeof ProfileRoute
+  RecordsRoute: typeof RecordsRoute
   RulesRoute: typeof RulesRoute
   ScorecardsRoute: typeof ScorecardsRoute
   ScorerRoute: typeof ScorerRoute
@@ -261,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/records': {
+      id: '/records'
+      path: '/records'
+      fullPath: '/records'
+      preLoaderRoute: typeof RecordsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rules': {
@@ -323,6 +343,7 @@ const rootRouteChildren: RootRouteChildren = {
   MatchesRoute: MatchesRoute,
   PointablesRoute: PointablesRoute,
   ProfileRoute: ProfileRoute,
+  RecordsRoute: RecordsRoute,
   RulesRoute: RulesRoute,
   ScorecardsRoute: ScorecardsRoute,
   ScorerRoute: ScorerRoute,

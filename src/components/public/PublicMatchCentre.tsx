@@ -1,12 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import type { Match, MatchState, InningsState, Delivery, OverGroup } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 import { oversText, describeDelivery, ballLabel } from "@/lib/scoring/engine";
 import { calculateMatchMVP } from "@/lib/scoring/playerPerformance";
+import { calculateSingleMatchStats, formatStatDecimal } from "@/lib/scoring/statistics";
 import { WagonWheel } from "@/components/scoring/WagonWheel";
 import { calculateBatterWagonWheel } from "@/lib/scoring/wagon-wheel";
 import { formatMatchCondition, type MatchCondition } from "@/lib/scoring/weather";
+import { LiveScoreBroadcastBanner, type LiveScoreEvent } from "@/components/public/LiveScoreBroadcastBanner";
+import { PlayerPerformanceModal } from "@/components/public/PlayerPerformanceModal";
 import {
   ChevronLeft,
   Radio,
@@ -45,11 +48,16 @@ type TabType = "overview" | "commentary" | "scorecard" | "stats" | "wagonwheel" 
 type CommentaryFilter = "all" | "wickets" | "fours" | "sixes" | "extras";
 
 export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchCentreProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [activeTab, setActiveTab] = useState<TabType>("scorecard");
   const [commentaryFilter, setCommentaryFilter] = useState<CommentaryFilter>("all");
   const [copiedShare, setCopiedShare] = useState(false);
   const [showAllOvers, setShowAllOvers] = useState(false);
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string | null>(null);
+  const [selectedPerformancePlayerId, setSelectedPerformancePlayerId] = useState<string | null>(null);
+  const [liveEvent, setLiveEvent] = useState<LiveScoreEvent | null>(null);
+
+  const lastDeliveryIdRef = useRef<string | null>(null);
+  const isFirstMountRef = useRef(true);
 
   const teamA = lookup.team(match.teamAId);
   const teamB = lookup.team(match.teamBId);
@@ -101,6 +109,92 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
     });
     return list.reverse(); // latest first
   }, [state]);
+
+  // Broadcast Live Score Event Animation (Data-driven, deduplicated via delivery.id)
+  useEffect(() => {
+    if (!allDeliveries || allDeliveries.length === 0) return;
+
+    const latest = allDeliveries[0]?.delivery;
+    if (!latest) return;
+
+    // Prevent flashing old ball on first page mount / refresh
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      lastDeliveryIdRef.current = latest.id;
+      return;
+    }
+
+    // Deduplication check: ignore if this ball ID was already animated
+    if (latest.id === lastDeliveryIdRef.current) return;
+    lastDeliveryIdRef.current = latest.id;
+
+    const isWicket = !!latest.wicket;
+    const isFour = !latest.extraType && latest.batterRuns === 4;
+    const isSix = !latest.extraType && latest.batterRuns === 6;
+    const isExtra = !!latest.extraType;
+
+    let badgeText = "";
+    let subText: string | undefined;
+
+    if (isWicket) {
+      badgeText = "WICKET!";
+      const outP = lookup.player(latest.wicket?.batterOutId ?? "");
+      const bowlP = lookup.player(latest.bowlerId);
+      const fieldP = latest.wicket?.fielderId ? lookup.player(latest.wicket.fielderId) : undefined;
+
+      if (latest.wicket?.type === "Caught" && fieldP && bowlP) {
+        subText = `${outP?.name ?? "Batter"} · c ${fieldP.name} b ${bowlP.name}`;
+      } else if (latest.wicket?.type === "Bowled" && bowlP) {
+        subText = `${outP?.name ?? "Batter"} · b ${bowlP.name}`;
+      } else if (latest.wicket?.type === "LBW" && bowlP) {
+        subText = `${outP?.name ?? "Batter"} · lbw b ${bowlP.name}`;
+      } else if (latest.wicket?.type === "Run Out" && fieldP) {
+        subText = `${outP?.name ?? "Batter"} · run out (${fieldP.name})`;
+      } else if (latest.wicket?.type === "Stumped" && fieldP && bowlP) {
+        subText = `${outP?.name ?? "Batter"} · st ${fieldP.name} b ${bowlP.name}`;
+      } else {
+        subText = outP?.name ? `${outP.name} (${latest.wicket?.type ?? "Out"})` : latest.wicket?.type;
+      }
+    } else if (latest.extraType === "wide") {
+      badgeText = `+${latest.extraRuns || 1} WD`;
+      subText = "Wide Extra";
+    } else if (latest.extraType === "noball") {
+      badgeText = `+${latest.extraRuns || 1} NB`;
+      subText = "No Ball Extra";
+    } else if (latest.extraType === "bye") {
+      badgeText = `+${latest.extraRuns} B`;
+      subText = "Bye Extra";
+    } else if (latest.extraType === "legbye") {
+      badgeText = `+${latest.extraRuns} LB`;
+      subText = "Leg Bye Extra";
+    } else if (isSix) {
+      badgeText = "+6";
+      subText = "MAXIMUM SIX!";
+    } else if (isFour) {
+      badgeText = "+4";
+      subText = "BOUNDARY FOUR";
+    } else if (latest.batterRuns > 0) {
+      badgeText = `+${latest.batterRuns}`;
+    }
+
+    if (badgeText) {
+      setLiveEvent({
+        id: latest.id,
+        badgeText,
+        subText,
+        isWicket,
+        isFour,
+        isSix,
+        isExtra,
+      });
+
+      const timer = setTimeout(() => {
+        setLiveEvent(null);
+      }, 1200);
+
+      return () => clearTimeout(timer);
+    }
+  }, [allDeliveries]);
 
   // Filtered Commentary
   const filteredDeliveries = useMemo(() => {
@@ -246,6 +340,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
     };
   }, [state, teamA, teamB]);
 
+  const singleMatchStats = useMemo(() => (state ? calculateSingleMatchStats(state) : null), [state]);
   const matchMvpList = useMemo(() => calculateMatchMVP(state), [state]);
 
   // Player of the match lookup
@@ -328,6 +423,9 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
       {/* ── MAIN SCOREBOARD HERO ───────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl bg-[#121316] border border-white/10 text-white shadow-2xl p-5 sm:p-7">
         <div className="absolute top-0 right-0 w-80 h-80 bg-[#D9A928]/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Live Broadcast Score Event Popup Animation */}
+        <LiveScoreBroadcastBanner event={liveEvent} />
 
         {/* Match Header Metadata */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-4 mb-5 text-xs text-white/70">
@@ -530,30 +628,61 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
         </div>
       )}
 
-      {/* ── MATCH NAVIGATION TABS ──────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar pb-1">
+      {/* ── MATCH NAVIGATION TABS (Mobile-First Responsive Grid - Zero Horizontal Scrolling) ── */}
+      <div
+        role="tablist"
+        aria-label="Match Centre Sections"
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5"
+      >
         {[
-          { id: "overview", label: "Overview", icon: Activity },
-          { id: "commentary", label: "Commentary", icon: Zap },
-          { id: "scorecard", label: "Scorecard", icon: Layers },
-          { id: "wagonwheel", label: "Wagon Wheel", icon: Compass },
-          { id: "stats", label: "Stats & Highlights", icon: BarChart3 },
-          { id: "playingxi", label: "Playing XI", icon: Users },
+          { id: "scorecard", label: "Scorecard", icon: Layers, desc: "Live card & innings" },
+          { id: "commentary", label: "Commentary", icon: Zap, desc: "Ball-by-ball updates" },
+          { id: "wagonwheel", label: "Wagon Wheel", icon: Compass, desc: "Batter shot map" },
+          { id: "stats", label: "Stats", icon: BarChart3, desc: "Records & MVP" },
+          { id: "playingxi", label: "Playing XI", icon: Users, desc: "Team lineups" },
+          { id: "overview", label: "Overview", icon: Activity, desc: "Match summary" },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`match-section-${tab.id}`}
               onClick={() => setActiveTab(tab.id as TabType)}
-              className={`tap shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`tap w-full min-h-[48px] h-auto p-2.5 rounded-2xl flex items-center justify-between gap-2 text-left transition-all relative select-none cursor-pointer ${
                 isActive
-                  ? "bg-[#111111] text-[#D9A928] shadow-md"
-                  : "bg-white text-[#5F6368] hover:text-[#111111] border border-[#E5E5E5]"
+                  ? "bg-[#121316] text-white border-2 border-[#D9A928] shadow-md ring-1 ring-[#D9A928]/30"
+                  : "bg-white text-[#111111] hover:bg-[#F9FAFB] border border-[#E5E5E5] shadow-xs"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
-              <span>{tab.label}</span>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div
+                  className={`h-7 w-7 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    isActive
+                      ? "bg-[#D9A928] text-black"
+                      : "bg-[#F3F4F6] text-[#5F6368]"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider truncate leading-tight ${
+                      isActive ? "text-[#D9A928]" : "text-[#111111]"
+                    }`}
+                  >
+                    {tab.label}
+                  </span>
+                </div>
+              </div>
+
+              {isActive && (
+                <div className="h-4 w-4 rounded-full bg-[#D9A928] text-black flex items-center justify-center shrink-0 shadow-xs">
+                  <Check className="h-2.5 w-2.5 stroke-[3]" />
+                </div>
+              )}
             </button>
           );
         })}
@@ -582,14 +711,14 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                     return (
                       <div key={b!.playerId} className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
-                          <Link
-                            to="/players/$playerId"
-                            params={{ playerId: b!.playerId }}
-                            className="text-sm font-black text-[#111111] hover:text-[#D9A928] flex items-center gap-1.5 truncate group"
+                          <button
+                            onClick={() => setSelectedPerformancePlayerId(b!.playerId)}
+                            className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] flex items-center gap-1.5 truncate group"
+                            title="View Player Performance & Wagon Wheel"
                           >
                             <span className="group-hover:underline">{p?.name ?? "Batter"}</span>
                             {isStriker && <span className="text-[#D9A928] font-black">*</span>}
-                          </Link>
+                          </button>
                           <p className="text-[10px] text-[#5F6368] font-bold">
                             {isStriker ? "On Strike" : "Non-Striker"}
                           </p>
@@ -627,13 +756,13 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                       return (
                         <div className="flex items-center justify-between">
                           <div>
-                            <Link
-                              to="/players/$playerId"
-                              params={{ playerId: activeBowler.playerId }}
-                              className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
+                            <button
+                              onClick={() => setSelectedPerformancePlayerId(activeBowler.playerId)}
+                              className="text-left text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate"
+                              title="View Player Performance & Wagon Wheel"
                             >
                               {p?.name ?? "Bowler"}
-                            </Link>
+                            </button>
                             <p className="text-[10px] text-[#5F6368] font-bold">{p?.role ?? "Bowling"}</p>
                           </div>
                           <div className="text-right">
@@ -1036,17 +1165,16 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                           <tr key={b.playerId} className={b.out ? "hover:bg-[#FAFAF8]" : "bg-[#D9A928]/5"}>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <Link
-                                  to="/players/$playerId"
-                                  params={{ playerId: b.playerId }}
-                                  className="font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline truncate"
+                                <button
+                                  onClick={() => setSelectedPerformancePlayerId(b.playerId)}
+                                  className="text-left font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline truncate"
+                                  title="View Player Performance & Wagon Wheel"
                                 >
                                   {p?.name ?? b.playerId}
-                                </Link>
+                                </button>
                                 <button
                                   onClick={() => {
-                                    setSelectedWagonBatterId(b.playerId);
-                                    setActiveTab("wagonwheel");
+                                    setSelectedPerformancePlayerId(b.playerId);
                                   }}
                                   className="shrink-0 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 hover:bg-[#D9A928] text-slate-700 hover:text-black border border-slate-200 transition-colors"
                                   title="View Wagon Wheel"
@@ -1097,13 +1225,13 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                         return (
                           <tr key={b.playerId} className="hover:bg-[#FAFAF8]">
                             <td className="px-4 py-3 font-extrabold text-[#111111]">
-                              <Link
-                                to="/players/$playerId"
-                                params={{ playerId: b.playerId }}
-                                className="hover:text-[#D9A928] hover:underline"
+                              <button
+                                onClick={() => setSelectedPerformancePlayerId(b.playerId)}
+                                className="text-left hover:text-[#D9A928] hover:underline truncate block"
+                                title="View Player Performance & Wagon Wheel"
                               >
                                 {p?.name ?? b.playerId}
-                              </Link>
+                              </button>
                             </td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{oversText(b.legalBalls)}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.maidens}</td>
@@ -1219,29 +1347,32 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                 {/* Batter Pills */}
                 <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
                   <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
-                      Select Batter for Wagon Wheel
-                    </span>
-                    <span className="text-[10px] font-bold text-[#5F6368]">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] block">
+                        BATTER WAGON WHEEL / SHOT MAP
+                      </span>
+                      <p className="text-xs text-[#111111] font-bold">Select Batter</p>
+                    </div>
+                    <span className="text-[10px] font-black uppercase bg-[#F3F4F6] text-[#5F6368] px-2.5 py-1 rounded-full">
                       {allBatters.length} Batters
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     {allBatters.map((b) => {
                       const isSelected = b.id === currentSelectedId;
                       return (
                         <button
                           key={b.id}
                           onClick={() => setSelectedWagonBatterId(b.id)}
-                          className={`tap shrink-0 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                          className={`tap px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                             isSelected
-                              ? "bg-[#D9A928] text-black shadow-sm"
+                              ? "bg-[#111111] text-[#D9A928] border-2 border-[#D9A928] shadow-sm"
                               : "bg-[#F7F7F5] text-[#5F6368] hover:text-[#111111] border border-[#E5E5E5]"
                           }`}
                         >
                           <span>{b.name}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSelected ? "bg-black/10 text-black" : "bg-white text-[#5F6368]"}`}>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSelected ? "bg-[#D9A928] text-black font-black" : "bg-white text-[#5F6368]"}`}>
                             {b.runs} ({b.balls})
                           </span>
                         </button>
@@ -1275,129 +1406,278 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
       {activeTab === "stats" && (
         <div className="flex flex-col gap-6">
           {/* Player of the Match Section */}
-          <div className="bg-gradient-to-r from-[#121316] via-black to-[#121316] border border-[#D9A928]/30 rounded-3xl p-6 shadow-xl text-white">
-            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-4">
-              <Trophy className="h-4 w-4 text-[#D9A928]" />
-              <h3 className="text-xs font-black uppercase tracking-wider text-[#D9A928]">
-                PLAYER OF THE MATCH
-              </h3>
+          <div className="bg-gradient-to-r from-[#121316] via-black to-[#121316] border-2 border-[#D9A928] rounded-3xl p-6 shadow-xl text-white">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-[#D9A928]" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#D9A928]">
+                  {isDone ? "🏆 MAN OF THE MATCH" : "CURRENT MATCH MVP LEADER"}
+                </h3>
+              </div>
+              {(() => {
+                const targetId = momPlayerId || (isDone ? matchMvpList[0]?.playerId : undefined);
+                const mvp = targetId ? matchMvpList.find((m) => m.playerId === targetId) : undefined;
+                return mvp ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#D9A928] text-black font-black text-[10px]">
+                    Impact: {mvp.totalPoints} pts
+                  </span>
+                ) : null;
+              })()}
             </div>
 
-            {momPlayer ? (
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-black/60 border-2 border-[#D9A928] p-1 flex items-center justify-center overflow-hidden">
-                    {momPlayer.avatar ? (
-                      <img src={momPlayer.avatar} alt="" className="h-full w-full object-cover rounded-xl" />
-                    ) : (
-                      <User className="h-8 w-8 text-white/50" />
-                    )}
-                  </div>
-                  <div>
-                    <Link
-                      to="/players/$playerId"
-                      params={{ playerId: momPlayer.id }}
-                      className="text-lg font-black text-white hover:text-[#D9A928] hover:underline"
-                    >
-                      {momPlayer.name}
-                    </Link>
-                    <p className="text-xs text-[#D9A928] font-bold mt-0.5">
-                      {lookup.team(momPlayer.teamId)?.name ?? "TPL Player"} • {momPlayer.role}
-                    </p>
-                  </div>
-                </div>
+            {(() => {
+              const targetId = momPlayerId || (isDone ? matchMvpList[0]?.playerId : undefined);
+              const player = targetId ? lookup.player(targetId) : undefined;
+              const mvp = targetId ? matchMvpList.find((m) => m.playerId === targetId) : undefined;
 
-                <div className="text-right">
-                  {momBatterStat && (
-                    <p className="text-sm font-black text-white tabular-nums">
-                      {momBatterStat.runs} runs ({momBatterStat.balls}b)
-                    </p>
-                  )}
-                  {momBowlerStat && momBowlerStat.legalBalls > 0 && (
-                    <p className="text-xs font-bold text-[#D9A928] tabular-nums">
-                      {momBowlerStat.wickets}/{momBowlerStat.runs} ({oversText(momBowlerStat.legalBalls)} ov)
-                    </p>
-                  )}
+              if (!player) {
+                return (
+                  <div className="py-2 text-xs font-bold text-white/60 italic">
+                    {isDone
+                      ? "Man of the Match: Awaiting referee confirmation."
+                      : "Man of the Match will be calculated upon match completion."}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="h-16 w-16 rounded-2xl bg-black/60 border-2 border-[#D9A928] p-1 flex items-center justify-center overflow-hidden shrink-0">
+                      {player.avatar ? (
+                        <img src={player.avatar} alt="" className="h-full w-full object-cover rounded-xl" />
+                      ) : (
+                        <User className="h-8 w-8 text-white/50" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <button
+                        onClick={() => setSelectedPerformancePlayerId(player.id)}
+                        className="text-left text-lg sm:text-xl font-black text-white hover:text-[#D9A928] hover:underline block truncate"
+                        title="View Player Performance & Wagon Wheel"
+                      >
+                        {player.name}
+                      </button>
+                      <p className="text-xs text-[#D9A928] font-bold mt-0.5">
+                        {lookup.team(player.teamId)?.name ?? "TPL Team"} • {player.role}
+                      </p>
+                      {mvp?.performanceSummary && (
+                        <p className="text-xs text-white/80 font-extrabold mt-1">
+                          {mvp.performanceSummary}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-center">
+                    <button
+                      onClick={() => setSelectedPerformancePlayerId(player.id)}
+                      className="tap px-4 py-2 rounded-xl bg-[#D9A928] text-black font-black text-xs uppercase tracking-wider shadow-md hover:bg-[#E5B537]"
+                    >
+                      View Player
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="py-2 text-xs font-bold text-white/60 italic">
-                {isDone ? "Player of the Match: To be announced" : "Player of the Match will be announced after match completion."}
-              </div>
-            )}
+              );
+            })()}
           </div>
 
-          {/* Top Performers Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Best Batter Card */}
-            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-3">
-              <div className="flex items-center gap-2 border-b border-[#E5E5E5] pb-3">
-                <Flame className="h-4 w-4 text-[#D9A928]" />
-                <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">Top Batter</h3>
+          {/* Match Records Grid */}
+          <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-4">
+            <div className="flex items-center gap-2 border-b border-[#E5E5E5] pb-3">
+              <Trophy className="h-5 w-5 text-[#9A6A05]" />
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                  Match Records & Top Performers
+                </h3>
+                <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                  Accolades derived from this match's deliveries
+                </p>
               </div>
-              {matchStats.topBatter && matchStats.topBatter.runs > 0 ? (
-                (() => {
-                  const p = lookup.player(matchStats.topBatter.playerId);
-                  return (
-                    <div className="flex items-center justify-between pt-2">
-                      <div>
-                        <Link
-                          to="/players/$playerId"
-                          params={{ playerId: matchStats.topBatter.playerId }}
-                          className="text-base font-black text-[#111111] hover:text-[#D9A928] hover:underline"
-                        >
-                          {p?.name ?? "Top Batter"}
-                        </Link>
-                        <p className="text-xs text-[#5F6368] font-bold mt-0.5">
-                          {matchStats.topBatter.fours}x4 • {matchStats.topBatter.sixes}x6 • SR {matchStats.topBatter.strikeRate.toFixed(1)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-[#111111]">{matchStats.topBatter.runs}</p>
-                        <p className="text-[10px] text-[#5F6368] uppercase font-bold">({matchStats.topBatter.balls} balls)</p>
-                      </div>
-                    </div>
-                  );
-                })()
-              ) : (
-                <p className="text-xs text-[#5F6368] italic py-4">No batting data available yet.</p>
-              )}
             </div>
 
-            {/* Best Bowler Card */}
-            <div className="bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm flex flex-col gap-3">
-              <div className="flex items-center gap-2 border-b border-[#E5E5E5] pb-3">
-                <Target className="h-4 w-4 text-[#D9A928]" />
-                <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">Best Bowling</h3>
-              </div>
-              {matchStats.topBowler && matchStats.topBowler.legalBalls > 0 ? (
-                (() => {
-                  const p = lookup.player(matchStats.topBowler.playerId);
-                  return (
-                    <div className="flex items-center justify-between pt-2">
-                      <div>
-                        <Link
-                          to="/players/$playerId"
-                          params={{ playerId: matchStats.topBowler.playerId }}
-                          className="text-base font-black text-[#111111] hover:text-[#D9A928] hover:underline"
-                        >
-                          {p?.name ?? "Top Bowler"}
-                        </Link>
-                        <p className="text-xs text-[#5F6368] font-bold mt-0.5">
-                          {oversText(matchStats.topBowler.legalBalls)} overs • Econ {(matchStats.topBowler.economy ?? 0).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-[#9A6A05]">
-                          {matchStats.topBowler.wickets}/{matchStats.topBowler.runs}
-                        </p>
-                        <p className="text-[10px] text-[#5F6368] uppercase font-bold">Wickets/Runs</p>
-                      </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Best Batter */}
+              <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-orange-600 mb-1">
+                    <Flame className="h-3.5 w-3.5" />
+                    <span className="text-[9px] font-black uppercase tracking-wider">Top Batter</span>
+                  </div>
+                  {singleMatchStats?.records.bestBatter && singleMatchStats.records.bestBatter.runs > 0 ? (
+                    <div>
+                      <button
+                        onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.bestBatter!.playerId)}
+                        className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                      >
+                        {singleMatchStats.records.bestBatter.playerName}
+                      </button>
+                      <p className="text-[10px] text-[#5F6368] font-bold mt-0.5">
+                        {singleMatchStats.records.bestBatter.teamShortName} • SR {formatStatDecimal(singleMatchStats.records.bestBatter.strikeRate)}
+                      </p>
                     </div>
-                  );
-                })()
-              ) : (
-                <p className="text-xs text-[#5F6368] italic py-4">No bowling data available yet.</p>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic py-1">No runs yet</p>
+                  )}
+                </div>
+                {singleMatchStats?.records.bestBatter && singleMatchStats.records.bestBatter.runs > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-orange-600 tabular-nums">
+                      {singleMatchStats.records.bestBatter.runs} runs
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      ({singleMatchStats.records.bestBatter.balls}b, {singleMatchStats.records.bestBatter.fours}x4, {singleMatchStats.records.bestBatter.sixes}x6)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Best Bowler / Figures */}
+              <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-purple-700 mb-1">
+                    <Target className="h-3.5 w-3.5" />
+                    <span className="text-[9px] font-black uppercase tracking-wider">Best Bowling</span>
+                  </div>
+                  {singleMatchStats?.records.bestBowlingFigures && singleMatchStats.records.bestBowlingFigures.legalBalls > 0 ? (
+                    <div>
+                      <button
+                        onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.bestBowlingFigures!.playerId)}
+                        className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                      >
+                        {singleMatchStats.records.bestBowlingFigures.playerName}
+                      </button>
+                      <p className="text-[10px] text-[#5F6368] font-bold mt-0.5">
+                        {singleMatchStats.records.bestBowlingFigures.teamShortName} • Econ {formatStatDecimal(singleMatchStats.records.bestBowlingFigures.economy)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic py-1">No bowling data yet</p>
+                  )}
+                </div>
+                {singleMatchStats?.records.bestBowlingFigures && singleMatchStats.records.bestBowlingFigures.legalBalls > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-purple-700 tabular-nums">
+                      {singleMatchStats.records.bestBowlingFigures.wickets}/{singleMatchStats.records.bestBowlingFigures.runsConceded}
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      ({singleMatchStats.records.bestBowlingFigures.oversText} ov)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Best Striker */}
+              <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-[#9A6A05] mb-1">
+                    <Zap className="h-3.5 w-3.5" />
+                    <span className="text-[9px] font-black uppercase tracking-wider">Best Striker</span>
+                  </div>
+                  {singleMatchStats?.records.bestStriker && singleMatchStats.records.bestStriker.runs > 0 ? (
+                    <div>
+                      <button
+                        onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.bestStriker!.playerId)}
+                        className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                      >
+                        {singleMatchStats.records.bestStriker.playerName}
+                      </button>
+                      <p className="text-[10px] text-[#5F6368] font-bold mt-0.5">
+                        {singleMatchStats.records.bestStriker.teamShortName} • {singleMatchStats.records.bestStriker.runs} runs ({singleMatchStats.records.bestStriker.balls}b)
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic py-1">No striker data yet</p>
+                  )}
+                </div>
+                {singleMatchStats?.records.bestStriker && singleMatchStats.records.bestStriker.runs > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-[#111111] tabular-nums">
+                      SR {formatStatDecimal(singleMatchStats.records.bestStriker.strikeRate)}
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      {singleMatchStats.records.bestStriker.boundaryRuns} boundary runs
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Most Sixes in Match */}
+              {singleMatchStats?.records.mostSixes && singleMatchStats.records.mostSixes.sixes > 0 && (
+                <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-amber-600 mb-1">
+                      <Zap className="h-3.5 w-3.5" />
+                      <span className="text-[9px] font-black uppercase tracking-wider">Most Sixes (6s)</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.mostSixes!.playerId)}
+                      className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                    >
+                      {singleMatchStats.records.mostSixes.playerName}
+                    </button>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-amber-600 tabular-nums">
+                      {singleMatchStats.records.mostSixes.sixes} Sixes
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      ({singleMatchStats.records.mostSixes.runs} total runs)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Most Fours in Match */}
+              {singleMatchStats?.records.mostFours && singleMatchStats.records.mostFours.fours > 0 && (
+                <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-yellow-600 mb-1">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span className="text-[9px] font-black uppercase tracking-wider">Most Fours (4s)</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.mostFours!.playerId)}
+                      className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                    >
+                      {singleMatchStats.records.mostFours.playerName}
+                    </button>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-[#111111] tabular-nums">
+                      {singleMatchStats.records.mostFours.fours} Fours
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      ({singleMatchStats.records.mostFours.runs} total runs)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Best Fielder */}
+              {singleMatchStats?.records.bestFielder && singleMatchStats.records.bestFielder.totalDismissals > 0 && (
+                <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5E5E5] flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-blue-600 mb-1">
+                      <Shield className="h-3.5 w-3.5" />
+                      <span className="text-[9px] font-black uppercase tracking-wider">Top Fielder</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPerformancePlayerId(singleMatchStats.records.bestFielder!.playerId)}
+                      className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline block truncate text-left"
+                    >
+                      {singleMatchStats.records.bestFielder.playerName}
+                    </button>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                    <span className="text-base font-black text-blue-700 tabular-nums">
+                      {singleMatchStats.records.bestFielder.totalDismissals} Dismissals
+                    </span>
+                    <span className="text-[10px] text-[#5F6368] font-bold">
+                      {singleMatchStats.records.bestFielder.catches}c, {singleMatchStats.records.bestFielder.runOuts}ro
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1553,11 +1833,11 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
               {(state?.setup.playingXI[teamA?.id ?? ""]?.playerIds ?? []).map((pId, pIdx) => {
                 const player = lookup.player(pId);
                 return (
-                  <Link
-                    to="/players/$playerId"
-                    params={{ playerId: pId }}
+                  <button
+                    onClick={() => setSelectedPerformancePlayerId(pId)}
                     key={pId}
-                    className="py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between text-xs hover:bg-[#F7F7F5] transition-colors group"
+                    className="py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between text-xs hover:bg-[#F7F7F5] transition-colors group w-full text-left"
+                    title="View Player Performance & Wagon Wheel"
                   >
                     <span className="font-bold text-[#111111] group-hover:text-[#D9A928] group-hover:underline">
                       {pIdx + 1}. {player?.name ?? pId}
@@ -1565,7 +1845,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                     <span className="text-[10px] font-bold text-[#5F6368] px-2 py-0.5 rounded-full bg-[#F7F7F5]">
                       {player?.role ?? "Player"}
                     </span>
-                  </Link>
+                  </button>
                 );
               })}
               {(!state?.setup.playingXI[teamA?.id ?? ""]?.playerIds?.length) && (
@@ -1589,11 +1869,11 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
               {(state?.setup.playingXI[teamB?.id ?? ""]?.playerIds ?? []).map((pId, pIdx) => {
                 const player = lookup.player(pId);
                 return (
-                  <Link
-                    to="/players/$playerId"
-                    params={{ playerId: pId }}
+                  <button
+                    onClick={() => setSelectedPerformancePlayerId(pId)}
                     key={pId}
-                    className="py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between text-xs hover:bg-[#F7F7F5] transition-colors group"
+                    className="py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between text-xs hover:bg-[#F7F7F5] transition-colors group w-full text-left"
+                    title="View Player Performance & Wagon Wheel"
                   >
                     <span className="font-bold text-[#111111] group-hover:text-[#D9A928] group-hover:underline">
                       {pIdx + 1}. {player?.name ?? pId}
@@ -1601,7 +1881,7 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
                     <span className="text-[10px] font-bold text-[#5F6368] px-2 py-0.5 rounded-full bg-[#F7F7F5]">
                       {player?.role ?? "Player"}
                     </span>
-                  </Link>
+                  </button>
                 );
               })}
               {(!state?.setup.playingXI[teamB?.id ?? ""]?.playerIds?.length) && (
@@ -1611,6 +1891,16 @@ export function PublicMatchCentre({ match, state, matchCondition }: PublicMatchC
           </div>
         </div>
       )}
+
+      {/* ── PLAYER PERFORMANCE & INDIVIDUAL WAGON WHEEL MODAL ───────── */}
+      <PlayerPerformanceModal
+        playerId={selectedPerformancePlayerId}
+        onClose={() => setSelectedPerformancePlayerId(null)}
+        match={match}
+        state={state}
+        allDeliveries={allDeliveries}
+        onSelectPlayer={(id) => setSelectedPerformancePlayerId(id)}
+      />
     </div>
   );
 }

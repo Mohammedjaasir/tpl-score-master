@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, AlertCircle, ShieldAlert } from "lucide-react";
 import type { InningsState, DismissalType, WicketInfo } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 
@@ -30,23 +30,55 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
   const striker = activeBatters.find((b) => b.playerId === innings.strikerId);
 
   const [dismissedId, setDismissedId] = useState(striker?.playerId ?? activeBatters[0]?.playerId ?? "");
-  const [type, setType] = useState<DismissalType>("Bowled");
+  const [type, setType] = useState<DismissalType>("Caught");
   const [fielderId, setFielderId] = useState("");
   const [newBatterId, setNewBatterId] = useState(innings.yetToBat[0] ?? "");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const needsFielder = NEEDS_FIELDER.includes(type);
   const inningsOver = innings.yetToBat.length === 0;
 
+  // Validation: For Caught, Run Out, Stumped, fielder is STRICTLY mandatory
+  const isFielderMissing = needsFielder && (!fielderId || fielderId.trim() === "");
+  const isConfirmDisabled = !dismissedId || !type || isFielderMissing;
+
   const handleConfirm = () => {
-    if (!dismissedId || !type) return;
+    setErrorMessage(null);
+
+    if (!dismissedId) {
+      setErrorMessage("BATTER REQUIRED: Please select the dismissed batter.");
+      return;
+    }
+
+    if (!type) {
+      setErrorMessage("DISMISSAL TYPE REQUIRED: Please select the dismissal type.");
+      return;
+    }
+
+    // STRICT MULTI-LEVEL VALIDATION: Caught / Run Out / Stumped must have an explicit fielder
+    if (needsFielder && (!fielderId || fielderId.trim() === "")) {
+      const label = type === "Caught" ? "who took the catch" : type === "Stumped" ? "who completed the stumping" : "who executed the run out";
+      setErrorMessage(`FIELDER REQUIRED: Please select the fielder ${label}.`);
+      return;
+    }
+
     const wicket: WicketInfo = {
       type,
       batterOutId: dismissedId,
-      ...(needsFielder && fielderId ? { fielderId } : {}),
+      ...(needsFielder ? { fielderId } : {}),
       ...(inningsOver ? {} : { newBatterId: newBatterId || undefined }),
     };
+
     onConfirm(wicket);
     onClose();
+  };
+
+  const handleTypeChange = (newType: DismissalType) => {
+    setType(newType);
+    setErrorMessage(null);
+    if (!NEEDS_FIELDER.includes(newType)) {
+      setFielderId("");
+    }
   };
 
   return (
@@ -55,28 +87,41 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md animate-slide-up rounded-t-3xl bg-background"
+        className="w-full max-w-md animate-slide-up rounded-t-3xl bg-background border-t border-border shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border/60">
-          <h2 className="font-display text-2xl font-extrabold text-primary uppercase tracking-wider">
-            Wicket
-          </h2>
+          <div>
+            <h2 className="font-display text-2xl font-extrabold text-primary uppercase tracking-wider">
+              Wicket Dismissal
+            </h2>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+              Official Match Scoring
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground"
+            className="tap grid h-9 w-9 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto max-h-[70vh] px-6 py-4 flex flex-col gap-4">
+        {/* Validation Error Banner */}
+        {errorMessage && (
+          <div className="mx-6 mt-4 p-3 rounded-2xl bg-destructive/15 border border-destructive/30 flex items-center gap-2.5 text-destructive animate-in fade-in">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p className="text-xs font-black uppercase tracking-wide">{errorMessage}</p>
+          </div>
+        )}
+
+        <div className="overflow-y-auto max-h-[65vh] px-6 py-4 flex flex-col gap-4">
           {/* Dismissed batter */}
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-              Dismissed Batter
+            <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+              Dismissed Batter <span className="text-destructive">*</span>
             </label>
             <div className="flex flex-col gap-2">
               {activeBatters.map((b) => {
@@ -84,7 +129,10 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
                 return (
                   <button
                     key={b.playerId}
-                    onClick={() => setDismissedId(b.playerId)}
+                    onClick={() => {
+                      setDismissedId(b.playerId);
+                      setErrorMessage(null);
+                    }}
                     className={`tap flex items-center gap-3 rounded-xl px-4 py-3 border-2 transition-colors ${
                       dismissedId === b.playerId
                         ? "border-primary bg-primary/5"
@@ -92,7 +140,7 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
                     }`}
                   >
                     <span className="text-sm font-bold text-foreground">{p?.name ?? "—"}</span>
-                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                    <span className="ml-auto text-xs text-muted-foreground tabular-nums font-bold">
                       {b.runs} ({b.balls})
                       {b.playerId === innings.strikerId ? " *" : ""}
                     </span>
@@ -104,18 +152,18 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
 
           {/* Dismissal type */}
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-              Dismissal Type
+            <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+              Dismissal Type <span className="text-destructive">*</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
               {DISMISSAL_TYPES.map((d) => (
                 <button
                   key={d}
-                  onClick={() => setType(d)}
-                  className={`tap rounded-xl px-3 py-2.5 text-sm font-bold border-2 transition-colors ${
+                  onClick={() => handleTypeChange(d)}
+                  className={`tap rounded-xl px-3 py-2.5 text-xs sm:text-sm font-black uppercase tracking-wider border-2 transition-colors ${
                     type === d
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background text-foreground"
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-background text-foreground hover:bg-secondary/50"
                   }`}
                 >
                   {d}
@@ -124,35 +172,54 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
             </div>
           </div>
 
-          {/* Fielder (for caught, run out, stumped) */}
+          {/* Fielder (for CAUGHT, RUN OUT, STUMPED) — STRICTLY MANDATORY */}
           {needsFielder && (
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                Fielder
-              </label>
+            <div className="p-4 rounded-2xl bg-secondary/40 border border-border/80 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase tracking-widest text-foreground flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-primary" />
+                  FIELDER <span className="text-destructive font-black">*</span>
+                </label>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
+                  Required
+                </span>
+              </div>
+
               <select
                 value={fielderId}
-                onChange={(e) => setFielderId(e.target.value)}
-                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                onChange={(e) => {
+                  setFielderId(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className={`w-full rounded-xl border px-4 py-3 text-sm font-bold text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors ${
+                  !fielderId ? "border-destructive/60 bg-destructive/5" : "border-border"
+                }`}
               >
-                <option value="">Select fielder</option>
+                <option value="">-- Select Fielder (Mandatory) --</option>
                 {bowlingXI.map((id) => {
                   const p = lookup.player(id);
                   return (
                     <option key={id} value={id}>
-                      {p?.name ?? id}
+                      {p?.name ?? id} ({p?.role ?? "Fielder"})
                     </option>
                   );
                 })}
               </select>
+
+              {!fielderId && (
+                <p className="text-[10px] font-bold text-destructive flex items-center gap-1 mt-0.5">
+                  <ShieldAlert className="h-3 w-3 shrink-0" />
+                  <span>Must select the fielder to confirm {type.toLowerCase()} dismissal.</span>
+                </p>
+              )}
             </div>
           )}
 
           {/* New batter */}
           {!inningsOver && innings.yetToBat.length > 0 && (
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                New Batter
+              <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+                Next Batter In
               </label>
               <div className="flex flex-col gap-1.5">
                 {innings.yetToBat.map((id) => {
@@ -161,7 +228,7 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
                     <button
                       key={id}
                       onClick={() => setNewBatterId(id)}
-                      className={`tap flex items-center gap-3 rounded-xl px-4 py-3 border-2 transition-colors ${
+                      className={`tap flex items-center gap-3 rounded-xl px-4 py-2.5 border-2 transition-colors ${
                         newBatterId === id
                           ? "border-primary bg-primary/5"
                           : "border-border bg-background"
@@ -177,21 +244,26 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
           )}
 
           {inningsOver && (
-            <p className="text-center text-sm text-muted-foreground font-bold py-2">
-              No more batters — innings will end.
+            <p className="text-center text-xs text-muted-foreground font-black uppercase tracking-wider py-2">
+              All out / No more batters — Innings will conclude.
             </p>
           )}
         </div>
 
-        {/* Confirm */}
-        <div className="px-6 pb-8 pt-4 border-t border-border/60">
+        {/* Confirm Action */}
+        <div className="px-6 pb-8 pt-4 border-t border-border/60 flex flex-col gap-2">
           <button
             onClick={handleConfirm}
-            disabled={!dismissedId || !type}
-            className="tap flex min-h-14 w-full items-center justify-center rounded-full bg-primary text-base font-extrabold uppercase tracking-widest text-primary-foreground shadow-[var(--shadow-pop)] disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={isConfirmDisabled}
+            className="tap flex min-h-14 w-full items-center justify-center rounded-full bg-primary text-base font-extrabold uppercase tracking-widest text-primary-foreground shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             Confirm Wicket
           </button>
+          {isFielderMissing && (
+            <p className="text-[10px] text-center font-black uppercase tracking-wider text-destructive">
+              Select a fielder above to enable confirmation
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -39,24 +39,24 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled }: Props
   const [pendingRuns, setPendingRuns] = useState<number | null>(null);
 
   const handleRun = (runs: number) => {
-    // If boundary (4 or 6), prompt for optional shot direction without blocking fast scoring
-    if (runs === 4 || runs === 6) {
+    // Only 1, 2, 4, 6 trigger the Wagon Wheel manual marker per lead requirement
+    if (runs === 1 || runs === 2 || runs === 4 || runs === 6) {
       setPendingRuns(runs);
     } else {
-      onRecord({ batterRuns: runs, extraRuns: 0, extraType: null });
+      onRecord({ batterRuns: runs, extraRuns: 0, extraType: null, shotZone: "unmapped" });
     }
   };
 
   const handleConfirmZone = (zone: ShotZoneKey) => {
     if (pendingRuns !== null) {
-      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: zone } as any);
+      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: zone });
       setPendingRuns(null);
     }
   };
 
   const handleSkipZone = () => {
     if (pendingRuns !== null) {
-      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null });
+      onRecord({ batterRuns: pendingRuns, extraRuns: 0, extraType: null, shotZone: "unmapped" });
       setPendingRuns(null);
     }
   };

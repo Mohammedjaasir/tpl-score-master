@@ -126,6 +126,7 @@ export interface SupabaseBall {
   wicket_type: SupabaseWicketType;
   player_out_id?: string | null;
   fielder_id?: string | null;
+  shot_zone?: string | null;
   created_at?: string;
 }
 
@@ -201,6 +202,7 @@ export interface Delivery {
   extraRuns: number;
   extraType: ExtraType;
   wicket?: WicketInfo | undefined;
+  shotZone?: string | null | undefined;
   timestamp: number;
 }
 
