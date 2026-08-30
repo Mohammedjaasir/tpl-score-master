@@ -44,34 +44,6 @@ export function LiveScoringScreen({ store }: Props) {
   const [oversModalOpen, setOversModalOpen] = useState(false);
   const [editingDelivery, setEditingDelivery] = useState<any | null>(null);
 
-  // ── Scorer Resume Debug Logging ──
-  useEffect(() => {
-    if (hydrated) {
-      console.log("[TPL SCORER RESUME AUDIT] Resumed at:", new Date().toISOString());
-      console.log("  hydrated:", hydrated);
-      console.log("  currentInningsIndex:", state?.currentInningsIndex);
-      console.log("  legalBalls:", innings?.legalBalls);
-      console.log("  activeStrikerId:", activeStrikerId);
-      console.log("  activeNonStrikerId:", activeNonStrikerId);
-      console.log("  currentBowlerId:", innings?.currentBowlerId);
-      console.log("  activeBowlerId:", activeBowlerId);
-      console.log("  needsBowler:", innings?.needsBowler);
-      console.log("  needsBatter:", innings?.needsBatter);
-      console.log("  isComplete:", innings?.isComplete);
-    }
-  }, [
-    hydrated,
-    state?.currentInningsIndex,
-    innings?.legalBalls,
-    activeStrikerId,
-    activeNonStrikerId,
-    innings?.currentBowlerId,
-    activeBowlerId,
-    innings?.needsBowler,
-    innings?.needsBatter,
-    innings?.isComplete,
-  ]);
-
   // ── Pre-hydration loading state ──
   if (!hydrated) {
     return (

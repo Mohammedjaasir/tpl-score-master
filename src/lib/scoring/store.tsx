@@ -157,29 +157,37 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     if (local.inningsDbIds) {
       inningsDbIdsRef.current = local.inningsDbIds;
     }
-    setHydrated(true);
   }, [matchId]);
 
-  // ── Preload match & team entities ─────────────────────────────────────────
+  // ── Preload match & team entities & rosters ───────────────────────────────
   useEffect(() => {
-    if (initialMatch) {
-      setMatchData(initialMatch);
-      return;
-    }
-    const cached = lookup.match(matchId);
-    if (cached) {
-      setMatchData(cached);
-    } else {
-      matchRepository.get(matchId).then((m) => {
-        if (m) {
-          setMatchData(m);
-          teamRepository.get(m.teamAId);
-          teamRepository.get(m.teamBId);
-          playerRepository.listByTeam(m.teamAId);
-          playerRepository.listByTeam(m.teamBId);
+    let isCancelled = false;
+
+    async function preload() {
+      try {
+        let m = initialMatch ?? lookup.match(matchId);
+        if (!m) {
+          m = await matchRepository.get(matchId);
         }
-      });
+        if (m && !isCancelled) {
+          setMatchData(m);
+          await Promise.all([
+            teamRepository.get(m.teamAId),
+            teamRepository.get(m.teamBId),
+            playerRepository.listByTeam(m.teamAId),
+            playerRepository.listByTeam(m.teamBId),
+          ]);
+        }
+      } catch (err) {
+        console.warn("[useMatchStore] preload entities notice:", err);
+      }
     }
+
+    preload();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [matchId, initialMatch]);
 
   // ── Reconcile authoritative scoring state from Supabase DB on load ────────
@@ -188,74 +196,85 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
     let isCancelled = false;
 
-    fetchMatchDeliveriesFromSupabase(matchId).then(({ deliveries, innings }) => {
-      if (isCancelled) return;
+    async function syncFromDb() {
+      try {
+        const { deliveries, innings } = await fetchMatchDeliveriesFromSupabase(matchId);
+        if (isCancelled) return;
 
-      const inn1 = innings.find((i) => i.innings_number === 1);
-      const inn2 = innings.find((i) => i.innings_number === 2);
-      const dbInningsIds: [string | null, string | null] = [
-        inn1?.id || null,
-        inn2?.id || null,
-      ];
-      inningsDbIdsRef.current = dbInningsIds;
+        const inn1 = innings.find((i) => i.innings_number === 1);
+        const inn2 = innings.find((i) => i.innings_number === 2);
+        const dbInningsIds: [string | null, string | null] = [
+          inn1?.id || null,
+          inn2?.id || null,
+        ];
+        inningsDbIdsRef.current = dbInningsIds;
 
-      setDoc((curr) => {
-        // If DB has authoritative deliveries, reconcile with local state
-        if (deliveries.length > 0) {
-          const firstDeliv = deliveries.find((d) => d.inningsIndex === 0);
-          const secondDeliv = deliveries.find((d) => d.inningsIndex === 1);
-          const hasSecondInnings = deliveries.some((d) => d.inningsIndex === 1);
+        setDoc((curr) => {
+          // If DB has authoritative deliveries, reconcile with local state
+          if (deliveries.length > 0) {
+            const firstDeliv = deliveries.find((d) => d.inningsIndex === 0);
+            const secondDeliv = deliveries.find((d) => d.inningsIndex === 1);
+            const hasSecondInnings = deliveries.some((d) => d.inningsIndex === 1);
 
-          const battingFirstId =
-            curr.setup.battingFirstId ||
-            inn1?.batting_team_id ||
-            (firstDeliv?.strikerId ? lookup.player(firstDeliv.strikerId)?.teamId : undefined);
+            const battingFirstId =
+              curr.setup.battingFirstId ||
+              inn1?.batting_team_id ||
+              (firstDeliv?.strikerId ? lookup.player(firstDeliv.strikerId)?.teamId : undefined);
 
-          const openers =
-            curr.setup.openers ||
-            (firstDeliv
-              ? { strikerId: firstDeliv.strikerId, nonStrikerId: firstDeliv.nonStrikerId }
-              : undefined);
+            const openers =
+              curr.setup.openers ||
+              (firstDeliv
+                ? { strikerId: firstDeliv.strikerId, nonStrikerId: firstDeliv.nonStrikerId }
+                : undefined);
 
-          const openingBowlerId = curr.setup.openingBowlerId || firstDeliv?.bowlerId;
+            const openingBowlerId = curr.setup.openingBowlerId || firstDeliv?.bowlerId;
 
-          const secondInningsOpeners =
-            curr.secondInningsOpeners ||
-            (secondDeliv
-              ? { strikerId: secondDeliv.strikerId, nonStrikerId: secondDeliv.nonStrikerId }
-              : undefined);
+            const secondInningsOpeners =
+              curr.secondInningsOpeners ||
+              (secondDeliv
+                ? { strikerId: secondDeliv.strikerId, nonStrikerId: secondDeliv.nonStrikerId }
+                : undefined);
 
-          const next: MatchDoc = {
-            ...curr,
-            deliveries,
-            inningsDbIds: dbInningsIds,
-            setup: {
-              ...curr.setup,
-              ...(battingFirstId ? { battingFirstId } : {}),
-              ...(openers ? { openers } : {}),
-              ...(openingBowlerId ? { openingBowlerId } : {}),
-            },
-            secondInningsStarted: curr.secondInningsStarted || hasSecondInnings,
-            ...(secondInningsOpeners ? { secondInningsOpeners } : {}),
-            isStarted: curr.isStarted || deliveries.length > 0,
-            syncStatus: "synced",
-          };
-          try {
-            window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(next));
-          } catch {}
-          return next;
+            const next: MatchDoc = {
+              ...curr,
+              deliveries,
+              inningsDbIds: dbInningsIds,
+              setup: {
+                ...curr.setup,
+                ...(battingFirstId ? { battingFirstId } : {}),
+                ...(openers ? { openers } : {}),
+                ...(openingBowlerId ? { openingBowlerId } : {}),
+              },
+              secondInningsStarted: curr.secondInningsStarted || hasSecondInnings,
+              ...(secondInningsOpeners ? { secondInningsOpeners } : {}),
+              isStarted: curr.isStarted || deliveries.length > 0,
+              syncStatus: "synced",
+            };
+            try {
+              window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(next));
+            } catch {}
+            return next;
+          }
+
+          if (dbInningsIds[0] || dbInningsIds[1]) {
+            return {
+              ...curr,
+              inningsDbIds: dbInningsIds,
+            };
+          }
+
+          return curr;
+        });
+      } catch (err) {
+        console.warn("[useMatchStore] syncFromDb notice:", err);
+      } finally {
+        if (!isCancelled) {
+          setHydrated(true);
         }
+      }
+    }
 
-        if (dbInningsIds[0] || dbInningsIds[1]) {
-          return {
-            ...curr,
-            inningsDbIds: dbInningsIds,
-          };
-        }
-
-        return curr;
-      });
-    });
+    syncFromDb();
 
     return () => {
       isCancelled = true;
