@@ -286,6 +286,8 @@ export function LiveScoringScreen({ store }: Props) {
         onClose={() => setOversModalOpen(false)}
         currentOvers={innings.maxOvers || match.overs}
         originalOvers={match.overs}
+        completedLegalBalls={innings.legalBalls}
+        oversText={innings.oversText}
         isChase={isChase}
         onApply={handleAdjustOvers}
       />
