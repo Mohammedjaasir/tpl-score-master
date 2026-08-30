@@ -336,6 +336,9 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
       ? deliveries[deliveries.length - 1]?.bowlerId
       : undefined);
 
+  if (strikerId) ensureBatter(strikerId);
+  if (nonStrikerId) ensureBatter(nonStrikerId);
+
   const battedIds = new Set(batters.keys());
   const yetToBat = config.battingXI.filter((id) => !battedIds.has(id));
 

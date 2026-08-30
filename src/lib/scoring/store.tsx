@@ -452,15 +452,23 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           targetRole ??
           (!currentInn?.strikerId ? "striker" : !currentInn?.nonStrikerId ? "non-striker" : "striker");
 
-        // 1. If the last delivery in current innings was a wicket, link the new batter to that wicket
+        // 1. If a wicket delivery exists in current innings, link the new batter to that wicket
         const currentDeliveries = d.deliveries;
         let lastWicketDeliveryIdx = -1;
         for (let i = currentDeliveries.length - 1; i >= 0; i--) {
-          if (currentDeliveries[i].inningsIndex === currentIdx) {
-            if (currentDeliveries[i].wicket) {
+          if (currentDeliveries[i].inningsIndex === currentIdx && currentDeliveries[i].wicket) {
+            if (!currentDeliveries[i].wicket?.newBatterId) {
               lastWicketDeliveryIdx = i;
+              break;
             }
-            break;
+          }
+        }
+        if (lastWicketDeliveryIdx === -1) {
+          for (let i = currentDeliveries.length - 1; i >= 0; i--) {
+            if (currentDeliveries[i].inningsIndex === currentIdx && currentDeliveries[i].wicket) {
+              lastWicketDeliveryIdx = i;
+              break;
+            }
           }
         }
 
