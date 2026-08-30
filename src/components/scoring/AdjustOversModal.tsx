@@ -151,7 +151,12 @@ export function AdjustOversModal({
         <div className="flex items-center justify-between p-3 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] text-xs font-bold">
           <div>
             <span className="text-[#5F6368] text-[10px] uppercase block tracking-wider font-extrabold">Current Match Overs</span>
-            <span className="text-sm font-black text-[#111111]">{currentOvers} Overs</span>
+            <span className="text-sm font-black text-[#111111]">{originalOvers} Overs</span>
+            {currentOvers !== originalOvers && (
+              <span className="text-[10px] font-bold text-[#9A6A05] block mt-0.5">
+                Active Limit: {currentOvers} ov (Revised)
+              </span>
+            )}
           </div>
           <div className="text-right">
             <span className="text-[#5F6368] text-[10px] uppercase block tracking-wider font-extrabold">Match Progress</span>

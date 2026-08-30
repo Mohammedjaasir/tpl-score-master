@@ -115,13 +115,13 @@ export function LiveScoringScreen({ store }: Props) {
   const handleAdjustOvers = (newOvers: number, reason: string) => {
     if (isChase) {
       updateSetup({
-        secondInningsReducedOvers: newOvers,
-        targetRevisionReason: reason,
+        secondInningsReducedOvers: newOvers === match.overs ? undefined : newOvers,
+        targetRevisionReason: newOvers === match.overs ? undefined : reason,
       });
     } else {
       updateSetup({
-        reducedOvers: newOvers,
-        targetRevisionReason: reason,
+        reducedOvers: newOvers === match.overs ? undefined : newOvers,
+        targetRevisionReason: newOvers === match.overs ? undefined : reason,
       });
     }
   };
