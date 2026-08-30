@@ -11,6 +11,9 @@ import {
   Radio,
   ArrowRight,
   Compass,
+  Scale,
+  Users,
+  X,
 } from "lucide-react";
 import type { Player, Team, Match } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
@@ -45,8 +48,22 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
     liveStore.state,
     liveMatch?.id,
   );
-
   const teamData = team ?? lookup.team(player.teamId);
+
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [comparePlayerId, setComparePlayerId] = useState<string | null>(null);
+  const allTournamentPlayers = useMemo(
+    () => lookup.players().filter((p) => p.id !== player.id),
+    [player.id],
+  );
+  const comparePlayer = comparePlayerId ? lookup.player(comparePlayerId) : null;
+  const compareStats = useMemo(
+    () =>
+      comparePlayer
+        ? calculatePlayerPerformance(comparePlayer.id, allMatches, liveStore.state, liveMatch?.id)
+        : null,
+    [comparePlayer, allMatches, liveStore.state, liveMatch?.id],
+  );
 
   // Collect all deliveries where this player was striker across all tournament matches
   const playerDeliveries = useMemo(() => {
@@ -111,19 +128,29 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
     <div className="mx-auto max-w-5xl px-4 pt-4 pb-20 flex flex-col gap-6">
       {/* ── TOP NAVIGATION BAR ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => {
-            if (window.history.length > 1) {
-              router.history.back();
-            } else {
-              router.navigate({ to: "/home" });
-            }
-          }}
-          className="tap inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E5E5E5] text-xs font-black uppercase tracking-wider text-[#111111] hover:bg-[#F7F7F5] shadow-sm transition-all cursor-pointer"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.history.back();
+              } else {
+                router.navigate({ to: "/home" });
+              }
+            }}
+            className="tap inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E5E5E5] text-xs font-black uppercase tracking-wider text-[#111111] hover:bg-[#F7F7F5] shadow-sm transition-all cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
+
+          <button
+            onClick={() => setCompareModalOpen(true)}
+            className="tap inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#F7F7F5] hover:bg-[#E5E5E5] border border-[#E5E5E5] text-xs font-black uppercase tracking-wider text-[#111111] transition-all cursor-pointer"
+          >
+            <Scale className="h-3.5 w-3.5 text-[#D9A928]" />
+            <span>Compare</span>
+          </button>
+        </div>
 
         <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368] bg-[#F3F4F6] border border-[#E5E5E5] px-3 py-1 rounded-full shadow-xs">
           TPL 2026 PLAYER PROFILE
@@ -482,6 +509,110 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
           </div>
         )}
       </div>
+
+      {/* ── 7. PLAYER COMPARISON MODAL (SECTION 26) ─────────────────────────── */}
+      {compareModalOpen && (
+        <div
+          className="fixed inset-0 z-50 glass-overlay flex items-center justify-center p-4"
+          onClick={() => setCompareModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl animate-scale-up rounded-3xl bg-white border border-[#E5E5E5] p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-[#D9A928]/15 text-[#9A6A05] flex items-center justify-center border border-[#D9A928]/30">
+                  <Scale className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-[#111111]">
+                    HEAD-TO-HEAD PLAYER COMPARISON
+                  </h3>
+                  <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                    Compare with any TPL 2026 player
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCompareModalOpen(false)}
+                className="tap h-8 w-8 rounded-full bg-[#F7F7F5] flex items-center justify-center text-[#5F6368] hover:text-[#111111]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Player Selection Dropdown */}
+            <div className="mb-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-[#5F6368] mb-1.5">
+                Select Opposing Player
+              </label>
+              <select
+                value={comparePlayerId ?? ""}
+                onChange={(e) => setComparePlayerId(e.target.value || null)}
+                className="w-full h-11 px-3.5 rounded-xl bg-[#F7F7F5] border border-[#E5E5E5] text-xs font-bold text-[#111111] focus:ring-2 focus:ring-[#D9A928]"
+              >
+                <option value="">-- Choose a player to compare --</option>
+                {allTournamentPlayers.map((p) => {
+                  const t = lookup.team(p.teamId);
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({t?.shortName ?? "TPL"}) — {p.role}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Comparison Table */}
+            {comparePlayer && compareStats ? (
+              <div className="flex flex-col gap-3">
+                {/* Headers */}
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-[#111111] text-white text-center">
+                  <div className="text-left">
+                    <p className="text-xs font-black uppercase text-[#D9A928] truncate">{player.name}</p>
+                    <p className="text-[9px] text-white/60 uppercase">{teamData?.shortName ?? "TPL"}</p>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">VS</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-black uppercase text-purple-400 truncate">{comparePlayer.name}</p>
+                    <p className="text-[9px] text-white/60 uppercase">{lookup.team(comparePlayer.teamId)?.shortName ?? "TPL"}</p>
+                  </div>
+                </div>
+
+                {/* Metrics Matrix */}
+                <div className="flex flex-col divide-y divide-[#E5E5E5] text-xs">
+                  {[
+                    { label: "Matches", valA: stats.matchesPlayed, valB: compareStats.matchesPlayed },
+                    { label: "Runs Scored", valA: stats.batting.runs, valB: compareStats.batting.runs, highlight: true },
+                    { label: "Strike Rate", valA: stats.batting.strikeRate > 0 ? stats.batting.strikeRate.toFixed(1) : "-", valB: compareStats.batting.strikeRate > 0 ? compareStats.batting.strikeRate.toFixed(1) : "-" },
+                    { label: "Batting Average", valA: stats.batting.average > 0 ? stats.batting.average.toFixed(1) : "-", valB: compareStats.batting.average > 0 ? compareStats.batting.average.toFixed(1) : "-" },
+                    { label: "Boundaries (4s / 6s)", valA: `${stats.batting.fours} / ${stats.batting.sixes}`, valB: `${compareStats.batting.fours} / ${compareStats.batting.sixes}` },
+                    { label: "Highest Score", valA: `${stats.batting.highestScore.runs}${stats.batting.highestScore.isNotOut ? "*" : ""}`, valB: `${compareStats.batting.highestScore.runs}${compareStats.batting.highestScore.isNotOut ? "*" : ""}` },
+                    { label: "Wickets Taken", valA: stats.bowling.wickets, valB: compareStats.bowling.wickets, highlight: true },
+                    { label: "Bowling Economy", valA: stats.bowling.economy > 0 ? stats.bowling.economy.toFixed(2) : "-", valB: compareStats.bowling.economy > 0 ? compareStats.bowling.economy.toFixed(2) : "-" },
+                    { label: "Best Bowling", valA: stats.bowling.bestBowling.wickets > 0 ? `${stats.bowling.bestBowling.wickets}/${stats.bowling.bestBowling.runs}` : "-", valB: compareStats.bowling.bestBowling.wickets > 0 ? `${compareStats.bowling.bestBowling.wickets}/${compareStats.bowling.bestBowling.runs}` : "-" },
+                    { label: "Fielding Dismissals", valA: stats.fielding.catches + stats.fielding.runOuts + stats.fielding.stumpings, valB: compareStats.fielding.catches + compareStats.fielding.runOuts + compareStats.fielding.stumpings },
+                  ].map((row, idx) => (
+                    <div key={idx} className="grid grid-cols-3 gap-2 py-2 items-center text-center">
+                      <span className="font-black text-[#111111] tabular-nums text-left">{row.valA}</span>
+                      <span className="text-[10px] font-bold text-[#5F6368] uppercase">{row.label}</span>
+                      <span className="font-black text-[#111111] tabular-nums text-right">{row.valB}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-[#5F6368] text-xs font-bold">
+                Select a player above to see instant side-by-side performance metrics.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

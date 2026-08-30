@@ -13,7 +13,8 @@ import { UndoBar } from "@/components/scoring/UndoBar";
 import { BowlerModal } from "@/components/scoring/BowlerModal";
 import { NewBatterModal } from "@/components/scoring/NewBatterModal";
 import { AdjustOversModal } from "@/components/scoring/AdjustOversModal";
-import { CloudRain, RotateCcw } from "lucide-react";
+import { EditBallModal } from "@/components/scoring/EditBallModal";
+import { CloudRain, RotateCcw, Edit3 } from "lucide-react";
 
 interface Props {
   store: MatchStore;
@@ -31,6 +32,7 @@ export function LiveScoringScreen({ store }: Props) {
     activeNonStrikerId,
     record,
     undo,
+    editDelivery,
     setBowler,
     setBatter,
     updateSetup,
@@ -40,6 +42,7 @@ export function LiveScoringScreen({ store }: Props) {
   const [manualBatterModal, setManualBatterModal] = useState(false);
   const [selectedBatterRole, setSelectedBatterRole] = useState<"striker" | "non-striker">("striker");
   const [oversModalOpen, setOversModalOpen] = useState(false);
+  const [editingDelivery, setEditingDelivery] = useState<any | null>(null);
 
   // ── Scorer Resume Debug Logging ──
   useEffect(() => {
@@ -225,8 +228,28 @@ export function LiveScoringScreen({ store }: Props) {
               />
             </div>
 
-            {/* Undo */}
-            <UndoBar onUndo={undo} canUndo={canUndo} />
+            {/* Undo & Correction Action Bar */}
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <div className="flex-1 w-full">
+                <UndoBar
+                  onUndo={undo}
+                  canUndo={canUndo}
+                  lastBallSummary={innings.recentBalls[innings.recentBalls.length - 1]}
+                />
+              </div>
+
+              {canUndo && doc.deliveries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setEditingDelivery(doc.deliveries[doc.deliveries.length - 1])}
+                  className="tap flex w-full sm:w-auto items-center justify-center gap-1.5 min-h-12 px-4 rounded-2xl border border-[#E5E5E5] bg-white text-xs font-black text-[#5F6368] uppercase tracking-wider hover:border-[#D9A928] hover:text-[#111111] transition-colors shadow-2xs cursor-pointer"
+                  title="Correct the last recorded delivery"
+                >
+                  <Edit3 className="h-3.5 w-3.5 text-[#D9A928]" />
+                  <span>Correct Last Ball</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* === RIGHT COLUMN: Info panels === */}
@@ -294,7 +317,23 @@ export function LiveScoringScreen({ store }: Props) {
         isChase={isChase}
         onApply={handleAdjustOvers}
       />
+
+      {/* Edit / Correct Delivery Modal */}
+      {editingDelivery && (
+        <EditBallModal
+          delivery={editingDelivery}
+          bowlingXI={bowlingXI}
+          battingXI={battingXI}
+          onSave={(delivId, patch, auditNote) => {
+            editDelivery(delivId, patch);
+            if (auditNote) {
+              console.log("[TPL SCORING AUDIT]", auditNote, "Time:", new Date().toLocaleTimeString());
+            }
+            setEditingDelivery(null);
+          }}
+          onClose={() => setEditingDelivery(null)}
+        />
+      )}
     </div>
   );
 }
-

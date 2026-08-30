@@ -75,6 +75,7 @@ export interface BatterWagonWheelSummary {
   totalBalls: number; // All balls faced by this batter (including dots)
   mappedRuns: number;
   unmappedRuns: number;
+  unmappedCount: number;
   shots: WagonWheelShot[];
   zoneBreakdown: Record<ShotZoneKey, { runs: number; shots: number; fours: number; sixes: number }>;
   hasLocationData: boolean;
@@ -117,7 +118,7 @@ export function calculateBatterWagonWheel(
   let recordedLocationCount = 0;
 
   batterDeliveries.forEach((d, idx) => {
-    const runs = d.runsOffBat || 0;
+    const runs = (d as any).runsOffBat ?? (d as any).batterRuns ?? 0;
     totalRuns += runs;
     totalBalls += 1; // Count every ball faced (including dots)
 
@@ -161,6 +162,7 @@ export function calculateBatterWagonWheel(
     totalBalls,
     mappedRuns,
     unmappedRuns,
+    unmappedCount: totalBalls - recordedLocationCount,
     shots,
     zoneBreakdown,
     hasLocationData: recordedLocationCount > 0,

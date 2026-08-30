@@ -374,14 +374,19 @@ export function PublicMatchCentre({
   const handleShare = async () => {
     const shareUrl = window.location.href;
     const title = `${match.tournament}: ${teamA?.name ?? "Team A"} vs ${teamB?.name ?? "Team B"}`;
+    const scoreSummary = firstInnings ? `${teamFirst?.shortName ?? "Team 1"}: ${firstInnings.runs}/${firstInnings.wickets} (${firstInnings.oversText} ov)` : "";
+    const secondSummary = secondInnings ? `\n${teamSecond?.shortName ?? "Team 2"}: ${secondInnings.runs}/${secondInnings.wickets} (${secondInnings.oversText} ov)` : "";
+    const result = state?.resultText ? `\n\n🏆 ${state.resultText}` : "";
+    const shareText = `🏏 *${match.tournament} — Match #${match.matchNumber}*\n${scoreSummary}${secondSummary}${result}\n\n📱 Live Match Centre & Wagon Wheel:\n${shareUrl}`;
+
     if (navigator.share) {
       try {
-        await navigator.share({ title, text: `Live score & match centre for ${title}`, url: shareUrl });
+        await navigator.share({ title, text: shareText, url: shareUrl });
         return;
       } catch {}
     }
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(shareText);
       setCopiedShare(true);
       setTimeout(() => setCopiedShare(false), 2500);
     } catch {}
@@ -764,20 +769,67 @@ export function PublicMatchCentre({
                 </div>
               </div>
 
-              {matchMVP && (
-                <div className="flex items-center justify-between pt-2.5 border-t border-[#E5E5E5] text-xs">
-                  <span className="font-bold text-[#5F6368]">Player of the Match:</span>
+              {/* Match Highlights / Report Bullets */}
+              <div className="flex flex-col gap-1.5 pt-2 border-t border-[#E5E5E5] text-xs text-[#5F6368]">
+                {matchStats.highlights.length > 0 ? (
+                  matchStats.highlights.slice(0, 3).map((h, i) => (
+                    <p key={i} className="flex items-center gap-2 font-medium text-[#111111]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928] shrink-0" />
+                      <span>{h}</span>
+                    </p>
+                  ))
+                ) : (
+                  <p className="flex items-center gap-2 font-medium text-[#111111]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928] shrink-0" />
+                    <span>Official match concluded with {totalDeliveriesCount || 0} deliveries recorded.</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Player of the Match & Quick Tab Navigators */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-[#E5E5E5]">
+                {matchMVP && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[#5F6368]">Player of the Match:</span>
+                    <button
+                      onClick={() => setSelectedPerformancePlayerId(matchMVP.player.id)}
+                      className="font-black text-[#111111] hover:text-[#D9A928] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{matchMVP.player.name}</span>
+                      <span className="text-[10px] text-[#5F6368] font-normal">
+                        ({lookup.team(matchMVP.player.teamId)?.shortName})
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <button
-                    onClick={() => setSelectedPerformancePlayerId(matchMVP.player.id)}
-                    className="font-black text-[#111111] hover:text-[#D9A928] hover:underline flex items-center gap-1"
+                    onClick={() => setActiveTab("scorecard")}
+                    className="tap px-2.5 py-1 rounded-lg bg-[#F7F7F5] hover:bg-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] border border-[#E5E5E5]"
                   >
-                    <span>{matchMVP.player.name}</span>
-                    <span className="text-[10px] text-[#5F6368] font-normal">
-                      ({lookup.team(matchMVP.player.teamId)?.shortName})
-                    </span>
+                    Full Scorecard
                   </button>
+                  <button
+                    onClick={() => setActiveTab("stats")}
+                    className="tap px-2.5 py-1 rounded-lg bg-[#F7F7F5] hover:bg-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] border border-[#E5E5E5]"
+                  >
+                    Performances
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("wagonwheel")}
+                    className="tap px-2.5 py-1 rounded-lg bg-[#F7F7F5] hover:bg-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] border border-[#E5E5E5]"
+                  >
+                    Wagon Wheel
+                  </button>
+                  <Link
+                    to="/records"
+                    className="tap px-2.5 py-1 rounded-lg bg-[#F7F7F5] hover:bg-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] border border-[#E5E5E5]"
+                  >
+                    Records
+                  </Link>
                 </div>
-              )}
+              </div>
             </div>
           ) : match.status === "ABANDONED" ? (
             <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 text-center shadow-sm">

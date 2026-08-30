@@ -87,7 +87,7 @@ function PointablesPage() {
                     <div className="flex items-center gap-2.5">
                       <span className="h-2.5 w-2.5 rounded-full bg-[#D9A928]" />
                       <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
-                        GROUP 1 STANDINGS
+                        GROUP A STANDINGS
                       </h2>
                     </div>
                     <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-[#D9A928]/20 text-[#D9A928] border border-[#D9A928]/30">
@@ -207,7 +207,7 @@ function PointablesPage() {
                     <div className="flex items-center gap-2.5">
                       <span className="h-2.5 w-2.5 rounded-full bg-purple-400" />
                       <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
-                        GROUP 2 STANDINGS
+                        GROUP B STANDINGS
                       </h2>
                     </div>
                     <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-400/30">
