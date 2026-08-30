@@ -14,7 +14,7 @@ import type {
 /** ---------- delivery helpers (pure) ---------- */
 
 export function isLegal(d: Delivery): boolean {
-  return d.extraType !== "wide" && d.extraType !== "noball";
+  return d.extraType !== "wide" && d.extraType !== "noball" && (d.extraType as string) !== "no-ball";
 }
 
 /** Runs added to the team total for this delivery. */

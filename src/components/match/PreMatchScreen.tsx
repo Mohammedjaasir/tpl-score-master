@@ -6,6 +6,7 @@ import { lookup } from "@/lib/repositories";
 import { MapPin, Clock } from "lucide-react";
 
 import { TeamLogo } from "@/components/team/TeamLogo";
+import { formatMatchTime } from "@/lib/utils";
 
 interface Props {
   match: Match;
@@ -24,10 +25,7 @@ export function PreMatchScreen({ match, store }: Props) {
   const [tossWinnerId, setTossWinnerId] = useState(setup.tossWinnerId ?? "");
   const [decision, setDecision] = useState<"bat" | "bowl">(setup.decision ?? "bat");
 
-  const time = new Date(match.scheduledAt).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const time = formatMatchTime(match.scheduledAt);
 
   const canProceed = !!tossWinnerId;
 

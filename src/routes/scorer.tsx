@@ -223,7 +223,7 @@ function ScorerDashboardPage() {
                             {doc.startedAt && (
                               <span className="flex items-center gap-1 text-[#D9A928]">
                                 <Play className="h-3 w-3" />
-                                Started: {new Date(doc.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                Started: {formatMatchTime(doc.startedAt)}
                               </span>
                             )}
                           </div>

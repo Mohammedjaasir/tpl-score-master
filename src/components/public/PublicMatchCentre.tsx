@@ -55,7 +55,8 @@ export function PublicMatchCentre({
   const [activeTab, setActiveTab] = useState<TabType>("scorecard");
   const [commentaryFilter, setCommentaryFilter] = useState<CommentaryFilter>("all");
   const [copiedShare, setCopiedShare] = useState(false);
-  const [showAllOvers, setShowAllOvers] = useState(false);
+  const [showAllOvers, setShowAllOvers] = useState(true);
+  const [oversInningsIdx, setOversInningsIdx] = useState<number | null>(null);
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string | null>(null);
   const [selectedPerformancePlayerId, setSelectedPerformancePlayerId] = useState<string | null>(null);
   const [liveEvent, setLiveEvent] = useState<LiveScoreEvent | null>(null);
@@ -797,7 +798,7 @@ export function PublicMatchCentre({
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pt-1">
                 <div className="bg-[#F7F7F5] p-2.5 rounded-xl">
                   <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Start Time</span>
-                  <span className="font-black text-[#111111]">{formatMatchTime(match.startTime)}</span>
+                  <span className="font-black text-[#111111]">{formatMatchTime(match.scheduledAt || match.startTime)}</span>
                 </div>
                 <div className="bg-[#F7F7F5] p-2.5 rounded-xl">
                   <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Overs</span>
@@ -961,12 +962,25 @@ export function PublicMatchCentre({
             </div>
           )}
 
-          {/* 5. RUNS PER OVER (BMR) VISUALIZATION */}
+          {/* 5. RUNS PER OVER (BMR) & OVER-BY-OVER BREAKDOWN */}
           {(() => {
-            const activeInningsForOvers = (secondInnings?.legalBalls ? secondInnings : firstInnings) ?? currentInnings;
+            const hasFirstInnings = (firstInnings?.legalBalls ?? 0) > 0 || (firstInnings?.extras ?? 0) > 0;
+            const hasSecondInnings = (secondInnings?.legalBalls ?? 0) > 0 || (secondInnings?.extras ?? 0) > 0;
+            const bothInningsHaveData = hasFirstInnings && hasSecondInnings;
+
+            const effectiveInningsIdx =
+              oversInningsIdx !== null
+                ? oversInningsIdx
+                : hasSecondInnings
+                ? 1
+                : 0;
+
+            const activeInningsForOvers = state?.innings[effectiveInningsIdx] ?? currentInnings;
             const overGroups = activeInningsForOvers?.overGroups ?? [];
             const maxOverRuns = overGroups.reduce((max, og) => Math.max(max, og.runs), 1);
             const inningsBatTeam = activeInningsForOvers ? lookup.team(activeInningsForOvers.battingTeamId) : null;
+            const completedCount = overGroups.filter((og) => og.complete).length;
+            const hasInProgressOver = overGroups.some((og) => !og.complete);
 
             if (overGroups.length === 0) {
               return (
@@ -975,7 +989,7 @@ export function PublicMatchCentre({
                     <div className="flex items-center gap-2">
                       <BarChart3 className="h-4 w-4 text-[#D9A928]" />
                       <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                        RUNS PER OVER
+                        OVER BREAKDOWNS
                       </h3>
                     </div>
                   </div>
@@ -984,96 +998,151 @@ export function PublicMatchCentre({
               );
             }
 
+            // Show all overs in ascending chronological order: Over 1, Over 2, Over 3, ...
+            const displayedOvers = showAllOvers ? overGroups : overGroups.slice(-5);
+
             return (
-              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
-                <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
+              <div className="bg-white border border-[#E5E5E5] rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col gap-4">
+                {/* Header with Innings Switcher */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E5E5E5] pb-3">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-[#D9A928]" />
                     <h3 className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                      RUNS PER OVER ({inningsBatTeam?.shortName ?? "INNINGS"})
+                      OVER-BY-OVER BREAKDOWN
                     </h3>
                   </div>
-                  <span className="text-[10px] font-bold text-[#5F6368]">
-                    {overGroups.length} Overs Bowled
-                  </span>
-                </div>
 
-                {/* Compact Responsive Bar Chart */}
-                <div className="flex items-end gap-1.5 sm:gap-2 h-24 pt-4 pb-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar">
-                  {overGroups.map((og) => {
-                    const heightPercent = Math.max(14, Math.round((og.runs / Math.max(maxOverRuns, 1)) * 100));
-                    const hasWicket = og.wickets > 0;
-                    const isHighOver = og.runs >= 10;
-
-                    return (
-                      <div
-                        key={og.overNumber}
-                        className="flex-1 min-w-[22px] max-w-[36px] flex flex-col items-center justify-end h-full group"
+                  {/* Innings Selector if both innings have data */}
+                  {bothInningsHaveData ? (
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#F7F7F5] border border-[#E5E5E5] self-start sm:self-auto">
+                      <button
+                        onClick={() => setOversInningsIdx(0)}
+                        className={`tap px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                          effectiveInningsIdx === 0
+                            ? "bg-[#111111] text-[#D9A928] shadow-xs"
+                            : "text-[#5F6368] hover:text-[#111111]"
+                        }`}
                       >
-                        <span className="text-[9px] font-black text-[#111111] tabular-nums mb-0.5 group-hover:text-[#D9A928]">
-                          {og.runs}
-                        </span>
-                        <div
-                          style={{ height: `${heightPercent}%` }}
-                          className={`w-full rounded-t transition-all ${
-                            hasWicket
-                              ? "bg-red-500"
-                              : isHighOver
-                              ? "bg-[#D9A928]"
-                              : "bg-[#111111]"
-                          }`}
-                        />
-                        <span className="text-[9px] font-bold text-[#5F6368] mt-1 tabular-nums">
-                          {og.overNumber + 1}
-                        </span>
-                      </div>
-                    );
-                  })}
+                        1st Inn ({teamFirst?.shortName ?? "Inn 1"})
+                      </button>
+                      <button
+                        onClick={() => setOversInningsIdx(1)}
+                        className={`tap px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                          effectiveInningsIdx === 1
+                            ? "bg-[#111111] text-[#D9A928] shadow-xs"
+                            : "text-[#5F6368] hover:text-[#111111]"
+                        }`}
+                      >
+                        2nd Inn ({teamSecond?.shortName ?? "Inn 2"})
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-bold text-[#5F6368]">
+                      {inningsBatTeam?.name} ({activeInningsForOvers?.runs}/{activeInningsForOvers?.wickets})
+                    </span>
+                  )}
                 </div>
 
-                {/* 6. RECENT OVER BREAKDOWN */}
+                {/* Runs per Over Bar Chart */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                    <span>Runs Per Over</span>
+                    <span>{completedCount} Completed {hasInProgressOver ? "· 1 Live" : ""}</span>
+                  </div>
+                  <div className="flex items-end gap-1.5 sm:gap-2 h-20 pt-3 pb-1 border-b border-[#E5E5E5] overflow-x-auto no-scrollbar">
+                    {overGroups.map((og) => {
+                      const heightPercent = Math.max(14, Math.round((og.runs / Math.max(maxOverRuns, 1)) * 100));
+                      const hasWicket = og.wickets > 0;
+                      const isHighOver = og.runs >= 10;
+                      const isLiveOver = !og.complete;
+
+                      return (
+                        <div
+                          key={og.overNumber}
+                          className="flex-1 min-w-[24px] max-w-[36px] flex flex-col items-center justify-end h-full group"
+                        >
+                          <span className="text-[9px] font-black text-[#111111] tabular-nums mb-0.5 group-hover:text-[#D9A928]">
+                            {og.runs}
+                          </span>
+                          <div
+                            style={{ height: `${heightPercent}%` }}
+                            className={`w-full rounded-t transition-all ${
+                              hasWicket
+                                ? "bg-red-500"
+                                : isHighOver
+                                ? "bg-[#D9A928]"
+                                : isLiveOver
+                                ? "bg-emerald-500 animate-pulse"
+                                : "bg-[#111111]"
+                            }`}
+                          />
+                          <span className="text-[9px] font-bold text-[#5F6368] mt-1 tabular-nums">
+                            {og.overNumber + 1}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Chronological Complete Over Breakdowns (Over 1, Over 2, Over 3, Over 4, Over 5...) */}
                 <div className="flex flex-col gap-2 pt-1">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
-                      Recent Over Breakdown
+                      All Completed Overs ({displayedOvers.length})
                     </p>
                     {overGroups.length > 5 && (
                       <button
                         onClick={() => setShowAllOvers((prev) => !prev)}
                         className="text-[10px] font-black uppercase text-[#D9A928] hover:underline cursor-pointer"
                       >
-                        {showAllOvers ? "Show Recent 5" : `View All (${overGroups.length})`}
+                        {showAllOvers ? "Collapse to Recent 5" : `View All ${overGroups.length} Overs`}
                       </button>
                     )}
                   </div>
 
                   <div className="flex flex-col divide-y divide-[#E5E5E5]">
-                    {(showAllOvers ? overGroups : overGroups.slice(-5)).reverse().map((og) => {
+                    {displayedOvers.map((og) => {
                       const bowler = lookup.player(og.bowlerId);
+                      const isLiveOver = !og.complete;
+
                       return (
                         <div
                           key={og.overNumber}
-                          className="py-2 flex items-center justify-between gap-2 text-xs"
+                          className={`py-2.5 flex items-center justify-between gap-2 text-xs transition-colors ${
+                            isLiveOver ? "bg-emerald-500/5 -mx-2 px-2 rounded-xl" : ""
+                          }`}
                         >
-                          <div className="min-w-0">
-                            <p className="font-black text-[#111111] truncate">
-                              OVER {og.overNumber + 1}{" "}
-                              <span className="text-[#5F6368] font-normal ml-1">
-                                • {bowler?.shortName ?? "Bowler"}
-                              </span>
-                            </p>
-                            <div className="flex items-center gap-1 mt-1">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-black text-[#111111]">
+                                OVER {og.overNumber + 1}
+                              </p>
+                              {isLiveOver ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 text-[9px] font-extrabold uppercase">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                                  Live in progress ({og.balls.length} balls)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-[#5F6368]">
+                                  • {bowler?.name ?? bowler?.shortName ?? "Bowler"}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Ball Chips */}
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {og.balls.map((b, bi) => {
                                 let bg = "bg-[#F7F7F5] text-[#111111] border-[#E5E5E5]";
-                                if (b.kind === "wicket") bg = "bg-red-600 text-white border-red-700";
-                                else if (b.delivery.batterRuns === 4) bg = "bg-[#D9A928] text-black border-[#C7961A]";
-                                else if (b.delivery.batterRuns === 6) bg = "bg-purple-600 text-white border-purple-700";
-                                else if (b.kind === "extra") bg = "bg-blue-50 text-blue-800 border-blue-200";
+                                if (b.kind === "wicket") bg = "bg-red-600 text-white border-red-700 font-black";
+                                else if (b.delivery.batterRuns === 4) bg = "bg-[#D9A928] text-black border-[#C7961A] font-black";
+                                else if (b.delivery.batterRuns === 6) bg = "bg-purple-600 text-white border-purple-700 font-black";
+                                else if (b.kind === "extra") bg = "bg-blue-50 text-blue-800 border-blue-200 font-bold";
 
                                 return (
                                   <span
-                                    key={bi}
-                                    className={`h-5 w-5 rounded text-[10px] font-black flex items-center justify-center border ${bg}`}
+                                    key={b.delivery.id || `${og.overNumber}-${bi}`}
+                                    className={`h-6 min-w-6 px-1 rounded-md text-[10px] font-bold flex items-center justify-center border shadow-2xs tabular-nums ${bg}`}
                                   >
                                     {b.label}
                                   </span>
@@ -1082,8 +1151,9 @@ export function PublicMatchCentre({
                             </div>
                           </div>
 
+                          {/* Over Stats */}
                           <div className="text-right shrink-0">
-                            <span className="font-black text-sm text-[#111111] tabular-nums">{og.runs}</span>
+                            <span className="font-black text-base text-[#111111] tabular-nums">{og.runs}</span>
                             <span className="text-[10px] font-bold text-[#5F6368] uppercase ml-1">RUNS</span>
                             {og.wickets > 0 && (
                               <p className="text-[10px] font-black text-red-600 uppercase tabular-nums">
