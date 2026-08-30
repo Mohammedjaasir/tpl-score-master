@@ -466,9 +466,9 @@ export function buildMatchState(input: MatchInput): MatchState {
   let arr: number | undefined;
 
   if (isSecondReduced) {
-    // Official Formula: (Team A Total / Team A Overs) × Team B Reduced Overs = Revised Target
+    // Official Formula: (Team A Total / Team A Overs) × Team B Reduced Overs + 1
     arr = maxOvers1 > 0 ? first.runs / maxOvers1 : 0;
-    target = Math.round(arr * maxOvers2);
+    target = Math.floor(arr * maxOvers2) + 1;
     isTargetRevised = true;
   }
 

@@ -72,7 +72,9 @@ function MatchPage() {
     screen = "complete";
   } else if (phase === "break") {
     screen = "break";
-  } else if (phase === "innings2" || phase === "innings1" || doc.deliveries.length > 0 || match.status === "LIVE") {
+  } else if (phase === "innings2") {
+    screen = "scoring";
+  } else if (doc.deliveries.length > 0) {
     screen = "scoring";
   } else {
     // setup phase — step-by-step
