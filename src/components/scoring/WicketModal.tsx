@@ -32,11 +32,22 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
   const [dismissedId, setDismissedId] = useState(striker?.playerId ?? activeBatters[0]?.playerId ?? "");
   const [type, setType] = useState<DismissalType>("Caught");
   const [fielderId, setFielderId] = useState("");
-  const [newBatterId, setNewBatterId] = useState(innings.yetToBat[0] ?? "");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const needsFielder = NEEDS_FIELDER.includes(type);
-  const inningsOver = innings.yetToBat.length === 0;
+
+  // Robust eligible batters calculation
+  const battingTeamPlayers = lookup.playersOf(innings.battingTeamId).map((p) => p.id);
+  const baseBatters = innings.yetToBat.length > 0 ? innings.yetToBat : battingTeamPlayers;
+  const dismissedIds = new Set(innings.batters.filter((b) => b.out).map((b) => b.playerId));
+  if (dismissedId) dismissedIds.add(dismissedId);
+  const onCreaseIds = new Set(activeBatters.map((b) => b.playerId).filter((id) => id !== dismissedId));
+
+  const eligibleBatters = baseBatters.filter((id) => !dismissedIds.has(id) && !onCreaseIds.has(id));
+
+  const [newBatterId, setNewBatterId] = useState(eligibleBatters[0] ?? "");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const inningsOver = eligibleBatters.length === 0;
 
   // Validation: For Caught, Run Out, Stumped, fielder is STRICTLY mandatory
   const isFielderMissing = needsFielder && (!fielderId || fielderId.trim() === "");
@@ -216,13 +227,13 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
           )}
 
           {/* New batter */}
-          {!inningsOver && innings.yetToBat.length > 0 && (
+          {!inningsOver && eligibleBatters.length > 0 && (
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
                 Next Batter In
               </label>
               <div className="flex flex-col gap-1.5">
-                {innings.yetToBat.map((id) => {
+                {eligibleBatters.map((id) => {
                   const p = lookup.player(id);
                   return (
                     <button

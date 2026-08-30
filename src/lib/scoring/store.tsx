@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
-import { buildMatchState, setPlayerNameResolver, setTeamNameResolver } from "@/lib/scoring/engine";
+import {
+  buildMatchState,
+  setPlayerNameResolver,
+  setTeamNameResolver,
+  setTeamPlayersResolver,
+} from "@/lib/scoring/engine";
 import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
 import { supabase } from "@/lib/supabase";
 import {
@@ -12,6 +17,7 @@ import {
 
 setTeamNameResolver((id) => lookup.team(id)?.name ?? id);
 setPlayerNameResolver((id) => lookup.player(id)?.name ?? id);
+setTeamPlayersResolver((id) => lookup.playersOf(id).map((p) => p.id));
 
 export interface MatchDoc {
   matchId: string;
@@ -20,6 +26,10 @@ export interface MatchDoc {
   secondInningsStarted: boolean;
   secondInningsOpeners?: { strikerId: string; nonStrikerId: string };
   pendingBowlerIds: [string | null, string | null];
+  pendingBatterIds?: [
+    { strikerId?: string | null; nonStrikerId?: string | null } | null,
+    { strikerId?: string | null; nonStrikerId?: string | null } | null,
+  ];
   inningsDbIds?: [string | null, string | null];
   playerOfTheMatchId?: string;
   isStarted?: boolean;
@@ -39,6 +49,7 @@ function emptyDoc(matchId: string): MatchDoc {
     deliveries: [],
     secondInningsStarted: false,
     pendingBowlerIds: [null, null],
+    pendingBatterIds: [null, null],
     inningsDbIds: [null, null],
     syncQueue: [],
     syncStatus: "synced",
@@ -362,6 +373,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const currentInningsIndex: 0 | 1 = state?.currentInningsIndex ?? 0;
   const innings = state?.innings[currentInningsIndex];
   const pendingBowlerId = doc.pendingBowlerIds[currentInningsIndex];
+  const pendingBatters = doc.pendingBatterIds?.[currentInningsIndex];
 
   const currentInningsDeliveries = doc.deliveries.filter((d) => d.inningsIndex === currentInningsIndex);
   const isOverInProgress = innings ? innings.legalBalls % 6 !== 0 : false;
@@ -377,6 +389,18 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     (innings?.legalBalls === 0 && currentInningsIndex === 0
       ? doc.setup.openingBowlerId ?? currentInningsDeliveries[0]?.bowlerId
       : undefined);
+
+  const activeStrikerId =
+    innings?.strikerId ??
+    pendingBatters?.strikerId ??
+    (currentInningsIndex === 0 ? doc.setup.openers?.strikerId : doc.secondInningsOpeners?.strikerId) ??
+    undefined;
+
+  const activeNonStrikerId =
+    innings?.nonStrikerId ??
+    pendingBatters?.nonStrikerId ??
+    (currentInningsIndex === 0 ? doc.setup.openers?.nonStrikerId : doc.secondInningsOpeners?.nonStrikerId) ??
+    undefined;
 
   const updateSetup = useCallback(
     (patch: Partial<MatchSetup>) => {
@@ -417,6 +441,93 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     [currentInningsIndex, broadcastDoc],
   );
 
+  const setBatter = useCallback(
+    (playerId: string, targetRole?: "striker" | "non-striker") => {
+      setDoc((d) => {
+        const currentIdx = state?.currentInningsIndex ?? 0;
+        const currentInn = state?.innings[currentIdx];
+
+        // Determine which slot needs this batter
+        const role =
+          targetRole ??
+          (!currentInn?.strikerId ? "striker" : !currentInn?.nonStrikerId ? "non-striker" : "striker");
+
+        // 1. If the last delivery in current innings was a wicket, link the new batter to that wicket
+        const currentDeliveries = d.deliveries;
+        let lastWicketDeliveryIdx = -1;
+        for (let i = currentDeliveries.length - 1; i >= 0; i--) {
+          if (currentDeliveries[i].inningsIndex === currentIdx) {
+            if (currentDeliveries[i].wicket) {
+              lastWicketDeliveryIdx = i;
+            }
+            break;
+          }
+        }
+
+        let nextDeliveries = currentDeliveries;
+        if (lastWicketDeliveryIdx !== -1) {
+          nextDeliveries = currentDeliveries.map((deliv, i) =>
+            i === lastWicketDeliveryIdx
+              ? { ...deliv, wicket: { ...deliv.wicket!, newBatterId: playerId } }
+              : deliv,
+          );
+        }
+
+        // 2. Update pendingBatterIds
+        const nextPendingBatters: [
+          { strikerId?: string | null; nonStrikerId?: string | null } | null,
+          { strikerId?: string | null; nonStrikerId?: string | null } | null,
+        ] = [...(d.pendingBatterIds ?? [null, null])];
+
+        const existingPending = nextPendingBatters[currentIdx] || {};
+        nextPendingBatters[currentIdx] = {
+          ...existingPending,
+          [role === "striker" ? "strikerId" : "nonStrikerId"]: playerId,
+        };
+
+        // 3. Handle opening batters setup if no balls bowled yet
+        let nextSetup = d.setup;
+        let nextSecondOpeners = d.secondInningsOpeners;
+        if (
+          currentIdx === 0 &&
+          (!d.setup.openers || !d.setup.openers.strikerId || !d.setup.openers.nonStrikerId)
+        ) {
+          const prev = d.setup.openers || { strikerId: "", nonStrikerId: "" };
+          nextSetup = {
+            ...d.setup,
+            openers: {
+              strikerId: role === "striker" ? playerId : prev.strikerId || playerId,
+              nonStrikerId: role === "non-striker" ? playerId : prev.nonStrikerId || playerId,
+            },
+          };
+        } else if (
+          currentIdx === 1 &&
+          (!d.secondInningsOpeners ||
+            !d.secondInningsOpeners.strikerId ||
+            !d.secondInningsOpeners.nonStrikerId)
+        ) {
+          const prev = d.secondInningsOpeners || { strikerId: "", nonStrikerId: "" };
+          nextSecondOpeners = {
+            strikerId: role === "striker" ? playerId : prev.strikerId || playerId,
+            nonStrikerId: role === "non-striker" ? playerId : prev.nonStrikerId || playerId,
+          };
+        }
+
+        const next: MatchDoc = {
+          ...d,
+          deliveries: nextDeliveries,
+          pendingBatterIds: nextPendingBatters,
+          setup: nextSetup,
+          ...(nextSecondOpeners ? { secondInningsOpeners: nextSecondOpeners } : {}),
+        };
+
+        broadcastDoc(next);
+        return next;
+      });
+    },
+    [state?.currentInningsIndex, state?.innings, broadcastDoc],
+  );
+
   const record = useCallback(
     (input: DeliveryInput) => {
       if (!match) return;
@@ -446,7 +557,18 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         (inn.legalBalls === 0 && idx === 0
           ? doc.setup.openingBowlerId ?? currentInnDeliveries[0]?.bowlerId
           : undefined);
-      if (!bowlerId || !inn.strikerId || !inn.nonStrikerId) return;
+
+      const strikerId =
+        inn.strikerId ??
+        doc.pendingBatterIds?.[idx]?.strikerId ??
+        (idx === 0 ? doc.setup.openers?.strikerId : doc.secondInningsOpeners?.strikerId);
+
+      const nonStrikerId =
+        inn.nonStrikerId ??
+        doc.pendingBatterIds?.[idx]?.nonStrikerId ??
+        (idx === 0 ? doc.setup.openers?.nonStrikerId : doc.secondInningsOpeners?.nonStrikerId);
+
+      if (!bowlerId || !strikerId || !nonStrikerId) return;
 
       // Disallow consecutive overs by the same bowler
       if (
@@ -474,8 +596,8 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         id: `${clientTimestamp}-${Math.random().toString(36).slice(2, 8)}`,
         inningsIndex: idx,
         bowlerId,
-        strikerId: inn.strikerId,
-        nonStrikerId: inn.nonStrikerId,
+        strikerId,
+        nonStrikerId,
         batterRuns: input.batterRuns,
         extraRuns: input.extraRuns,
         extraType: input.extraType,
@@ -496,6 +618,13 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         nextPending[idx] = null;
       }
 
+      // Clear pending batter since ball has been successfully formed
+      const nextPendingBatters: [
+        { strikerId?: string | null; nonStrikerId?: string | null } | null,
+        { strikerId?: string | null; nonStrikerId?: string | null } | null,
+      ] = [...(doc.pendingBatterIds ?? [null, null])];
+      nextPendingBatters[idx] = null;
+
       // Compute resulting state for DB totals
       const projectedDeliveries = [...doc.deliveries, delivery];
       const nextBuilt = buildMatchState({
@@ -510,6 +639,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       const nextDoc: MatchDoc = {
         ...doc,
         pendingBowlerIds: nextPending,
+        pendingBatterIds: nextPendingBatters,
         deliveries: projectedDeliveries,
         syncQueue: [...doc.syncQueue, delivery.id],
         syncStatus: "syncing",
@@ -729,8 +859,11 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     state,
     innings,
     activeBowlerId,
+    activeStrikerId,
+    activeNonStrikerId,
     updateSetup,
     setBowler,
+    setBatter,
     record,
     undo,
     editDelivery,

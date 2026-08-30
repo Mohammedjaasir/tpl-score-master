@@ -6,7 +6,7 @@ import { ExtraModal } from "@/components/scoring/ExtraModal";
 import { ShotLocationSelectorModal } from "@/components/scoring/ShotLocationSelectorModal";
 import type { ShotZoneKey } from "@/lib/scoring/wagon-wheel";
 import { TplButton } from "@/components/ui/tpl-button";
-import { Compass } from "lucide-react";
+import { Compass, UserPlus, ShieldAlert, CircleDot } from "lucide-react";
 
 type ExtraMode = Exclude<ExtraType, null>;
 
@@ -17,6 +17,8 @@ interface Props {
   disabled?: boolean;
   /** When disabled, the specific reason: 'bowler' | 'striker' | 'non-striker' | 'innings-complete' */
   disabledReason?: string | null;
+  onSelectBatter?: () => void;
+  onSelectBowler?: () => void;
 }
 
 // Run buttons config with official TPL palette
@@ -36,7 +38,15 @@ const EXTRA_BUTTONS: { mode: ExtraMode; label: string; cls: string }[] = [
   { mode: "legbye", label: "LB", cls: "bg-white hover:bg-[#F7F7F5] text-[#111111] border border-[#E5E5E5] shadow-sm" },
 ];
 
-export function ScoringButtons({ innings, bowlingXI, onRecord, disabled, disabledReason }: Props) {
+export function ScoringButtons({
+  innings,
+  bowlingXI,
+  onRecord,
+  disabled,
+  disabledReason,
+  onSelectBatter,
+  onSelectBowler,
+}: Props) {
   const [showWicket, setShowWicket] = useState(false);
   const [extraMode, setExtraMode] = useState<ExtraMode | null>(null);
   const [pendingRuns, setPendingRuns] = useState<number | null>(null);
@@ -81,33 +91,70 @@ export function ScoringButtons({ innings, bowlingXI, onRecord, disabled, disable
   };
 
   if (disabled) {
-    // Show contextual message based on exact blocking reason
     const isNeedsBowler = disabledReason === "bowler";
+    const isNeedsBatter = disabledReason === "striker" || disabledReason === "non-striker";
     const isInningsComplete = disabledReason === "innings-complete";
 
     return (
-      <div className="rounded-2xl bg-white border border-[#E5E5E5] px-4 py-6 text-center shadow-sm flex flex-col items-center gap-2">
-        {isNeedsBowler ? (
-          <>
-            <div className="h-8 w-8 rounded-full border-4 border-[#D9A928]/30 border-t-[#D9A928] animate-spin mb-1" />
-            <p className="text-sm font-extrabold text-[#111111]">
-              Select Bowler for Next Over
-            </p>
-            <p className="text-xs text-[#5F6368] max-w-xs">
-              The Bowler Selection panel is opening. Choose the bowler to start the next over.
-            </p>
-          </>
+      <div className="rounded-2xl bg-white border border-[#E5E5E5] p-5 text-center shadow-sm flex flex-col items-center gap-3">
+        {isNeedsBatter ? (
+          <div className="w-full flex flex-col items-center gap-2">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#D9A928]/15 text-[#9A6A05] border border-[#D9A928]/30 mb-0.5">
+              <UserPlus className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-base font-black text-[#111111]">
+                Incoming Batter Required
+              </p>
+              <p className="text-xs font-bold text-[#5F6368] mt-0.5 max-w-xs">
+                Select the incoming batsman ({disabledReason === "striker" ? "Striker *" : "Non-Striker"}) to continue scoring.
+              </p>
+            </div>
+            {onSelectBatter && (
+              <button
+                type="button"
+                onClick={onSelectBatter}
+                className="tap min-h-14 w-full mt-2 rounded-2xl bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] text-sm sm:text-base font-black uppercase tracking-wider shadow-lg shadow-[#D9A928]/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+              >
+                <UserPlus className="h-5 w-5 stroke-[2.5]" />
+                <span>SELECT NEW BATTER</span>
+              </button>
+            )}
+          </div>
+        ) : isNeedsBowler ? (
+          <div className="w-full flex flex-col items-center gap-2">
+            <div className="h-10 w-10 rounded-full border-4 border-[#D9A928]/30 border-t-[#D9A928] animate-spin mb-0.5" />
+            <div>
+              <p className="text-base font-black text-[#111111]">
+                Select Bowler for Next Over
+              </p>
+              <p className="text-xs font-bold text-[#5F6368] mt-0.5 max-w-xs">
+                Over complete. Choose the next bowler to start the new over.
+              </p>
+            </div>
+            {onSelectBowler && (
+              <button
+                type="button"
+                onClick={onSelectBowler}
+                className="tap min-h-14 w-full mt-2 rounded-2xl bg-[#111111] hover:bg-[#222222] text-[#D9A928] border-2 border-[#D9A928] text-sm sm:text-base font-black uppercase tracking-wider shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <CircleDot className="h-5 w-5 text-[#D9A928]" />
+                <span>SELECT NEXT BOWLER</span>
+              </button>
+            )}
+          </div>
         ) : isInningsComplete ? (
-          <p className="text-sm font-extrabold text-[#5F6368]">
-            Innings Complete
-          </p>
+          <div className="py-2">
+            <p className="text-base font-black text-[#5F6368]">
+              Innings Complete
+            </p>
+            <p className="text-xs text-[#5F6368]/70 mt-1">
+              All allocated overs or target achieved.
+            </p>
+          </div>
         ) : (
           <p className="text-sm font-extrabold text-[#5F6368]">
-            {disabledReason === "striker"
-              ? "Awaiting striker selection"
-              : disabledReason === "non-striker"
-              ? "Awaiting non-striker selection"
-              : "Scoring paused"}
+            Scoring paused
           </p>
         )}
       </div>

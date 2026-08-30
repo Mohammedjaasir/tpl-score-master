@@ -296,6 +296,8 @@ export interface InningsState {
   partnership: Partnership;
   isComplete: boolean;
   needsBowler: boolean;
+  needsBatter?: boolean;
+  missingBatterRole?: "striker" | "non-striker" | null;
   yetToBat: string[];
   target?: number | undefined;
   originalTarget?: number | undefined;

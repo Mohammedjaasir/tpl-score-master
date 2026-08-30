@@ -1,5 +1,6 @@
 import type { BatterStat } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
+import { UserPlus } from "lucide-react";
 
 function BatterCard({
   stat,
@@ -89,9 +90,15 @@ interface Props {
   strikerId?: string;
   nonStrikerId?: string;
   batters: BatterStat[];
+  onSelectBatter?: (role: "striker" | "non-striker") => void;
 }
 
-export function BatterPanel({ strikerId, nonStrikerId, batters }: Props) {
+export function BatterPanel({
+  strikerId,
+  nonStrikerId,
+  batters,
+  onSelectBatter,
+}: Props) {
   // Keep active batters in stable batting position order so the active black mark visibly shifts between batters when strike changes
   const activeBatters = batters
     .filter((b) => (b.playerId === strikerId || b.playerId === nonStrikerId) && !b.out)
@@ -99,10 +106,18 @@ export function BatterPanel({ strikerId, nonStrikerId, batters }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[10px] font-extrabold tracking-widest text-[#5F6368] uppercase flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928]" />
-        Current Batters
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-extrabold tracking-widest text-[#5F6368] uppercase flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928]" />
+          Current Batters
+        </p>
+        {(!strikerId || !nonStrikerId) && (
+          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#D9A928]/20 text-[#9A6A05] border border-[#D9A928]/30 animate-pulse">
+            Batter Needed
+          </span>
+        )}
+      </div>
+
       <div className="flex flex-col gap-2">
         {activeBatters.map((batter) => (
           <BatterCard
@@ -111,6 +126,55 @@ export function BatterPanel({ strikerId, nonStrikerId, batters }: Props) {
             isStriker={batter.playerId === strikerId}
           />
         ))}
+
+        {/* Missing Striker Slot */}
+        {!strikerId && (
+          <button
+            type="button"
+            onClick={() => onSelectBatter?.("striker")}
+            className="flex items-center gap-3 rounded-2xl px-4 py-3 border-2 border-dashed border-[#D9A928]/60 bg-[#D9A928]/5 hover:bg-[#D9A928]/10 text-left transition-all tap cursor-pointer"
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#D9A928]/20 text-[#9A6A05] text-xs font-black">
+              <UserPlus className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-[#111111] flex items-center gap-1.5">
+                <span>Select Striker</span>
+                <span className="text-[#D9A928] font-black text-base animate-pulse">*</span>
+              </p>
+              <p className="text-[11px] font-bold text-[#9A6A05]">
+                Tap to choose incoming batsman on strike
+              </p>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#D9A928] text-[#111111] shrink-0">
+              SELECT
+            </span>
+          </button>
+        )}
+
+        {/* Missing Non-Striker Slot */}
+        {!nonStrikerId && (
+          <button
+            type="button"
+            onClick={() => onSelectBatter?.("non-striker")}
+            className="flex items-center gap-3 rounded-2xl px-4 py-3 border-2 border-dashed border-[#E5E5E5] bg-[#F7F7F5] hover:border-[#D9A928]/50 text-left transition-all tap cursor-pointer"
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white border border-[#E5E5E5] text-[#5F6368] text-xs font-black">
+              <UserPlus className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-[#111111]">
+                Select Non-Striker
+              </p>
+              <p className="text-[11px] font-bold text-[#5F6368]">
+                Tap to choose incoming non-striker
+              </p>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#111111] text-white shrink-0">
+              SELECT
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

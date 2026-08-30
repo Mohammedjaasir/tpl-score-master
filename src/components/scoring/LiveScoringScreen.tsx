@@ -11,6 +11,7 @@ import { PartnershipPanel } from "@/components/scoring/Partnership";
 import { FallOfWickets } from "@/components/scoring/FallOfWickets";
 import { UndoBar } from "@/components/scoring/UndoBar";
 import { BowlerModal } from "@/components/scoring/BowlerModal";
+import { NewBatterModal } from "@/components/scoring/NewBatterModal";
 import { AdjustOversModal } from "@/components/scoring/AdjustOversModal";
 import { CloudRain, RotateCcw } from "lucide-react";
 
@@ -19,8 +20,25 @@ interface Props {
 }
 
 export function LiveScoringScreen({ store }: Props) {
-  const { state, innings, match, doc, hydrated, activeBowlerId, record, undo, setBowler, updateSetup } = store;
+  const {
+    state,
+    innings,
+    match,
+    doc,
+    hydrated,
+    activeBowlerId,
+    activeStrikerId,
+    activeNonStrikerId,
+    record,
+    undo,
+    setBowler,
+    setBatter,
+    updateSetup,
+  } = store;
+
   const [manualBowlerModal, setManualBowlerModal] = useState(false);
+  const [manualBatterModal, setManualBatterModal] = useState(false);
+  const [selectedBatterRole, setSelectedBatterRole] = useState<"striker" | "non-striker">("striker");
   const [oversModalOpen, setOversModalOpen] = useState(false);
 
   // ── Scorer Resume Debug Logging ──
@@ -30,18 +48,28 @@ export function LiveScoringScreen({ store }: Props) {
       console.log("  hydrated:", hydrated);
       console.log("  currentInningsIndex:", state?.currentInningsIndex);
       console.log("  legalBalls:", innings?.legalBalls);
+      console.log("  activeStrikerId:", activeStrikerId);
+      console.log("  activeNonStrikerId:", activeNonStrikerId);
       console.log("  currentBowlerId:", innings?.currentBowlerId);
-      console.log("  previousBowlerId:", innings?.previousBowlerId);
-      console.log("  pendingBowlerId:", state ? doc.pendingBowlerIds[state.currentInningsIndex] : null);
+      console.log("  activeBowlerId:", activeBowlerId);
       console.log("  needsBowler:", innings?.needsBowler);
+      console.log("  needsBatter:", innings?.needsBatter);
       console.log("  isComplete:", innings?.isComplete);
     }
-  }, [hydrated, state?.currentInningsIndex, innings?.legalBalls, innings?.currentBowlerId, innings?.previousBowlerId, doc.pendingBowlerIds, innings?.needsBowler, innings?.isComplete]);
-
+  }, [
+    hydrated,
+    state?.currentInningsIndex,
+    innings?.legalBalls,
+    activeStrikerId,
+    activeNonStrikerId,
+    innings?.currentBowlerId,
+    activeBowlerId,
+    innings?.needsBowler,
+    innings?.needsBatter,
+    innings?.isComplete,
+  ]);
 
   // ── Pre-hydration loading state ──
-  // Before Supabase reconciliation completes, show a skeleton so the scorer
-  // never sees a confusing blank or mis-stated page.
   if (!hydrated) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6 text-center">
@@ -61,32 +89,53 @@ export function LiveScoringScreen({ store }: Props) {
   const currentInnings = state.innings[state.currentInningsIndex];
   const isChase = state.currentInningsIndex === 1;
 
-  // Determine bowling XI
+  // Determine teams playing XIs
   const bowlingTeamId = innings.bowlingTeamId;
   const bowlingXI =
     state.setup.playingXI[bowlingTeamId]?.playerIds ?? lookup.playersOf(bowlingTeamId).map((p) => p.id);
 
-  // ── Determine scoring readiness ──
+  const battingTeamId = innings.battingTeamId;
+  const battingXI =
+    state.setup.playingXI[battingTeamId]?.playerIds ?? lookup.playersOf(battingTeamId).map((p) => p.id);
+
+  // ── Determine batter readiness & modal ──
+  const needsBatter = !innings.isComplete && (!activeStrikerId || !activeNonStrikerId);
+  const currentBatterRole: "striker" | "non-striker" = !activeStrikerId
+    ? "striker"
+    : !activeNonStrikerId
+    ? "non-striker"
+    : selectedBatterRole;
+
+  const isBatterModalOpen = (needsBatter || manualBatterModal) && !innings.isComplete;
+
+  // ── Determine bowler readiness & modal ──
   // needsBowler: over just completed OR opening and no bowler selected yet
-  const needsBowlerModal = innings.needsBowler && !activeBowlerId;
-  const isModalOpen = needsBowlerModal || manualBowlerModal;
+  const needsBowlerModal = innings.needsBowler && !activeBowlerId && !innings.isComplete;
+  // If a batter is needed first (e.g. after a wicket), we prioritize batter selection then bowler selection,
+  // but allow scorer to open either manually without deadlock.
+  const isBowlerModalOpen = (needsBowlerModal && !needsBatter) || manualBowlerModal;
   const isOverStart = innings.legalBalls % 6 === 0;
   const canChangeBowler = !innings.isComplete && isOverStart;
 
-  // Derive a precise disabled reason for better UX
+  // Derive a precise disabled reason for scoring buttons
   let disabledReason: string | null = null;
-  if (!activeBowlerId && innings.needsBowler) {
-    disabledReason = "bowler";
-  } else if (!innings.strikerId) {
-    disabledReason = "striker";
-  } else if (!innings.nonStrikerId) {
-    disabledReason = "non-striker";
-  } else if (innings.isComplete) {
+  if (innings.isComplete) {
     disabledReason = "innings-complete";
+  } else if (!activeStrikerId) {
+    disabledReason = "striker";
+  } else if (!activeNonStrikerId) {
+    disabledReason = "non-striker";
+  } else if (!activeBowlerId && innings.needsBowler) {
+    disabledReason = "bowler";
   }
 
   const canScore = !disabledReason;
   const canUndo = doc.deliveries.filter((d) => d.inningsIndex === state.currentInningsIndex).length > 0;
+
+  const handleOpenBatterModal = (role?: "striker" | "non-striker") => {
+    setSelectedBatterRole(role ?? (!activeStrikerId ? "striker" : "non-striker"));
+    setManualBatterModal(true);
+  };
 
   const handleAdjustOvers = (newOvers: number, reason: string) => {
     if (isChase) {
@@ -139,14 +188,15 @@ export function LiveScoringScreen({ store }: Props) {
               </button>
             </div>
 
-            {/* Batters */}
+            {/* Batters Panel */}
             <BatterPanel
-              strikerId={innings.strikerId}
-              nonStrikerId={innings.nonStrikerId}
+              strikerId={activeStrikerId}
+              nonStrikerId={activeNonStrikerId}
               batters={innings.batters}
+              onSelectBatter={handleOpenBatterModal}
             />
 
-            {/* Bowler */}
+            {/* Bowler Panel */}
             <BowlerPanel
               bowlerId={activeBowlerId}
               bowlers={innings.bowlers}
@@ -170,6 +220,8 @@ export function LiveScoringScreen({ store }: Props) {
                 onRecord={record}
                 disabled={!canScore}
                 disabledReason={disabledReason}
+                onSelectBatter={() => handleOpenBatterModal()}
+                onSelectBowler={() => setManualBowlerModal(true)}
               />
             </div>
 
@@ -201,8 +253,24 @@ export function LiveScoringScreen({ store }: Props) {
         </div>
       </div>
 
-      {/* Bowler selection modal — always opens immediately when bowler is required */}
-      {isModalOpen && (
+      {/* New Batter Selection Modal */}
+      {isBatterModalOpen && (
+        <NewBatterModal
+          innings={innings}
+          battingXI={battingXI}
+          role={currentBatterRole}
+          currentStrikerId={activeStrikerId}
+          currentNonStrikerId={activeNonStrikerId}
+          onSelect={(id) => {
+            setBatter(id, currentBatterRole);
+            setManualBatterModal(false);
+          }}
+          onClose={activeStrikerId && activeNonStrikerId ? () => setManualBatterModal(false) : undefined}
+        />
+      )}
+
+      {/* Bowler Selection Modal */}
+      {isBowlerModalOpen && (
         <BowlerModal
           bowlingXI={bowlingXI}
           bowlers={innings.bowlers}

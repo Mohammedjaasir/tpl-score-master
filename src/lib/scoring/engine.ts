@@ -342,6 +342,15 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
   const battersList = [...batters.values()].sort((a, b) => a.battingPosition - b.battingPosition);
   const bowlersList = [...bowlers.values()];
 
+  const needsBatter = !isComplete && (!strikerId || !nonStrikerId);
+  const missingBatterRole = !isComplete
+    ? !strikerId
+      ? ("striker" as const)
+      : !nonStrikerId
+      ? ("non-striker" as const)
+      : null
+    : null;
+
   const state: InningsState = {
     index: config.index,
     battingTeamId: config.battingTeamId,
@@ -372,6 +381,8 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     },
     isComplete,
     needsBowler: !isComplete && !currentBowlerId,
+    needsBatter,
+    missingBatterRole,
     yetToBat,
   };
 
@@ -407,7 +418,12 @@ export function buildMatchState(input: MatchInput): MatchState {
   const teamAId = battingFirstId;
   const teamBId = teamAId === match.teamAId ? match.teamBId : match.teamAId;
 
-  const xiOf = (teamId: string) => setup?.playingXI?.[teamId]?.playerIds ?? [];
+  const xiOf = (teamId: string) => {
+    const custom = setup?.playingXI?.[teamId]?.playerIds;
+    if (custom && custom.length > 0) return custom;
+    const fallback = teamPlayersResolver(teamId);
+    return fallback.length > 0 ? fallback : [];
+  };
 
   // Scenario A: Rain before or during 1st innings -> equal overs reduction
   const maxOvers1 = input.reducedOvers ?? setup.reducedOvers ?? match.overs;
@@ -534,4 +550,10 @@ export function setPlayerNameResolver(fn: (playerId: string) => string) {
 }
 function playerNameOf(playerId: string) {
   return playerNameResolver(playerId);
+}
+
+/** Team players resolver is injected lazily to provide roster fallback for yetToBat. */
+let teamPlayersResolver: (teamId: string) => string[] = () => [];
+export function setTeamPlayersResolver(fn: (teamId: string) => string[]) {
+  teamPlayersResolver = fn;
 }
