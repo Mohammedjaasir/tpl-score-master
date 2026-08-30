@@ -390,17 +390,25 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       ? doc.setup.openingBowlerId ?? currentInningsDeliveries[0]?.bowlerId
       : undefined);
 
+  const isNoBallsInnings = currentInningsDeliveries.length === 0;
+
   const activeStrikerId =
     innings?.strikerId ??
     pendingBatters?.strikerId ??
-    (currentInningsIndex === 0 ? doc.setup.openers?.strikerId : doc.secondInningsOpeners?.strikerId) ??
-    undefined;
+    (isNoBallsInnings
+      ? currentInningsIndex === 0
+        ? doc.setup.openers?.strikerId
+        : doc.secondInningsOpeners?.strikerId
+      : undefined);
 
   const activeNonStrikerId =
     innings?.nonStrikerId ??
     pendingBatters?.nonStrikerId ??
-    (currentInningsIndex === 0 ? doc.setup.openers?.nonStrikerId : doc.secondInningsOpeners?.nonStrikerId) ??
-    undefined;
+    (isNoBallsInnings
+      ? currentInningsIndex === 0
+        ? doc.setup.openers?.nonStrikerId
+        : doc.secondInningsOpeners?.nonStrikerId
+      : undefined);
 
   const updateSetup = useCallback(
     (patch: Partial<MatchSetup>) => {
@@ -569,12 +577,20 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       const strikerId =
         inn.strikerId ??
         doc.pendingBatterIds?.[idx]?.strikerId ??
-        (idx === 0 ? doc.setup.openers?.strikerId : doc.secondInningsOpeners?.strikerId);
+        (currentInnDeliveries.length === 0
+          ? idx === 0
+            ? doc.setup.openers?.strikerId
+            : doc.secondInningsOpeners?.strikerId
+          : undefined);
 
       const nonStrikerId =
         inn.nonStrikerId ??
         doc.pendingBatterIds?.[idx]?.nonStrikerId ??
-        (idx === 0 ? doc.setup.openers?.nonStrikerId : doc.secondInningsOpeners?.nonStrikerId);
+        (currentInnDeliveries.length === 0
+          ? idx === 0
+            ? doc.setup.openers?.nonStrikerId
+            : doc.secondInningsOpeners?.nonStrikerId
+          : undefined);
 
       if (!bowlerId || !strikerId || !nonStrikerId) return;
 

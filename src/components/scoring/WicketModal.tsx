@@ -34,20 +34,7 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
   const [fielderId, setFielderId] = useState("");
 
   const needsFielder = NEEDS_FIELDER.includes(type);
-
-  // Robust eligible batters calculation
-  const battingTeamPlayers = lookup.playersOf(innings.battingTeamId).map((p) => p.id);
-  const baseBatters = innings.yetToBat.length > 0 ? innings.yetToBat : battingTeamPlayers;
-  const dismissedIds = new Set(innings.batters.filter((b) => b.out).map((b) => b.playerId));
-  if (dismissedId) dismissedIds.add(dismissedId);
-  const onCreaseIds = new Set(activeBatters.map((b) => b.playerId).filter((id) => id !== dismissedId));
-
-  const eligibleBatters = baseBatters.filter((id) => !dismissedIds.has(id) && !onCreaseIds.has(id));
-
-  const [newBatterId, setNewBatterId] = useState(eligibleBatters[0] ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const inningsOver = eligibleBatters.length === 0;
 
   // Validation: For Caught, Run Out, Stumped, fielder is STRICTLY mandatory
   const isFielderMissing = needsFielder && (!fielderId || fielderId.trim() === "");
@@ -77,7 +64,6 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
       type,
       batterOutId: dismissedId,
       ...(needsFielder ? { fielderId } : {}),
-      ...(inningsOver ? {} : { newBatterId: newBatterId || undefined }),
     };
 
     onConfirm(wicket);
@@ -224,40 +210,6 @@ export function WicketModal({ innings, bowlingXI, onConfirm, onClose }: Props) {
                 </p>
               )}
             </div>
-          )}
-
-          {/* New batter */}
-          {!inningsOver && eligibleBatters.length > 0 && (
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-                Next Batter In
-              </label>
-              <div className="flex flex-col gap-1.5">
-                {eligibleBatters.map((id) => {
-                  const p = lookup.player(id);
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => setNewBatterId(id)}
-                      className={`tap flex items-center gap-3 rounded-xl px-4 py-2.5 border-2 transition-colors ${
-                        newBatterId === id
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-background"
-                      }`}
-                    >
-                      <span className="text-sm font-bold text-foreground">{p?.name ?? id}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">{p?.role}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {inningsOver && (
-            <p className="text-center text-xs text-muted-foreground font-black uppercase tracking-wider py-2">
-              All out / No more batters — Innings will conclude.
-            </p>
           )}
         </div>
 

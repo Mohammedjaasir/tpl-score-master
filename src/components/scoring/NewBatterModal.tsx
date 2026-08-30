@@ -47,7 +47,7 @@ export function NewBatterModal({
     return true;
   });
 
-  const [selectedId, setSelectedId] = useState(eligiblePlayerIds[0] ?? "");
+  const [selectedId, setSelectedId] = useState("");
 
   const handleConfirm = () => {
     if (selectedId) {
