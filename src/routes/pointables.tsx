@@ -161,7 +161,85 @@ export function PointablesPage() {
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Mobile Standings Cards (Visible on mobile: md:hidden) */}
+                    <div className="md:hidden flex flex-col divide-y divide-[#E5E5E5]">
+                      {group1Standings.map((team, idx) => {
+                        const isQualified = idx < 2;
+                        const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+
+                        return (
+                          <div
+                            key={team.teamId}
+                            className={`p-3.5 flex flex-col gap-2.5 ${
+                              idx === 0 ? "bg-[#D9A928]/5" : ""
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
+                                    isQualified
+                                      ? "bg-[#D9A928] text-black shadow-xs"
+                                      : "bg-slate-200 text-[#5F6368]"
+                                  }`}
+                                >
+                                  {team.pos}
+                                </span>
+                                <TeamLogo
+                                  logoUrl={team.logoUrl}
+                                  name={team.teamName}
+                                  shortName={team.teamShortName}
+                                  size="xs"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                    {team.teamName}
+                                  </p>
+                                  <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                    {team.teamShortName}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="font-black text-xs text-[#111111] bg-[#D9A928]/25 px-2.5 py-1 rounded-lg border border-[#D9A928]/30 tabular-nums">
+                                  {team.points} PTS
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
+                                <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
+                                <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
+                                <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
+                                <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
+                                <span className="font-black text-[#111111] tabular-nums">
+                                  {team.played > 0 ? nrrFormatted : "0.00"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Desktop & Tablet Table (Hidden on mobile: hidden md:block) */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-[#F9FAFB] text-[#5F6368] border-b border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider">
@@ -252,7 +330,85 @@ export function PointablesPage() {
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Mobile Standings Cards (Visible on mobile: md:hidden) */}
+                    <div className="md:hidden flex flex-col divide-y divide-[#E5E5E5]">
+                      {group2Standings.map((team, idx) => {
+                        const isQualified = idx < 2;
+                        const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+
+                        return (
+                          <div
+                            key={team.teamId}
+                            className={`p-3.5 flex flex-col gap-2.5 ${
+                              idx === 0 ? "bg-purple-500/5" : ""
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
+                                    isQualified
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "bg-slate-200 text-[#5F6368]"
+                                  }`}
+                                >
+                                  {team.pos}
+                                </span>
+                                <TeamLogo
+                                  logoUrl={team.logoUrl}
+                                  name={team.teamName}
+                                  shortName={team.teamShortName}
+                                  size="xs"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                    {team.teamName}
+                                  </p>
+                                  <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                    {team.teamShortName}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="font-black text-xs text-[#111111] bg-[#D9A928]/25 px-2.5 py-1 rounded-lg border border-[#D9A928]/30 tabular-nums">
+                                  {team.points} PTS
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
+                                <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
+                                <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
+                                <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
+                                <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
+                                <span className="font-black text-[#111111] tabular-nums">
+                                  {team.played > 0 ? nrrFormatted : "0.00"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Desktop & Tablet Table (Hidden on mobile: hidden md:block) */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-[#F9FAFB] text-[#5F6368] border-b border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider">

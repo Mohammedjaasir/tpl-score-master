@@ -280,40 +280,49 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 2. UPCOMING MATCH CARD (2-COLUMN RESPONSIVE FIXTURE CARD)
+  // 2. UPCOMING MATCH CARD (RESPONSIVE FIXTURE CARD)
   // ─────────────────────────────────────────────────────────────────────────────
   if (effectiveStatus === "UPCOMING" || effectiveStatus === "READY") {
     return (
-      <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-lg hover:border-[#D9A928]/50 transition-all duration-200 flex flex-col justify-between h-full">
-        {/* Subtle Backdrop Accent */}
-        <div className="absolute inset-0 pointer-events-none opacity-15 overflow-hidden">
-          <img src={backdropImage} alt="" className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#14161A] via-[#14161A]/90 to-[#14161A]/70" />
+      <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-md hover:border-[#D9A928]/50 transition-all duration-200 flex flex-col justify-between w-full">
+        {/* Subtle Backdrop Accent with dark overlay */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+          <img
+            src={backdropImage}
+            alt=""
+            className="w-full h-full object-cover object-center opacity-10 sm:opacity-20 group-hover:scale-105 transition-transform duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#14161A] via-[#14161A]/95 to-[#14161A]/80" />
         </div>
 
-        <div className="relative z-10 flex flex-col p-4 sm:p-5 gap-4 flex-1 justify-between">
-          {/* Top Bar */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-            <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] bg-[#D9A928]/10 border border-[#D9A928]/30 px-2.5 py-0.5 rounded-full">
-              MATCH #{String(match.matchNumber).padStart(2, "0")}
-            </span>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-white/60">
+        <div className="relative z-10 flex flex-col p-3.5 sm:p-5 gap-3 sm:gap-4 flex-1 justify-between">
+          {/* Top Bar: Match # and Date/Time */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] bg-[#D9A928]/10 border border-[#D9A928]/30 px-2.5 py-0.5 rounded-full">
+                MATCH #{String(match.matchNumber).padStart(2, "0")}
+              </span>
+              <span className="text-[10px] font-bold text-white/50 hidden sm:inline">
+                {effectiveMatchOvers} Overs
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-white/70">
               <span>{dateFormatted}</span>
-              <span>•</span>
-              <span className="text-[#D9A928]">{time}</span>
+              <span className="text-white/30">•</span>
+              <span className="text-[#D9A928] font-black">{time}</span>
             </div>
           </div>
 
-          {/* Teams Matchup Row */}
-          <div className="grid grid-cols-7 items-center gap-2 my-2">
+          {/* Teams Matchup Grid */}
+          <div className="grid grid-cols-7 items-center gap-2 my-1 sm:my-2">
             {/* Team A */}
-            <div className="col-span-3 flex flex-col items-center text-center gap-2 min-w-0">
+            <div className="col-span-3 flex flex-col items-center text-center gap-1.5 min-w-0">
               <TeamLogo
                 logoUrl={team1?.logoUrl}
                 name={team1?.name}
                 shortName={team1?.shortName}
                 size="md"
-                className="w-12 h-12 sm:w-14 sm:h-14"
+                className="w-10 h-10 sm:w-14 sm:h-14"
               />
               <p className="text-xs font-black text-white uppercase tracking-wide truncate w-full">
                 {team1?.name}
@@ -322,19 +331,19 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
 
             {/* VS Divider */}
             <div className="col-span-1 flex flex-col items-center justify-center">
-              <span className="text-[10px] font-black text-[#D9A928] bg-black/40 px-2 py-1 rounded-full border border-white/10">
+              <span className="text-[9px] sm:text-[10px] font-black text-[#D9A928] bg-black/60 px-2 py-0.5 rounded-full border border-white/10">
                 VS
               </span>
             </div>
 
             {/* Team B */}
-            <div className="col-span-3 flex flex-col items-center text-center gap-2 min-w-0">
+            <div className="col-span-3 flex flex-col items-center text-center gap-1.5 min-w-0">
               <TeamLogo
                 logoUrl={team2?.logoUrl}
                 name={team2?.name}
                 shortName={team2?.shortName}
                 size="md"
-                className="w-12 h-12 sm:w-14 sm:h-14"
+                className="w-10 h-10 sm:w-14 sm:h-14"
               />
               <p className="text-xs font-black text-white uppercase tracking-wide truncate w-full">
                 {team2?.name}
@@ -342,21 +351,21 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
             </div>
           </div>
 
-          {/* Bottom Bar: Venue, Overs & Action */}
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10 text-xs">
-            <div className="flex items-center gap-2 text-white/50 text-[11px] truncate">
-              <span className="truncate">{match.venue || "TPL Ground"}</span>
+          {/* Bottom Bar: Venue & Action */}
+          <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-white/10 text-xs">
+            <div className="flex items-center gap-1.5 text-white/50 text-[10px] sm:text-[11px] truncate">
+              <span className="font-bold text-white/70">{effectiveMatchOvers} OVERS</span>
               <span>•</span>
-              <span className="font-bold text-white/70 shrink-0">{effectiveMatchOvers} Overs</span>
+              <span className="truncate">{match.venue || "TPL Cricket Ground"}</span>
             </div>
 
             <Link
               to={targetRoute}
               params={{ matchId: match.id }}
-              className="tap shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-[#D9A928] text-white hover:text-black font-black text-[11px] uppercase tracking-wider transition-all"
+              className="tap shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[10px] sm:text-[11px] uppercase tracking-wider transition-all shadow-sm"
             >
               <span>{buttonLabel}</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
             </Link>
           </div>
         </div>
@@ -368,11 +377,21 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   // 3. COMPLETED MATCH CARD (RECENT RESULTS WITH FINAL SCORE & MVP)
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-lg hover:border-white/25 transition-all duration-200 flex flex-col justify-between h-full">
-      <div className="relative z-10 flex flex-col p-4 sm:p-5 gap-3.5 flex-1 justify-between">
+    <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-md hover:border-white/25 transition-all duration-200 flex flex-col justify-between w-full">
+      {/* Subtle Backdrop Accent with dark overlay */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <img
+          src={backdropImage}
+          alt=""
+          className="w-full h-full object-cover object-center opacity-10 group-hover:scale-105 transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#14161A] via-[#14161A]/95 to-[#14161A]/80" />
+      </div>
+
+      <div className="relative z-10 flex flex-col p-3.5 sm:p-5 gap-3 flex-1 justify-between">
         
         {/* Top Bar: Completed Badge + Match # */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+        <div className="flex items-center justify-between border-b border-white/10 pb-2">
           <StatusPill status="COMPLETED" />
           <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
             Match #{String(match.matchNumber).padStart(2, "0")} • {dateFormatted}
@@ -380,10 +399,10 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
         </div>
 
         {/* Scores Summary Grid */}
-        <div className="flex flex-col gap-2 my-1">
+        <div className="flex flex-col gap-1.5 my-0.5">
           {/* Team 1 Score */}
           <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.04] border border-white/5">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <TeamLogo logoUrl={team1?.logoUrl} name={team1?.name} shortName={team1?.shortName} size="xs" />
               <span className="text-xs font-black text-white uppercase truncate">
                 {team1?.name}
@@ -401,7 +420,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
 
           {/* Team 2 Score */}
           <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.04] border border-white/5">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <TeamLogo logoUrl={team2?.logoUrl} name={team2?.name} shortName={team2?.shortName} size="xs" />
               <span className="text-xs font-black text-white uppercase truncate">
                 {team2?.name}
@@ -419,7 +438,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
         </div>
 
         {/* Result & MVP Banner */}
-        <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 flex flex-col gap-1">
+        <div className="p-2 rounded-xl bg-black/50 border border-white/10 flex flex-col gap-0.5">
           <p className="text-xs font-black text-[#D9A928] uppercase truncate text-center">
             {resultText || "Match Completed"}
           </p>
@@ -437,10 +456,10 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
           <Link
             to={targetRoute}
             params={{ matchId: match.id }}
-            className="tap inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-wider transition-colors"
+            className="tap inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-[#D9A928] text-white hover:text-black font-black text-[10px] sm:text-[11px] uppercase tracking-wider transition-all"
           >
             <span>VIEW SCORECARD</span>
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
           </Link>
         </div>
 

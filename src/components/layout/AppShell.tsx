@@ -122,11 +122,11 @@ export function AppShell({
 
       {/* ── Main Content Body ────────────────────────────────────────── */}
       {fullBleedTop ? (
-        <main className={`flex-1 w-full ${hideNav ? "pb-4" : "pb-24 md:pb-12"}`}>
+        <main className={`flex-1 w-full ${hideNav ? "pb-4" : "pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
           {children}
         </main>
       ) : (
-        <main className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 ${hideNav ? "pb-4" : "pb-24 md:pb-12"}`}>
+        <main className={`flex-1 mx-auto max-w-7xl w-full px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 ${hideNav ? "pb-4" : "pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
           {children}
         </main>
       )}

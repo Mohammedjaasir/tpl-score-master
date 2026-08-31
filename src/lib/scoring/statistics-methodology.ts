@@ -438,9 +438,9 @@ export const TPL_STATISTICS_METHODOLOGY: Record<string, MetricMethodology> = {
     edgeCases: "Accumulates point-for-point from every individual match calculation.",
     methodologyVersion: "v1.0",
   },
-  man_of_the_tournament: {
-    key: "man_of_the_tournament",
-    name: "Man of the Tournament",
+  player_of_the_tournament: {
+    key: "player_of_the_tournament",
+    name: "Player of the Tournament",
     category: "AWARDS",
     description: "Premier tournament accolade honoring the most impactful and consistent player.",
     scope: "TOURNAMENT",

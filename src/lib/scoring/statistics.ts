@@ -8,7 +8,7 @@
 
 import type { Match, MatchState, InningsState, BatterStat, BowlerStat, Delivery } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
-import { oversText, totalRunsOf, bowlerRunsOf, batterRunsOf, isLegal } from "@/lib/scoring/engine";
+import { oversText, totalRunsOf, bowlerRunsOf, batterRunsOf, isLegal, buildMatchState } from "@/lib/scoring/engine";
 import { calculateMatchMVP, type PlayerMVPScore, formatMOTMPerformanceSummary } from "@/lib/scoring/playerPerformance";
 
 // ── CONFIGURABLE QUALIFICATION THRESHOLDS ────────────────────────────────────
@@ -407,7 +407,10 @@ export interface TournamentMVPEntry extends TournamentLeaderboardEntry {
 }
 
 export interface OfficialTournamentAwards {
-  manOfTheTournament?: TournamentMVPEntry;
+  isTournamentCompleted: boolean;
+  playerOfTheTournament?: TournamentMVPEntry;
+  currentMvpLeader?: TournamentMVPEntry;
+  manOfTheTournament?: TournamentMVPEntry; // Deprecated alias for backwards compatibility
   orangeCapWinner?: OrangeCapEntry;
   purpleCapWinner?: PurpleCapEntry;
   bestBatter?: OrangeCapEntry;
@@ -547,8 +550,7 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
         if (raw) {
           const doc = JSON.parse(raw);
           if (doc && doc.deliveries) {
-            const { buildMatchState: bms } = require("@/lib/scoring/engine");
-            state = bms({
+            state = buildMatchState({
               match: m,
               setup: doc.setup,
               deliveries: doc.deliveries,
@@ -941,8 +943,14 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
   // ── 13. Official Tournament Awards ────────────────────────────────────────
+  // A tournament is only completed if there is at least 1 match scheduled and EVERY match is COMPLETED.
+  const isTournamentCompleted = matches.length > 0 && matches.every((m) => m.status === "COMPLETED");
+
   const awards: OfficialTournamentAwards = {
-    manOfTheTournament: mvpLeaderboard[0],
+    isTournamentCompleted,
+    playerOfTheTournament: isTournamentCompleted && completedMatchesCount > 0 ? mvpLeaderboard[0] : undefined,
+    currentMvpLeader: !isTournamentCompleted && completedMatchesCount > 0 ? mvpLeaderboard[0] : undefined,
+    manOfTheTournament: mvpLeaderboard[0], // Deprecated alias
     orangeCapWinner: orangeCap[0],
     purpleCapWinner: purpleCap[0],
     bestBatter: orangeCap[0],

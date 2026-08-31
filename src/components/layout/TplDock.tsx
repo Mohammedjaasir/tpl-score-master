@@ -15,7 +15,7 @@ export function TplBottomDock() {
   const currentPath = routerState.location.pathname;
 
   return (
-    <div className="fixed bottom-3 sm:bottom-4 inset-x-0 mx-auto w-fit z-50 pointer-events-auto flex justify-center px-3 max-w-full">
+    <div className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] inset-x-0 mx-auto w-fit z-50 pointer-events-auto flex justify-center px-3 max-w-full">
       <Dock
         panelHeight={52}
         magnification={66}

@@ -147,77 +147,219 @@ function StatsPage() {
           </div>
         )}
 
+        {/* Quick Discovery Cards (Orange & Purple Caps, Boundaries, Economy) */}
+        {!isLoading && stats.completedMatchesCount > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase text-[#111111] tracking-wider flex items-center gap-1.5">
+                <Flame className="h-4 w-4 text-[#D9A928]" />
+                TOP TOURNAMENT LEADERS
+              </span>
+              <span className="text-[10px] font-bold text-[#5F6368] uppercase">
+                {stats.completedMatchesCount} {stats.completedMatchesCount === 1 ? "Match" : "Matches"} Played
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Orange Cap */}
+              <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3.5 shadow-xs flex flex-col justify-between hover:border-[#D9A928] transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-[#9A6A05] bg-[#D9A928]/15 px-2 py-0.5 rounded flex items-center gap-1">
+                    🏏 ORANGE CAP
+                  </span>
+                </div>
+                <div className="my-2 min-w-0">
+                  {stats.orangeCap[0] ? (
+                    <Link to="/player/$playerId" params={{ playerId: stats.orangeCap[0].playerId }} className="block group/p truncate">
+                      <p className="text-xs font-black text-[#111111] uppercase truncate group-hover/p:text-[#9A6A05]">
+                        {stats.orangeCap[0].playerName}
+                      </p>
+                      <p className="text-[10px] text-[#5F6368] font-bold uppercase truncate">
+                        {stats.orangeCap[0].teamShortName}
+                      </p>
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic">—</p>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between border-t border-[#F0F0EE] pt-2">
+                  <span className="text-[9px] font-bold text-[#5F6368]">RUNS</span>
+                  <span className="text-base font-black text-[#111111] tabular-nums">
+                    {stats.orangeCap[0] ? `${stats.orangeCap[0].runs} RUNS` : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Purple Cap */}
+              <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3.5 shadow-xs flex flex-col justify-between hover:border-[#D9A928] transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-purple-700 bg-purple-100 px-2 py-0.5 rounded flex items-center gap-1">
+                    🎯 PURPLE CAP
+                  </span>
+                </div>
+                <div className="my-2 min-w-0">
+                  {stats.purpleCap[0] && stats.purpleCap[0].wickets > 0 ? (
+                    <Link to="/player/$playerId" params={{ playerId: stats.purpleCap[0].playerId }} className="block group/p truncate">
+                      <p className="text-xs font-black text-[#111111] uppercase truncate group-hover/p:text-[#9A6A05]">
+                        {stats.purpleCap[0].playerName}
+                      </p>
+                      <p className="text-[10px] text-[#5F6368] font-bold uppercase truncate">
+                        {stats.purpleCap[0].teamShortName}
+                      </p>
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic">—</p>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between border-t border-[#F0F0EE] pt-2">
+                  <span className="text-[9px] font-bold text-[#5F6368]">WICKETS</span>
+                  <span className="text-base font-black text-purple-700 tabular-nums">
+                    {stats.purpleCap[0] && stats.purpleCap[0].wickets > 0 ? `${stats.purpleCap[0].wickets} W` : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Most Sixes */}
+              <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3.5 shadow-xs flex flex-col justify-between hover:border-[#D9A928] transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-100 px-2 py-0.5 rounded flex items-center gap-1">
+                    💥 MOST 6s
+                  </span>
+                </div>
+                <div className="my-2 min-w-0">
+                  {stats.mostSixes[0] && stats.mostSixes[0].sixes > 0 ? (
+                    <Link to="/player/$playerId" params={{ playerId: stats.mostSixes[0].playerId }} className="block group/p truncate">
+                      <p className="text-xs font-black text-[#111111] uppercase truncate group-hover/p:text-[#9A6A05]">
+                        {stats.mostSixes[0].playerName}
+                      </p>
+                      <p className="text-[10px] text-[#5F6368] font-bold uppercase truncate">
+                        {stats.mostSixes[0].teamShortName}
+                      </p>
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic">—</p>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between border-t border-[#F0F0EE] pt-2">
+                  <span className="text-[9px] font-bold text-[#5F6368]">SIXES</span>
+                  <span className="text-base font-black text-rose-600 tabular-nums">
+                    {stats.mostSixes[0] && stats.mostSixes[0].sixes > 0 ? stats.mostSixes[0].sixes : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Best Economy */}
+              <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3.5 shadow-xs flex flex-col justify-between hover:border-[#D9A928] transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
+                    🎳 BEST ECON
+                  </span>
+                </div>
+                <div className="my-2 min-w-0">
+                  {stats.bestEconomies[0] ? (
+                    <Link to="/player/$playerId" params={{ playerId: stats.bestEconomies[0].playerId }} className="block group/p truncate">
+                      <p className="text-xs font-black text-[#111111] uppercase truncate group-hover/p:text-[#9A6A05]">
+                        {stats.bestEconomies[0].playerName}
+                      </p>
+                      <p className="text-[10px] text-[#5F6368] font-bold uppercase truncate">
+                        {stats.bestEconomies[0].teamShortName}
+                      </p>
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] italic">—</p>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between border-t border-[#F0F0EE] pt-2">
+                  <span className="text-[9px] font-bold text-[#5F6368]">ECONOMY</span>
+                  <span className="text-base font-black text-emerald-700 tabular-nums">
+                    {stats.bestEconomies[0] ? stats.bestEconomies[0].economy.toFixed(2) : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── TAB 0: OFFICIAL TOURNAMENT AWARDS SHOWCASE ───────────────────── */}
         {!isLoading && activeTab === "awards" && (
           <div className="flex flex-col gap-6">
-            {/* Hero Man of the Tournament */}
-            {stats.awards.manOfTheTournament ? (
-              <div className="bg-gradient-to-r from-[#1A1810] via-black to-[#121316] border-2 border-[#D9A928] rounded-3xl p-6 sm:p-8 shadow-2xl text-white flex flex-col gap-5">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-10 w-10 rounded-2xl bg-[#D9A928]/20 flex items-center justify-center text-[#D9A928]">
-                      <Trophy className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5 text-[#D9A928]" />
-                        OFFICIAL TOURNAMENT AWARDS
+            {/* Hero MVP / Player of the Tournament */}
+            {stats.awards.playerOfTheTournament || stats.awards.currentMvpLeader ? (
+              (() => {
+                const isComplete = stats.awards.isTournamentCompleted;
+                const heroPlayer = stats.awards.playerOfTheTournament ?? stats.awards.currentMvpLeader!;
+                const heroHeading = isComplete ? "PLAYER OF THE TOURNAMENT" : "CURRENT MVP LEADER";
+                const heroSubtext = isComplete ? "OFFICIAL TOURNAMENT CHAMPION AWARD" : "TOURNAMENT LEADERS • PROVISIONAL";
+
+                return (
+                  <div className="bg-gradient-to-r from-[#1A1810] via-black to-[#121316] border-2 border-[#D9A928] rounded-3xl p-5 sm:p-7 shadow-2xl text-white flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-9 w-9 rounded-2xl bg-[#D9A928]/20 flex items-center justify-center text-[#D9A928]">
+                          <Trophy className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5 text-[#D9A928]" />
+                            {heroSubtext}
+                          </span>
+                          <h2 className="text-sm sm:text-lg font-black uppercase tracking-wide text-white">
+                            {heroHeading}
+                          </h2>
+                        </div>
+                      </div>
+
+                      <span className="px-3 py-1 rounded-full bg-[#D9A928] text-black font-black text-xs shadow-md">
+                        {heroPlayer.mvpPoints} MVP Pts
                       </span>
-                      <h2 className="text-base sm:text-xl font-black uppercase tracking-wide text-white">
-                        MAN OF THE TOURNAMENT
-                      </h2>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-black/60 border-2 border-[#D9A928] p-1 flex items-center justify-center overflow-hidden shrink-0">
+                          {heroPlayer.playerAvatar ? (
+                            <img
+                              src={heroPlayer.playerAvatar}
+                              alt=""
+                              className="h-full w-full object-cover rounded-xl"
+                            />
+                          ) : (
+                            <User className="h-8 w-8 text-white/50" />
+                          )}
+                        </div>
+                        <div>
+                          <Link
+                            to="/player/$playerId"
+                            params={{ playerId: heroPlayer.playerId }}
+                            className="text-base sm:text-xl font-black uppercase text-white hover:text-[#D9A928] hover:underline block"
+                          >
+                            {heroPlayer.playerName}
+                          </Link>
+                          <p className="text-xs text-[#D9A928] font-bold mt-0.5">
+                            {heroPlayer.teamName} ({heroPlayer.teamShortName}) • {heroPlayer.playerRole ?? "All-Rounder"}
+                          </p>
+                          <p className="text-xs text-white/80 font-extrabold mt-1">
+                            {heroPlayer.runs} runs • {heroPlayer.wickets} wickets • {heroPlayer.catches} catches
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/player/$playerId"
+                          params={{ playerId: heroPlayer.playerId }}
+                          className="tap px-4 py-2 rounded-xl bg-[#D9A928] text-black font-black text-xs uppercase tracking-wider shadow-md hover:bg-[#E5B537]"
+                        >
+                          View Profile
+                        </Link>
+                      </div>
                     </div>
                   </div>
-
-                  <span className="px-3 py-1 rounded-full bg-[#D9A928] text-black font-black text-xs shadow-md">
-                    {stats.awards.manOfTheTournament.mvpPoints} MVP Pts
-                  </span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-black/60 border-2 border-[#D9A928] p-1 flex items-center justify-center overflow-hidden shrink-0">
-                      {stats.awards.manOfTheTournament.playerAvatar ? (
-                        <img
-                          src={stats.awards.manOfTheTournament.playerAvatar}
-                          alt=""
-                          className="h-full w-full object-cover rounded-xl"
-                        />
-                      ) : (
-                        <User className="h-10 w-10 text-white/50" />
-                      )}
-                    </div>
-                    <div>
-                      <Link
-                        to="/players/$playerId"
-                        params={{ playerId: stats.awards.manOfTheTournament.playerId }}
-                        className="text-lg sm:text-2xl font-black uppercase text-white hover:text-[#D9A928] hover:underline block"
-                      >
-                        {stats.awards.manOfTheTournament.playerName}
-                      </Link>
-                      <p className="text-xs text-[#D9A928] font-bold mt-0.5">
-                        {stats.awards.manOfTheTournament.teamName} ({stats.awards.manOfTheTournament.teamShortName}) • {stats.awards.manOfTheTournament.playerRole ?? "All-Rounder"}
-                      </p>
-                      <p className="text-xs text-white/80 font-extrabold mt-1">
-                        {stats.awards.manOfTheTournament.runs} runs • {stats.awards.manOfTheTournament.wickets} wickets • {stats.awards.manOfTheTournament.catches} catches
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to="/players/$playerId"
-                      params={{ playerId: stats.awards.manOfTheTournament.playerId }}
-                      className="tap px-5 py-2.5 rounded-xl bg-[#D9A928] text-black font-black text-xs uppercase tracking-wider shadow-md hover:bg-[#E5B537]"
-                    >
-                      View Profile
-                    </Link>
-                  </div>
-                </div>
-              </div>
+                );
+              })()
             ) : (
               <div className="card-surface p-8 bg-white border border-[#E5E5E5] rounded-3xl text-center text-xs font-bold text-[#5F6368] italic">
-                NO COMPLETED MATCHES YET TO CALCULATE TOURNAMENT AWARDS.
+                NO TOURNAMENT DATA YET — Stats will appear after matches are played.
               </div>
             )}
 
@@ -235,7 +377,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.orangeCapWinner.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -269,7 +411,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.purpleCapWinner.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -303,7 +445,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.bestStriker.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -337,7 +479,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.bestAllRounder.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -371,7 +513,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.bestFielder.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -405,7 +547,7 @@ function StatsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
-                        to="/players/$playerId"
+                        to="/player/$playerId"
                         params={{ playerId: stats.awards.highestIndividualScore.playerId }}
                         className="text-sm font-black text-[#111111] hover:text-[#D9A928] hover:underline"
                       >
@@ -487,7 +629,7 @@ function StatsPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <Link
-                            to="/players/$playerId"
+                            to="/player/$playerId"
                             params={{ playerId: b.playerId }}
                             className="font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline block"
                           >
@@ -571,7 +713,7 @@ function StatsPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <Link
-                            to="/players/$playerId"
+                            to="/player/$playerId"
                             params={{ playerId: b.playerId }}
                             className="font-extrabold text-[#111111] hover:text-[#D9A928] hover:underline block"
                           >
@@ -635,7 +777,7 @@ function StatsPage() {
                       <tr key={b.playerId} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">{idx + 1}</td>
                         <td className="px-4 py-3.5 font-extrabold text-[#111111]">
-                          <Link to="/players/$playerId" params={{ playerId: b.playerId }} className="hover:underline">
+                          <Link to="/player/$playerId" params={{ playerId: b.playerId }} className="hover:underline">
                             {b.playerName}
                           </Link>
                           <span className="text-[10px] text-[#5F6368] font-bold uppercase block">{b.teamShortName}</span>
@@ -672,7 +814,7 @@ function StatsPage() {
                   {stats.bestAverages.slice(0, 5).map((b, i) => (
                     <div key={b.playerId} className="p-3.5 flex items-center justify-between">
                       <div>
-                        <Link to="/players/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
+                        <Link to="/player/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
                           {b.playerName}
                         </Link>
                         <p className="text-[10px] text-[#5F6368]">{b.runs} runs in {b.innings} inns</p>
@@ -697,7 +839,7 @@ function StatsPage() {
                   {stats.bestBowlingAverages.slice(0, 5).map((bw, i) => (
                     <div key={bw.playerId} className="p-3.5 flex items-center justify-between">
                       <div>
-                        <Link to="/players/$playerId" params={{ playerId: bw.playerId }} className="text-xs font-black text-[#111111] hover:underline">
+                        <Link to="/player/$playerId" params={{ playerId: bw.playerId }} className="text-xs font-black text-[#111111] hover:underline">
                           {bw.playerName}
                         </Link>
                         <p className="text-[10px] text-[#5F6368]">{bw.wickets} wkts for {bw.runsConceded} runs</p>
@@ -729,7 +871,7 @@ function StatsPage() {
                       <div className="flex items-center gap-2.5">
                         <span className="text-xs font-black text-[#5F6368] w-5">{idx + 1}</span>
                         <div>
-                          <Link to="/players/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
+                          <Link to="/player/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
                             {b.playerName}
                           </Link>
                           <p className="text-[10px] text-[#5F6368]">{b.teamShortName}</p>
@@ -757,7 +899,7 @@ function StatsPage() {
                       <div className="flex items-center gap-2.5">
                         <span className="text-xs font-black text-[#5F6368] w-5">{idx + 1}</span>
                         <div>
-                          <Link to="/players/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
+                          <Link to="/player/$playerId" params={{ playerId: b.playerId }} className="text-xs font-black text-[#111111] hover:underline">
                             {b.playerName}
                           </Link>
                           <p className="text-[10px] text-[#5F6368]">{b.teamShortName}</p>
@@ -809,7 +951,7 @@ function StatsPage() {
                       <tr key={a.playerId} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">{idx + 1}</td>
                         <td className="px-4 py-3.5 font-extrabold text-[#111111]">
-                          <Link to="/players/$playerId" params={{ playerId: a.playerId }} className="hover:underline">
+                          <Link to="/player/$playerId" params={{ playerId: a.playerId }} className="hover:underline">
                             {a.playerName}
                           </Link>
                           <span className="text-[10px] text-[#5F6368] font-bold uppercase block">{a.teamShortName}</span>
@@ -868,7 +1010,7 @@ function StatsPage() {
                       <tr key={f.playerId} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="px-3 sm:px-4 py-3.5 text-center font-black text-[#111111] tabular-nums">{idx + 1}</td>
                         <td className="px-4 py-3.5 font-extrabold text-[#111111]">
-                          <Link to="/players/$playerId" params={{ playerId: f.playerId }} className="hover:underline">
+                          <Link to="/player/$playerId" params={{ playerId: f.playerId }} className="hover:underline">
                             {f.playerName}
                           </Link>
                           <span className="text-[10px] text-[#5F6368] font-bold uppercase block">{f.teamShortName}</span>
