@@ -55,6 +55,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   const hasDeliveries = (state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0;
   const isLive = !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
   const effectiveStatus = isDone ? "COMPLETED" : isLive ? "LIVE" : match.status === "READY" ? "READY" : "UPCOMING";
+  const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
 
   const time = formatMatchTime(match?.scheduledAt || match?.startTime);
   const dateFormatted = formatMatchDate(match?.scheduledAt || match?.startTime);
@@ -105,9 +106,14 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   if (effectiveStatus === "LIVE") {
     const battingTeam = currentInn?.battingTeamId ? lookup.team(currentInn.battingTeamId) : team1;
     const isSecondInnings = state?.currentInningsIndex === 1;
-    const targetRuns = inn1 ? inn1.runs + 1 : 0;
+
+    // Authoritative effective match overs from live engine innings state or match record
+    const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
+    const secondInningsMaxOvers = state?.innings[1]?.maxOvers ?? effectiveMatchOvers;
+    const targetRuns = inn1 ? (state?.innings[1]?.target ?? inn1.runs + 1) : 0;
     const runsNeeded = isSecondInnings && inn2 ? Math.max(0, targetRuns - inn2.runs) : 0;
-    const ballsRemaining = isSecondInnings && inn2 ? Math.max(0, (match.overs * 6) - inn2.legalBalls) : 0;
+    const maxLegalBalls = secondInningsMaxOvers * 6;
+    const ballsRemaining = isSecondInnings && inn2 ? Math.max(0, maxLegalBalls - inn2.legalBalls) : 0;
 
     return (
       <article className="group relative overflow-hidden rounded-3xl bg-[#0E0F12] border-2 border-[#D9A928]/50 shadow-2xl transition-all duration-300 hover:border-[#D9A928] flex flex-col justify-between w-full">
@@ -137,7 +143,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
                 Match #{String(match.matchNumber).padStart(2, "0")}
               </span>
               <span className="text-[11px] font-bold text-white/50 hidden sm:inline-block">
-                {match.overs} Overs Match
+                {effectiveMatchOvers} Overs Match
               </span>
             </div>
           </div>
@@ -146,8 +152,8 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
           <div className="grid grid-cols-1 sm:grid-cols-5 items-center gap-4 my-2">
             
             {/* Team 1 (Batting First) */}
-            <div className={`sm:col-span-2 flex items-center justify-start sm:justify-start gap-4 p-3 rounded-2xl transition-all ${
-              currentInn?.battingTeamId === firstTeamId ? "bg-white/[0.06] border border-[#D9A928]/30" : "bg-black/30"
+            <div className={`sm:col-span-2 flex items-center justify-start gap-4 p-3.5 sm:p-4 rounded-2xl transition-all ${
+              currentInn?.battingTeamId === firstTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/30"
             }`}>
               <TeamLogo
                 logoUrl={team1?.logoUrl}
@@ -177,53 +183,68 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
               </div>
             </div>
 
-            {/* Middle VS & Live Status */}
+            {/* Middle VS Pill */}
             <div className="sm:col-span-1 flex flex-col items-center justify-center py-1">
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D9A928]/20 border border-[#D9A928]/40 text-[#D9A928] text-[10px] font-black uppercase tracking-widest">
                 <span>VS</span>
               </div>
+            </div>
+
+            {/* Team 2 (Batting Second / Chasing Team) */}
+            <div className={`sm:col-span-2 flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl transition-all ${
+              currentInn?.battingTeamId === secondTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/30"
+            }`}>
+              <div className="flex items-center justify-start gap-4">
+                <TeamLogo
+                  logoUrl={team2?.logoUrl}
+                  name={team2?.name}
+                  shortName={team2?.shortName}
+                  isBatting={currentInn?.battingTeamId === secondTeamId}
+                  size="lg"
+                  className="w-14 h-14 sm:w-16 sm:h-16 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide truncate">
+                      {team2?.name}
+                    </p>
+                    {currentInn?.battingTeamId === secondTeamId && (
+                      <span className="h-2 w-2 rounded-full bg-[#D9A928] animate-ping shrink-0" />
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl sm:text-3xl font-black text-white tabular-nums tracking-tight">
+                      {secondScore || (isSecondInnings ? "0/0" : "Yet to bat")}
+                    </span>
+                    {secondOvers && (
+                      <span className="text-xs font-extrabold text-white/60 tabular-nums">
+                        ({secondOvers} ov)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chasing Target Strip (Directly attached to Chasing Team on Desktop) */}
               {isSecondInnings && (
-                <p className="text-[10px] font-extrabold text-white/80 mt-1.5 text-center leading-tight">
-                  Need <strong className="text-[#D9A928]">{runsNeeded}</strong> in <strong className="text-[#D9A928]">{ballsRemaining}b</strong>
-                </p>
+                <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-[#D9A928]/15 border border-[#D9A928]/35 hidden sm:flex items-center justify-between text-[#D9A928] text-[11px] font-black uppercase tracking-wider">
+                  <span>NEED {runsNeeded} RUNS</span>
+                  <span className="text-white/40">•</span>
+                  <span>{ballsRemaining} BALLS</span>
+                </div>
               )}
             </div>
 
-            {/* Team 2 (Batting Second) */}
-            <div className={`sm:col-span-2 flex items-center justify-start sm:justify-start gap-4 p-3 rounded-2xl transition-all ${
-              currentInn?.battingTeamId === secondTeamId ? "bg-white/[0.06] border border-[#D9A928]/30" : "bg-black/30"
-            }`}>
-              <TeamLogo
-                logoUrl={team2?.logoUrl}
-                name={team2?.name}
-                shortName={team2?.shortName}
-                isBatting={currentInn?.battingTeamId === secondTeamId}
-                size="lg"
-                className="w-14 h-14 sm:w-16 sm:h-16 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs sm:text-sm font-black text-white uppercase tracking-wide truncate">
-                    {team2?.name}
-                  </p>
-                  {currentInn?.battingTeamId === secondTeamId && (
-                    <span className="h-2 w-2 rounded-full bg-[#D9A928] animate-ping shrink-0" />
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl sm:text-3xl font-black text-white tabular-nums tracking-tight">
-                    {secondScore || (isSecondInnings ? "0/0" : "Yet to bat")}
-                  </span>
-                  {secondOvers && (
-                    <span className="text-xs font-extrabold text-white/60 tabular-nums">
-                      ({secondOvers} ov)
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
           </div>
+
+          {/* Mobile Target Strip (Underneath Chasing Team on Mobile) */}
+          {isSecondInnings && (
+            <div className="sm:hidden px-4 py-2.5 rounded-xl bg-[#D9A928]/15 border border-[#D9A928]/35 flex items-center justify-center gap-2 text-[#D9A928] text-xs font-black uppercase tracking-wider">
+              <span>NEED {runsNeeded} RUNS</span>
+              <span className="text-white/40">•</span>
+              <span>{ballsRemaining} BALLS</span>
+            </div>
+          )}
 
           {/* Bottom Bar: Metadata & Match Centre Button */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-white/10">
@@ -234,13 +255,13 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
               </div>
               <span className="text-white/30">•</span>
               <div className="flex items-center gap-1.5 truncate">
-                <MapPin className="h-3.5 w-3.5 text-[#D9A928] shrink-0" />
+                <MapPin className="h-3.5 w-3.5 text-[#D9A928]" />
                 <span className="truncate">{match.venue || "TPL Cricket Ground"}</span>
               </div>
               <span className="text-white/30 hidden sm:inline">•</span>
               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                 <Layers className="h-3.5 w-3.5 text-[#D9A928]" />
-                <span>{match.overs} Overs</span>
+                <span>{effectiveMatchOvers} Overs</span>
               </div>
             </div>
 
@@ -326,7 +347,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
             <div className="flex items-center gap-2 text-white/50 text-[11px] truncate">
               <span className="truncate">{match.venue || "TPL Ground"}</span>
               <span>•</span>
-              <span className="font-bold text-white/70 shrink-0">{match.overs} Overs</span>
+              <span className="font-bold text-white/70 shrink-0">{effectiveMatchOvers} Overs</span>
             </div>
 
             <Link

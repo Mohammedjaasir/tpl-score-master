@@ -36,6 +36,7 @@ export function LiveScoringScreen({ store }: Props) {
     setBowler,
     setBatter,
     updateSetup,
+    adjustMatchOvers,
   } = store;
 
   const [manualBowlerModal, setManualBowlerModal] = useState(false);
@@ -113,17 +114,7 @@ export function LiveScoringScreen({ store }: Props) {
   };
 
   const handleAdjustOvers = (newOvers: number, reason: string) => {
-    if (isChase) {
-      updateSetup({
-        secondInningsReducedOvers: newOvers === match.overs ? undefined : newOvers,
-        targetRevisionReason: newOvers === match.overs ? undefined : reason,
-      });
-    } else {
-      updateSetup({
-        reducedOvers: newOvers === match.overs ? undefined : newOvers,
-        targetRevisionReason: newOvers === match.overs ? undefined : reason,
-      });
-    }
+    adjustMatchOvers(newOvers, reason);
   };
 
   return (

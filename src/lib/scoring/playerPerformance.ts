@@ -153,8 +153,12 @@ export function calculatePlayerPerformance(
     const teamB = lookup.team(match.teamBId);
     const player = lookup.player(playerId);
 
-    const isInTeamA = player?.teamId === match.teamAId || state?.setup.playingXI[match.teamAId]?.playerIds?.includes(playerId);
-    const isInTeamB = player?.teamId === match.teamBId || state?.setup.playingXI[match.teamBId]?.playerIds?.includes(playerId);
+    const isInPlayingXIA = Boolean(state?.setup.playingXI[match.teamAId]?.playerIds?.includes(playerId));
+    const isInPlayingXIB = Boolean(state?.setup.playingXI[match.teamBId]?.playerIds?.includes(playerId));
+    const inPlayingXI = isInPlayingXIA || isInPlayingXIB;
+
+    const isInTeamA = player?.teamId === match.teamAId || isInPlayingXIA;
+    const isInTeamB = player?.teamId === match.teamBId || isInPlayingXIB;
 
     if (!isInTeamA && !isInTeamB && !state) {
       continue;
@@ -167,7 +171,7 @@ export function calculatePlayerPerformance(
     let matchBowling: PlayerMatchPerformance["bowling"] | undefined = undefined;
     let matchFielding: PlayerMatchPerformance["fielding"] | undefined = undefined;
 
-    let playedThisMatch = false;
+    let playedThisMatch = inPlayingXI;
 
     if (state) {
       // 1. Batting in any innings
@@ -287,24 +291,20 @@ export function calculatePlayerPerformance(
       }
     }
 
-    if (playedThisMatch || match.status === "COMPLETED" || match.status === "LIVE") {
-      if (playedThisMatch) {
-        matchesCount++;
-      }
-      if (matchBatting || matchBowling || matchFielding) {
-        matchHistory.push({
-          matchId: match.id,
-          matchNumber: match.matchNumber,
-          opponentTeamName: opponentTeam?.name ?? "Opponent",
-          opponentTeamLogo: opponentTeam?.logoUrl,
-          matchDate: match.scheduledAt,
-          status: match.status,
-          resultText: match.resultText ?? state?.resultText,
-          batting: matchBatting,
-          bowling: matchBowling,
-          fielding: matchFielding,
-        });
-      }
+    if (playedThisMatch) {
+      matchesCount++;
+      matchHistory.push({
+        matchId: match.id,
+        matchNumber: match.matchNumber,
+        opponentTeamName: opponentTeam?.name ?? "Opponent",
+        opponentTeamLogo: opponentTeam?.logoUrl,
+        matchDate: match.scheduledAt,
+        status: match.status,
+        resultText: match.resultText ?? state?.resultText,
+        batting: matchBatting,
+        bowling: matchBowling,
+        fielding: matchFielding,
+      });
     }
   }
 

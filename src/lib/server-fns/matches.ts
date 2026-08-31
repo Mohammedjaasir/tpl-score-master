@@ -347,3 +347,25 @@ export const updateMatchStatusServerFn = createServerFn({ method: "POST" })
 
     return data as SupabaseMatch;
   });
+
+/**
+ * Server Function: Authoritatively updates total_overs for a match in Supabase.
+ */
+export const updateMatchOversServerFn = createServerFn({ method: "POST" })
+  .validator((input: { matchId: string; overs: number }) => input)
+  .handler(async ({ data: input }) => {
+    const supabaseAdmin = getServerSupabaseAdmin();
+
+    const { data, error } = await supabaseAdmin
+      .from("matches")
+      .update({ total_overs: input.overs })
+      .eq("id", input.matchId)
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update match overs: ${error?.message || "Unknown error"}`);
+    }
+
+    return data as SupabaseMatch;
+  });

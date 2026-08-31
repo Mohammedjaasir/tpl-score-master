@@ -17,6 +17,7 @@ import {
   type GenerateScheduleInput,
   createMatchServerFn,
   updateMatchStatusServerFn,
+  updateMatchOversServerFn,
 } from "@/lib/server-fns/matches";
 
 export const TOURNAMENT_NAME = "TPL 2026";
@@ -598,6 +599,24 @@ export class SupabaseMatchRepository implements MatchRepository {
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] createMatch server error:", err?.message);
       throw new Error(`Failed to create match: ${err?.message || "Server error"}`);
+    }
+  }
+
+  async updateMatchOvers(matchId: string, overs: number): Promise<Match> {
+    try {
+      const updatedRow = await updateMatchOversServerFn({ data: { matchId, overs } });
+      const updatedMatch = toMatch(updatedRow);
+      lookup.updateMatch(matchId, updatedMatch);
+      return updatedMatch;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] updateMatchOvers server error:", err?.message);
+      const existing = lookup.match(matchId);
+      if (existing) {
+        const updated = { ...existing, overs };
+        lookup.updateMatch(matchId, updated);
+        return updated;
+      }
+      throw new Error(`Failed to update match overs: ${err?.message || "Server error"}`);
     }
   }
 

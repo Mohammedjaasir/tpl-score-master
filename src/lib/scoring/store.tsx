@@ -448,6 +448,47 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
             console.warn("[updateSetup] toss persist notice:", err);
           });
       }
+
+      // If match overs are reduced/revised, authoritatively persist total_overs to matches table
+      const revisedOvers = patch.secondInningsReducedOvers ?? patch.reducedOvers;
+      if (typeof revisedOvers === "number" && revisedOvers > 0) {
+        matchRepository
+          .updateMatchOvers(matchId, revisedOvers)
+          .then((updated) => {
+            setMatchData(updated);
+            broadcastTournamentUpdate();
+          })
+          .catch((err) => {
+            console.warn("[updateSetup] overs persist notice:", err);
+          });
+      }
+    },
+    [matchId, broadcastDoc],
+  );
+
+  const adjustMatchOvers = useCallback(
+    async (newOvers: number, reason?: string) => {
+      if (newOvers < 1) return;
+
+      setDoc((d) => {
+        const nextSetup = {
+          ...d.setup,
+          reducedOvers: newOvers,
+          secondInningsReducedOvers: newOvers,
+          targetRevisionReason: reason || undefined,
+        };
+        const next = { ...d, setup: nextSetup };
+        broadcastDoc(next);
+        return next;
+      });
+
+      try {
+        const updated = await matchRepository.updateMatchOvers(matchId, newOvers);
+        setMatchData(updated);
+        broadcastTournamentUpdate();
+      } catch (err) {
+        console.warn("[adjustMatchOvers] persist error:", err);
+      }
     },
     [matchId, broadcastDoc],
   );
@@ -905,6 +946,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     activeStrikerId,
     activeNonStrikerId,
     updateSetup,
+    adjustMatchOvers,
     setBowler,
     setBatter,
     record,

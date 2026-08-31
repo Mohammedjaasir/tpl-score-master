@@ -80,6 +80,7 @@ export function PublicMatchCentre({
   const currentInnings = state?.innings[currentInningsIndex];
   const firstInnings = state?.innings[0];
   const secondInnings = state?.innings[1];
+  const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
 
   const battingTeam = currentInnings ? lookup.team(currentInnings.battingTeamId) : teamFirst;
   const bowlingTeam = currentInnings ? lookup.team(currentInnings.bowlingTeamId) : teamSecond;
@@ -365,9 +366,42 @@ export function PublicMatchCentre({
   const singleMatchStats = useMemo(() => (state ? calculateSingleMatchStats(state) : null), [state]);
   const matchMvpList = useMemo(() => calculateMatchMVP(state), [state]);
 
-  // Player of the match lookup
+  // Player of the match lookup (Authoritative MVP computation)
   const momPlayerId = match.manOfTheMatchId ?? state?.match.manOfTheMatchId;
-  const momPlayer = momPlayerId ? lookup.player(momPlayerId) : undefined;
+  const matchMVP = useMemo(() => {
+    let targetPlayerId = momPlayerId;
+    if (!targetPlayerId && isDone && matchMvpList.length > 0) {
+      targetPlayerId = matchMvpList[0].playerId;
+    }
+    if (!targetPlayerId) return undefined;
+
+    const mvpItem = matchMvpList.find((m) => m.playerId === targetPlayerId);
+    const p = lookup.player(targetPlayerId);
+
+    if (p) {
+      return {
+        player: p,
+        totalPoints: mvpItem?.totalPoints ?? 0,
+        performanceSummary: mvpItem?.performanceSummary ?? "Player of the Match",
+      };
+    } else if (mvpItem) {
+      return {
+        player: {
+          id: mvpItem.playerId,
+          name: mvpItem.playerName,
+          shortName: mvpItem.playerName,
+          teamId: mvpItem.teamId,
+          role: mvpItem.playerRole,
+          avatar: mvpItem.playerAvatar,
+        },
+        totalPoints: mvpItem.totalPoints,
+        performanceSummary: mvpItem.performanceSummary,
+      };
+    }
+    return undefined;
+  }, [momPlayerId, matchMvpList, isDone]);
+
+  const momPlayer = momPlayerId ? lookup.player(momPlayerId) : matchMVP?.player;
   const momBatterStat = momPlayerId ? state?.innings.flatMap((i) => i.batters).find((b) => b.playerId === momPlayerId) : undefined;
   const momBowlerStat = momPlayerId ? state?.innings.flatMap((i) => i.bowlers).find((b) => b.playerId === momPlayerId) : undefined;
 
@@ -461,7 +495,7 @@ export function PublicMatchCentre({
             <span>•</span>
             <span className="font-bold uppercase tracking-wider">Match #{match.matchNumber}</span>
             <span>•</span>
-            <span>{match.overs} Overs Match</span>
+            <span>{effectiveMatchOvers} Overs Match</span>
           </div>
           <div className="flex items-center gap-4 text-white/60 text-[11px]">
             {match.venue && (
@@ -788,20 +822,22 @@ export function PublicMatchCentre({
 
               {/* Player of the Match & Quick Tab Navigators */}
               <div className="flex flex-col gap-2 pt-2 border-t border-[#E5E5E5]">
-                {matchMVP && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#5F6368]">Player of the Match:</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-[#5F6368]">Player of the Match:</span>
+                  {matchMVP?.player ? (
                     <button
                       onClick={() => setSelectedPerformancePlayerId(matchMVP.player.id)}
                       className="font-black text-[#111111] hover:text-[#D9A928] hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <span>{matchMVP.player.name}</span>
                       <span className="text-[10px] text-[#5F6368] font-normal">
-                        ({lookup.team(matchMVP.player.teamId)?.shortName})
+                        ({lookup.team(matchMVP.player.teamId)?.shortName ?? "TPL"})
                       </span>
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    <span className="font-bold text-[#5F6368] italic">To be announced</span>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <button
@@ -854,7 +890,7 @@ export function PublicMatchCentre({
                 </div>
                 <div className="bg-[#F7F7F5] p-2.5 rounded-xl">
                   <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Overs</span>
-                  <span className="font-black text-[#111111]">{match.overs} Overs / Side</span>
+                  <span className="font-black text-[#111111]">{effectiveMatchOvers} Overs / Side</span>
                 </div>
                 <div className="bg-[#F7F7F5] p-2.5 rounded-xl col-span-2 sm:col-span-1">
                   <span className="text-[10px] font-bold text-[#5F6368] uppercase block">Venue</span>
@@ -880,7 +916,7 @@ export function PublicMatchCentre({
                   {[striker, nonStriker].filter(Boolean).map((b) => {
                     const p = lookup.player(b!.playerId);
                     const isStriker = b!.playerId === currentInnings.strikerId;
-                    const sr = b!.balls > 0 ? ((b!.runs / b!.balls) * 100).toFixed(1) : "-";
+                    const sr = b!.balls > 0 ? ((b!.runs / b!.balls) * 100).toFixed(2) : "0.00";
                     return (
                       <div key={b!.playerId} className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
@@ -1410,11 +1446,11 @@ export function PublicMatchCentre({
                 </div>
 
                 {/* Batting Table */}
-                <div className="border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-xs">
-                  <table className="w-full text-xs">
+                <div className="border border-[#E5E5E5] rounded-2xl overflow-x-auto shadow-xs">
+                  <table className="min-w-[500px] w-full text-xs">
                     <thead>
                       <tr className="bg-[#FAFAF8] border-b border-[#E5E5E5] text-[10px] font-black uppercase text-[#5F6368]">
-                        <th className="px-4 py-3 text-left">Batting</th>
+                        <th className="px-4 py-3 text-left">BATTER</th>
                         <th className="px-3 py-3 text-right">R</th>
                         <th className="px-3 py-3 text-right">B</th>
                         <th className="px-3 py-3 text-right">4s</th>
@@ -1425,7 +1461,7 @@ export function PublicMatchCentre({
                     <tbody className="divide-y divide-[#E5E5E5]">
                       {sortedBatters.map((b) => {
                         const p = lookup.player(b.playerId);
-                        const sr = b.balls > 0 ? ((b.runs / b.balls) * 100).toFixed(1) : "-";
+                        const sr = b.balls > 0 ? ((b.runs / b.balls) * 100).toFixed(2) : "0.00";
                         return (
                           <tr key={b.playerId} className={b.out ? "hover:bg-[#FAFAF8]" : "bg-[#D9A928]/5"}>
                             <td className="px-4 py-3">
@@ -1451,7 +1487,7 @@ export function PublicMatchCentre({
                                 {b.out ? b.dismissal : <span className="text-[#16A34A] font-bold">not out</span>}
                               </p>
                             </td>
-                            <td className="px-3 py-3 text-right font-black text-[#111111] tabular-nums">{b.runs}</td>
+                            <td className="px-3 py-3 text-right text-sm font-black text-[#111111] tabular-nums">{b.runs}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.balls}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.fours}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.sixes}</td>
@@ -1472,16 +1508,16 @@ export function PublicMatchCentre({
                 </div>
 
                 {/* Bowling Table */}
-                <div className="border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-xs">
-                  <table className="w-full text-xs">
+                <div className="border border-[#E5E5E5] rounded-2xl overflow-x-auto shadow-xs">
+                  <table className="min-w-[480px] w-full text-xs">
                     <thead>
                       <tr className="bg-[#FAFAF8] border-b border-[#E5E5E5] text-[10px] font-black uppercase text-[#5F6368]">
-                        <th className="px-4 py-3 text-left">Bowling</th>
+                        <th className="px-4 py-3 text-left">BOWLER</th>
                         <th className="px-3 py-3 text-right">O</th>
                         <th className="px-3 py-3 text-right">M</th>
                         <th className="px-3 py-3 text-right">R</th>
                         <th className="px-3 py-3 text-right">W</th>
-                        <th className="px-4 py-3 text-right">Econ</th>
+                        <th className="px-4 py-3 text-right">ECON</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E5E5]">
@@ -1501,7 +1537,7 @@ export function PublicMatchCentre({
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{oversText(b.legalBalls)}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.maidens}</td>
                             <td className="px-3 py-3 text-right font-bold text-[#5F6368] tabular-nums">{b.runs}</td>
-                            <td className="px-3 py-3 text-right font-black text-[#9A6A05] bg-[#D9A928]/10 tabular-nums">{b.wickets}</td>
+                            <td className="px-3 py-3 text-right text-sm font-black text-[#9A6A05] bg-[#D9A928]/15 px-2 py-0.5 rounded-md tabular-nums">{b.wickets}</td>
                             <td className="px-4 py-3 text-right font-bold text-[#5F6368] tabular-nums">{(b.economy ?? 0).toFixed(2)}</td>
                           </tr>
                         );

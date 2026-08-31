@@ -50,6 +50,22 @@ export function oversText(legalBalls: number): string {
   return `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`;
 }
 
+/**
+ * Converts legal balls to exact mathematical overs.
+ * e.g., 20 legal balls = 3 + 2/6 = 3.333... overs
+ */
+export function legalBallsToOvers(legalBalls: number): number {
+  return legalBalls > 0 ? legalBalls / 6 : 0;
+}
+
+/**
+ * Computes canonical runs per over (Run Rate) from runs and legal balls.
+ * e.g., 45 runs in 20 legal balls = (45 / 20) * 6 = 13.50
+ */
+export function runsPerOver(runs: number, legalBalls: number): number {
+  return legalBalls > 0 ? (runs / legalBalls) * 6 : 0;
+}
+
 export function ballLabel(d?: Delivery | null): { label: string; kind: BallSummary["kind"] } {
   if (!d) return { label: "", kind: "dot" };
   if (d.wicket) return { label: "W", kind: "wicket" };

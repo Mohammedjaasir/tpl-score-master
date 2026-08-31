@@ -225,7 +225,7 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
             <div className="h-8 w-px bg-[#E5E5E5]" />
             <div className="text-center">
               <p className="text-lg sm:text-xl font-black text-[#D9A928] tabular-nums">
-                {stats.batting.strikeRate > 0 ? stats.batting.strikeRate.toFixed(1) : "-"}
+                {stats.batting.strikeRate > 0 ? stats.batting.strikeRate.toFixed(2) : "0.00"}
               </p>
               <p className="text-[9px] font-bold text-[#5F6368] uppercase tracking-widest">SR</p>
             </div>
@@ -318,13 +318,17 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
           </div>
           <div className="bg-[#F7F7F5] p-3 rounded-2xl text-center">
             <p className="text-xl font-black text-[#111111] tabular-nums">
-              {stats.batting.average > 0 ? stats.batting.average.toFixed(1) : "-"}
+              {stats.batting.average > 0
+                ? stats.batting.average.toFixed(2)
+                : stats.batting.runs > 0
+                ? `${stats.batting.runs.toFixed(2)}*`
+                : "0.00"}
             </p>
             <p className="text-[9px] font-bold text-[#5F6368] uppercase tracking-wider">Average</p>
           </div>
           <div className="bg-[#F7F7F5] p-3 rounded-2xl text-center">
             <p className="text-xl font-black text-[#111111] tabular-nums">
-              {stats.batting.strikeRate > 0 ? stats.batting.strikeRate.toFixed(1) : "-"}
+              {stats.batting.strikeRate > 0 ? stats.batting.strikeRate.toFixed(2) : "0.00"}
             </p>
             <p className="text-[9px] font-bold text-[#5F6368] uppercase tracking-wider">Strike Rate</p>
           </div>
@@ -362,13 +366,13 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
             </div>
             <div className="bg-[#F7F7F5] p-3 rounded-2xl text-center">
               <p className="text-xl font-black text-[#111111] tabular-nums">
-                {stats.bowling.economy > 0 ? stats.bowling.economy.toFixed(2) : "-"}
+                {stats.bowling.economy > 0 ? stats.bowling.economy.toFixed(2) : "0.00"}
               </p>
               <p className="text-[9px] font-bold text-[#5F6368] uppercase tracking-wider">Economy</p>
             </div>
             <div className="bg-[#F7F7F5] p-3 rounded-2xl text-center">
               <p className="text-xl font-black text-[#111111] tabular-nums">
-                {stats.bowling.average > 0 ? stats.bowling.average.toFixed(1) : "-"}
+                {stats.bowling.average > 0 ? stats.bowling.average.toFixed(2) : "0.00"}
               </p>
               <p className="text-[9px] font-bold text-[#5F6368] uppercase tracking-wider">Average</p>
             </div>
@@ -467,15 +471,15 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
                 </div>
 
                 {/* Match Figures */}
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex flex-wrap items-center justify-end gap-3 text-xs">
                   {m.batting && (
                     <div className="text-right">
                       <p className="font-black text-[#111111] tabular-nums">
                         {m.batting.runs}
-                        {m.batting.isNotOut && "*"} ({m.batting.balls})
+                        {m.batting.isNotOut && "*"} <span className="text-[11px] text-[#5F6368] font-bold">({m.batting.balls}b)</span>
                       </p>
                       <p className="text-[9px] text-[#5F6368] font-bold">
-                        {m.batting.fours}x4 • {m.batting.sixes}x6
+                        {m.batting.fours}x4 • {m.batting.sixes}x6 • SR {m.batting.strikeRate.toFixed(2)}
                       </p>
                     </div>
                   )}
@@ -483,18 +487,31 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
                   {m.bowling && (
                     <div className="text-right">
                       <p className="font-black text-[#9A6A05] tabular-nums">
-                        {m.bowling.wickets}/{m.bowling.runs}
+                        {m.bowling.wickets}/{m.bowling.runs} <span className="text-[11px] text-[#5F6368] font-bold">({m.bowling.oversText} ov)</span>
                       </p>
                       <p className="text-[9px] text-[#5F6368] font-bold">
-                        {m.bowling.oversText} ov
+                        Econ {m.bowling.economy.toFixed(2)}
                       </p>
+                    </div>
+                  )}
+
+                  {m.fielding && (m.fielding.catches > 0 || m.fielding.runOuts > 0 || m.fielding.stumpings > 0) && (
+                    <div className="text-right">
+                      <p className="font-bold text-[#111111] text-[11px]">
+                        {[
+                          m.fielding.catches > 0 ? `${m.fielding.catches}c` : null,
+                          m.fielding.runOuts > 0 ? `${m.fielding.runOuts}ro` : null,
+                          m.fielding.stumpings > 0 ? `${m.fielding.stumpings}st` : null,
+                        ].filter(Boolean).join(" • ")}
+                      </p>
+                      <p className="text-[9px] text-[#5F6368] font-bold">Fielding</p>
                     </div>
                   )}
 
                   <Link
                     to="/scorecard/$matchId"
                     params={{ matchId: m.matchId }}
-                    className="tap px-3 py-1.5 rounded-xl bg-[#F7F7F5] hover:bg-[#D9A928] hover:text-black border border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] transition-all"
+                    className="tap shrink-0 px-3 py-1.5 rounded-xl bg-[#F7F7F5] hover:bg-[#D9A928] hover:text-black border border-[#E5E5E5] text-[10px] font-black uppercase tracking-wider text-[#111111] transition-all"
                   >
                     Match Centre →
                   </Link>

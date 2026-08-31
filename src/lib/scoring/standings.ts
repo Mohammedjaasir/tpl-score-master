@@ -1,5 +1,5 @@
 import type { Match, Team } from "@/types/cricket";
-import { buildMatchState } from "@/lib/scoring/engine";
+import { buildMatchState, runsPerOver, legalBallsToOvers, oversText } from "@/lib/scoring/engine";
 
 export interface TeamStanding {
   pos: number;
@@ -16,8 +16,12 @@ export interface TeamStanding {
   nrr: number;
   runsFor: number;
   oversFor: number;
+  oversForText: string;
+  legalBallsFor: number;
   runsAgainst: number;
   oversAgainst: number;
+  oversAgainstText: string;
+  legalBallsAgainst: number;
 }
 
 export function calculateStandings(teams: Team[], matches: Match[]): TeamStanding[] {
@@ -34,9 +38,9 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
       noResult: number;
       points: number;
       runsFor: number;
-      oversFor: number;
+      legalBallsFor: number;
       runsAgainst: number;
-      oversAgainst: number;
+      legalBallsAgainst: number;
     }
   >();
 
@@ -49,9 +53,9 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
       noResult: 0,
       points: 0,
       runsFor: 0,
-      oversFor: 0,
+      legalBallsFor: 0,
       runsAgainst: 0,
-      oversAgainst: 0,
+      legalBallsAgainst: 0,
     });
   });
 
@@ -64,10 +68,10 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     statsB.played += 1;
 
     let runsA = 0;
-    let oversA = 0;
+    let legalBallsA = 0;
     let runsB = 0;
-    let oversB = 0;
-    let winnerId: string | null = null;
+    let legalBallsB = 0;
+    let winnerId: string | null = m.winnerId ?? null;
     let isTie = false;
 
     if (typeof window !== "undefined") {
@@ -78,33 +82,27 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
           const state = buildMatchState({ match: m, setup: doc.setup, deliveries: doc.deliveries });
           const inn1 = state.innings[0];
           const inn2 = state.innings[1];
-          if (inn1 && inn2) {
+          if (inn1) {
             const team1Runs = inn1.runs;
-            const team2Runs = inn2.runs;
-            const xiCount1 = doc.setup?.playingXI[inn1.battingTeamId]?.playerIds?.length || 11;
-            const xiCount2 = doc.setup?.playingXI[inn2.battingTeamId]?.playerIds?.length || 11;
-            const team1IsAllOut = inn1.wickets >= Math.max(1, xiCount1 - 1);
-            const team2IsAllOut = inn2.wickets >= Math.max(1, xiCount2 - 1);
-            const scheduledOvers1 = inn1.maxOvers || m.overs || 5;
-            const scheduledOvers2 = inn2.maxOvers || m.overs || 5;
-            const team1Overs = team1IsAllOut ? scheduledOvers1 : Math.max(0.1, inn1.oversFloat);
-            const team2Overs = team2IsAllOut ? scheduledOvers2 : Math.max(0.1, inn2.oversFloat);
+            const team1Balls = inn1.legalBalls;
+            const team2Runs = inn2 ? inn2.runs : 0;
+            const team2Balls = inn2 ? inn2.legalBalls : 0;
 
             if (inn1.battingTeamId === m.teamAId) {
               runsA = team1Runs;
-              oversA = team1Overs;
+              legalBallsA = team1Balls;
               runsB = team2Runs;
-              oversB = team2Overs;
+              legalBallsB = team2Balls;
             } else {
               runsB = team1Runs;
-              oversB = team1Overs;
+              legalBallsB = team1Balls;
               runsA = team2Runs;
-              oversA = team2Overs;
+              legalBallsA = team2Balls;
             }
 
             if (team1Runs > team2Runs) winnerId = inn1.battingTeamId;
-            else if (team2Runs > team1Runs) winnerId = inn2.battingTeamId;
-            else isTie = true;
+            else if (team2Runs > team1Runs) winnerId = inn2 ? inn2.battingTeamId : null;
+            else if (team1Runs === team2Runs && team2Balls > 0) isTie = true;
           }
         }
       } catch {}
@@ -126,21 +124,23 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     }
 
     statsA.runsFor += runsA;
-    statsA.oversFor += oversA;
+    statsA.legalBallsFor += legalBallsA;
     statsA.runsAgainst += runsB;
-    statsA.oversAgainst += oversB;
+    statsA.legalBallsAgainst += legalBallsB;
 
     statsB.runsFor += runsB;
-    statsB.oversFor += oversB;
+    statsB.legalBallsFor += legalBallsB;
     statsB.runsAgainst += runsA;
-    statsB.oversAgainst += oversA;
+    statsB.legalBallsAgainst += legalBallsA;
   });
 
   const list: TeamStanding[] = teams.map((t) => {
     const s = map.get(t.id)!;
-    const rpoFor = s.oversFor > 0 ? s.runsFor / s.oversFor : 0;
-    const rpoAgainst = s.oversAgainst > 0 ? s.runsAgainst / s.oversAgainst : 0;
-    const nrr = s.played > 0 ? rpoFor - rpoAgainst : 0;
+    const rpoFor = runsPerOver(s.runsFor, s.legalBallsFor);
+    const rpoAgainst = runsPerOver(s.runsAgainst, s.legalBallsAgainst);
+    const nrr = s.played > 0 && (s.legalBallsFor > 0 || s.legalBallsAgainst > 0)
+      ? rpoFor - rpoAgainst
+      : 0;
 
     return {
       pos: 0,
@@ -156,9 +156,13 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
       points: s.points,
       nrr,
       runsFor: s.runsFor,
-      oversFor: s.oversFor,
+      oversFor: legalBallsToOvers(s.legalBallsFor),
+      oversForText: oversText(s.legalBallsFor),
+      legalBallsFor: s.legalBallsFor,
       runsAgainst: s.runsAgainst,
-      oversAgainst: s.oversAgainst,
+      oversAgainst: legalBallsToOvers(s.legalBallsAgainst),
+      oversAgainstText: oversText(s.legalBallsAgainst),
+      legalBallsAgainst: s.legalBallsAgainst,
     };
   });
 

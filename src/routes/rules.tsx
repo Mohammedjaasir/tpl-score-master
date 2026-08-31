@@ -184,7 +184,7 @@ function OfficialRulesPage() {
               </ul>
 
               <p className="text-[11px] italic text-[#5F6368]">
-                * Note: If a team is bowled out before their full quota of overs, the total scheduled overs (e.g. 5.0) are used for NRR calculation rather than the actual overs faced.
+                * Note: Net Run Rate is derived strictly from actual legal deliveries faced and bowled across all matches (e.g. 20 legal balls = 3.333 overs; 3.4 overs = 22 legal balls = 3.667 overs) for both early chases and all-out innings.
               </p>
             </div>
           </section>
