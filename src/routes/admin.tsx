@@ -7,7 +7,7 @@ import { lookup, matchRepository, TOURNAMENT_NAME } from "@/lib/repositories";
 import { broadcastTournamentUpdate } from "@/lib/scoring/store";
 import { Logo } from "@/components/brand/Logo";
 import { TeamLogo } from "@/components/team/TeamLogo";
-import { formatMatchTime } from "@/lib/utils";
+import { formatMatchTime, parseTime12To24, parse24ToTime12 } from "@/lib/utils";
 import type { Match, Player, Team } from "@/types/cricket";
 import {
   LayoutDashboard,
@@ -110,16 +110,30 @@ function AdminPortalPage() {
   const [selectedPlayerForView, setSelectedPlayerForView] = useState<Player | null>(null);
 
   // Tournament control modals
+  const [showSingleMatchModal, setShowSingleMatchModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showResetAllModal, setShowResetAllModal] = useState(false);
   const [showScheduleGeneratorModal, setShowScheduleGeneratorModal] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
-  // Schedule generator state
+  // Single Match state
+  const [singleMatchTeam1, setSingleMatchTeam1] = useState("");
+  const [singleMatchTeam2, setSingleMatchTeam2] = useState("");
+  const [singleMatchDate, setSingleMatchDate] = useState("2026-08-30");
+  const [singleMatchHour, setSingleMatchHour] = useState("02");
+  const [singleMatchMinute, setSingleMatchMinute] = useState("30");
+  const [singleMatchAmPm, setSingleMatchAmPm] = useState<"AM" | "PM">("PM");
+  const [singleMatchOvers, setSingleMatchOvers] = useState(5);
+  const [singleMatchBallsPerOver, setSingleMatchBallsPerOver] = useState(6);
+  const [singleMatchVenue, setSingleMatchVenue] = useState("TPL Cricket Ground");
+
+  // Schedule generator state (12-hour format)
   const [genGroup1Teams, setGenGroup1Teams] = useState<string[]>(["", "", ""]);
   const [genGroup2Teams, setGenGroup2Teams] = useState<string[]>(["", "", ""]);
   const [genStartDate, setGenStartDate] = useState("2026-08-30");
-  const [genStartTime, setGenStartTime] = useState("09:00");
+  const [genStartHour, setGenStartHour] = useState("09");
+  const [genStartMinute, setGenStartMinute] = useState("00");
+  const [genStartAmPm, setGenStartAmPm] = useState<"AM" | "PM">("AM");
   const [genOvers, setGenOvers] = useState(5);
   const [genBallsPerOver, setGenBallsPerOver] = useState(6);
   const [genIntervalMinutes, setGenIntervalMinutes] = useState(45);
@@ -128,7 +142,9 @@ function AdminPortalPage() {
   const [knockoutStage, setKnockoutStage] = useState<"Semi-Final 1" | "Semi-Final 2" | "Final">("Semi-Final 1");
   const [knockoutTeamA, setKnockoutTeamA] = useState("");
   const [knockoutTeamB, setKnockoutTeamB] = useState("");
-  const [knockoutTime, setKnockoutTime] = useState("16:00");
+  const [knockoutHour, setKnockoutHour] = useState("04");
+  const [knockoutMinute, setKnockoutMinute] = useState("00");
+  const [knockoutAmPm, setKnockoutAmPm] = useState<"AM" | "PM">("PM");
   const [knockoutDate, setKnockoutDate] = useState("2026-08-30");
 
   // Schedule action status state
@@ -260,6 +276,33 @@ function AdminPortalPage() {
   // Auto-populate group 1 & group 2 defaults with unique teams when teams are loaded
   useEffect(() => {
     if (teams.length >= 6) {
+      // 1. First attempt to restore saved group selections from localStorage
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.localStorage.getItem("tpl-schedule-groups");
+          if (raw) {
+            const saved = JSON.parse(raw);
+            if (
+              Array.isArray(saved?.group1) &&
+              Array.isArray(saved?.group2) &&
+              saved.group1.length === 3 &&
+              saved.group2.length === 3
+            ) {
+              const combined = new Set([...saved.group1, ...saved.group2]);
+              const allExist = [...saved.group1, ...saved.group2].every((id) =>
+                teams.some((t) => t.id === id)
+              );
+              if (combined.size === 6 && allExist) {
+                setGenGroup1Teams(saved.group1);
+                setGenGroup2Teams(saved.group2);
+                return;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // 2. If no saved selection, check team groupName metadata from database
       if (!genGroup1Teams[0] && !genGroup2Teams[0]) {
         const g1 = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
         const g2 = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
@@ -273,16 +316,58 @@ function AdminPortalPage() {
             return;
           }
         }
-        // Fallback to first 6 unique teams
+        // 3. Fallback to first 6 unique teams
         setGenGroup1Teams([teams[0].id, teams[1].id, teams[2].id]);
         setGenGroup2Teams([teams[3].id, teams[4].id, teams[5].id]);
       }
     }
   }, [teams]);
 
+  // Next available unique match number
+  const nextMatchNumber = useMemo(() => {
+    if (matches.length === 0) return 1;
+    const max = Math.max(...matches.map((m) => m.matchNumber || 0));
+    return max + 1;
+  }, [matches]);
+
+  // Team 2 available options for Single Match (excludes Team 1)
+  const availableTeam2Options = useMemo(() => {
+    return teams.filter((t) => t.id !== singleMatchTeam1);
+  }, [teams, singleMatchTeam1]);
+
+  const handleTeam1Change = (newTeam1Id: string) => {
+    setSingleMatchTeam1(newTeam1Id);
+    if (newTeam1Id === singleMatchTeam2) {
+      const nextAvailable = teams.find((t) => t.id !== newTeam1Id);
+      setSingleMatchTeam2(nextAvailable ? nextAvailable.id : "");
+    }
+  };
+
+  const handleOpenSingleMatchModal = () => {
+    setScheduleActionError(null);
+    if (teams.length >= 2) {
+      setSingleMatchTeam1(teams[0].id);
+      setSingleMatchTeam2(teams[1].id);
+    } else {
+      setSingleMatchTeam1("");
+      setSingleMatchTeam2("");
+    }
+    setSingleMatchOvers(5);
+    setSingleMatchBallsPerOver(6);
+    setSingleMatchVenue("TPL Cricket Ground");
+    setShowSingleMatchModal(true);
+  };
+
   // Modal body scroll lock and escape key handler
   useEffect(() => {
-    const isAnyModalOpen = showScheduleGeneratorModal || showResetAllModal || showResetConfirm;
+    const isAnyModalOpen =
+      showSingleMatchModal ||
+      showScheduleGeneratorModal ||
+      showResetAllModal ||
+      showResetConfirm ||
+      showKnockoutModal ||
+      Boolean(selectedPlayerForView);
+
     if (!isAnyModalOpen) return;
 
     const originalOverflow = document.body.style.overflow;
@@ -290,9 +375,11 @@ function AdminPortalPage() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isScheduleActionLoading) {
+        setShowSingleMatchModal(false);
         setShowScheduleGeneratorModal(false);
         setShowResetAllModal(false);
         setShowResetConfirm(false);
+        setShowKnockoutModal(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -301,7 +388,15 @@ function AdminPortalPage() {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showScheduleGeneratorModal, showResetAllModal, showResetConfirm, isScheduleActionLoading]);
+  }, [
+    showSingleMatchModal,
+    showScheduleGeneratorModal,
+    showResetAllModal,
+    showResetConfirm,
+    showKnockoutModal,
+    selectedPlayerForView,
+    isScheduleActionLoading,
+  ]);
 
   // Memoized list of all currently selected team IDs across both groups
   const selectedTeamIds = useMemo(() => {
@@ -313,6 +408,57 @@ function AdminPortalPage() {
     return teams.filter((t) => t.id === currentVal || !selectedTeamIds.includes(t.id));
   };
 
+  // ── CREATE SINGLE MATCH HANDLER ──────────────────────────────────────────
+  const handleCreateSingleMatchSubmit = async () => {
+    if (!singleMatchTeam1 || !singleMatchTeam2) {
+      setScheduleActionError("Please select both Team 1 and Team 2.");
+      return;
+    }
+    if (singleMatchTeam1 === singleMatchTeam2) {
+      setScheduleActionError("Team 1 and Team 2 cannot be the same team.");
+      return;
+    }
+    if (!singleMatchDate) {
+      setScheduleActionError("Please choose a valid match start date.");
+      return;
+    }
+    if (singleMatchOvers < 1) {
+      setScheduleActionError("Total overs must be at least 1.");
+      return;
+    }
+
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
+    setResetSuccessMsg(null);
+
+    try {
+      const startTime24 = parseTime12To24(singleMatchHour, singleMatchMinute, singleMatchAmPm);
+      const scheduledIso = `${singleMatchDate}T${startTime24}:00`;
+
+      const created = await matchRepository.createSingleMatch({
+        teamAId: singleMatchTeam1,
+        teamBId: singleMatchTeam2,
+        scheduledAt: scheduledIso,
+        overs: Number(singleMatchOvers) || 5,
+        ballsPerOver: Number(singleMatchBallsPerOver) || 6,
+        venue: singleMatchVenue || "TPL Cricket Ground",
+        matchNumber: nextMatchNumber,
+      });
+
+      const updatedMatches = await matchRepository.list();
+      queryClient.setQueryData(["matches"], updatedMatches);
+      broadcastTournamentUpdate();
+      await refetchMatches();
+      setShowSingleMatchModal(false);
+      setResetSuccessMsg(`Match #${String(created.matchNumber).padStart(2, "0")} created successfully.`);
+    } catch (err: any) {
+      console.error("[handleCreateSingleMatchSubmit] Error:", err);
+      setScheduleActionError(err?.message || "Failed to create single match fixture.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  };
+
   // ── RESET ALL TOURNAMENT MATCHES HANDLER ─────────────────────────────────
   const handleResetAllMatches = async () => {
     setIsScheduleActionLoading(true);
@@ -320,13 +466,18 @@ function AdminPortalPage() {
     setResetSuccessMsg(null);
 
     try {
-      // Purge all client-side localStorage scoring docs
+      // Purge all client-side localStorage scoring docs ONLY (Preserve group assignments & config)
       if (typeof window !== "undefined") {
         try {
           const keysToRemove: string[] = [];
           for (let i = 0; i < window.localStorage.length; i++) {
             const k = window.localStorage.key(i);
-            if (k && k.startsWith("tpl-scoring:")) {
+            if (
+              k &&
+              (k.startsWith("tpl-scoring:") ||
+                k.startsWith("tpl-live-match:") ||
+                k.startsWith("tpl-match-state:"))
+            ) {
               keysToRemove.push(k);
             }
           }
@@ -340,7 +491,7 @@ function AdminPortalPage() {
       await refetchMatches();
       setShowResetAllModal(false);
       setResetSuccessMsg(
-        "All test matches and match-generated statistics have been reset. Master player and team data is preserved."
+        "All test matches and match-generated statistics have been reset. Master player records, teams, and group assignments are strictly preserved."
       );
     } catch (err: any) {
       console.error("[handleResetAllMatches] Error:", err);
@@ -369,11 +520,6 @@ function AdminPortalPage() {
       return;
     }
 
-    if (!genStartTime) {
-      setScheduleActionError("Please choose a valid match start time.");
-      return;
-    }
-
     if (genOvers < 1) {
       setScheduleActionError("Total overs must be at least 1.");
       return;
@@ -384,11 +530,23 @@ function AdminPortalPage() {
     setResetSuccessMsg(null);
 
     try {
+      const startTime24 = parseTime12To24(genStartHour, genStartMinute, genStartAmPm);
+
+      // Save group assignments in localStorage for persistent group configuration
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            "tpl-schedule-groups",
+            JSON.stringify({ group1: genGroup1Teams, group2: genGroup2Teams })
+          );
+        } catch {}
+      }
+
       const generated = await matchRepository.generateTournamentSchedule({
         group1TeamIds: genGroup1Teams,
         group2TeamIds: genGroup2Teams,
         startDate: genStartDate,
-        startTime: genStartTime,
+        startTime: startTime24,
         overs: Number(genOvers) || 5,
         ballsPerOver: Number(genBallsPerOver) || 6,
         intervalMinutes: Number(genIntervalMinutes) || 45,
@@ -442,7 +600,8 @@ function AdminPortalPage() {
 
     try {
       const nextMatchNum = matches.length + 1;
-      const scheduledDateTime = new Date(`${knockoutDate}T${knockoutTime}:00`);
+      const startTime24 = parseTime12To24(knockoutHour, knockoutMinute, knockoutAmPm);
+      const scheduledDateTime = new Date(`${knockoutDate}T${startTime24}:00`);
 
       const newMatch: Match = {
         id: `tpl-knockout-${nextMatchNum}`,
@@ -1118,25 +1277,22 @@ function AdminPortalPage() {
             )}
 
             {/* Control Actions Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-[#111827]">Tournament Fixture Control</h3>
                 <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-                  Generate 9 cross-pool group matches, schedule knockouts, or reset test data.
+                  Create and manage tournament fixtures.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
-                  onClick={() => {
-                    setScheduleActionError(null);
-                    setShowResetAllModal(true);
-                  }}
+                  onClick={handleOpenSingleMatchModal}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-300 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all shadow-xs"
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all min-h-[48px]"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Reset All Matches</span>
+                  <Plus className="h-4 w-4 stroke-[3]" />
+                  <span>Create Single Match</span>
                 </button>
 
                 <button
@@ -1145,7 +1301,7 @@ function AdminPortalPage() {
                     setShowScheduleGeneratorModal(true);
                   }}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all"
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all min-h-[48px]"
                 >
                   <Calendar className="h-3.5 w-3.5" />
                   <span>Generate Schedule (9 Matches)</span>
@@ -1157,10 +1313,22 @@ function AdminPortalPage() {
                     setShowKnockoutModal(true);
                   }}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all"
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-black text-xs uppercase tracking-wider border border-[#E5E7EB] transition-all min-h-[48px]"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Schedule Knockout</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setScheduleActionError(null);
+                    setShowResetAllModal(true);
+                  }}
+                  disabled={isScheduleActionLoading}
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-300 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all shadow-xs min-h-[48px]"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Reset All Matches</span>
                 </button>
               </div>
             </div>
@@ -1606,6 +1774,251 @@ function AdminPortalPage() {
         </div>
       )}
 
+      {/* ── CREATE SINGLE MATCH MODAL ─────────────────────────────────────── */}
+      {showSingleMatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
+          <div className="w-full max-w-lg bg-white border border-[#E5E7EB] rounded-3xl flex flex-col shadow-2xl my-auto max-h-[calc(100dvh-2rem)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header (Fixed/Sticky at Top) */}
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 sm:px-6 py-4 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-[#D9A928]/15 text-[#9A6A05]">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black uppercase text-[#111827]">Create Single Match</h3>
+                  <p className="text-xs text-[#6B7280]">Schedule an individual tournament fixture</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSingleMatchModal(false)}
+                disabled={isScheduleActionLoading}
+                className="text-[#9CA3AF] hover:text-[#111827] p-2 rounded-xl hover:bg-[#F3F4F6] transition-colors"
+                aria-label="Close Modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 sm:py-5 flex flex-col gap-4 overscroll-contain">
+              {/* Match Number Pill Banner */}
+              <div className="p-3.5 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-[#6B7280]">Fixture Number</span>
+                  <span className="text-xs font-black uppercase px-2.5 py-0.5 rounded-full bg-[#D9A928]/20 text-[#9A6A05] border border-[#D9A928]/40">
+                    Match #{String(nextMatchNumber).padStart(2, "0")}
+                  </span>
+                </div>
+                <span className="text-[11px] font-bold text-[#6B7280]">Auto-determined</span>
+              </div>
+
+              {/* Team 1 & Team 2 Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Team 1 */}
+                <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-2">
+                  <label className="text-[10px] font-black uppercase text-[#9A6A05] tracking-wider">
+                    Team 1 (Batting First / Home)
+                  </label>
+                  <select
+                    value={singleMatchTeam1}
+                    onChange={(e) => handleTeam1Change(e.target.value)}
+                    className="w-full bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[48px]"
+                  >
+                    <option value="" disabled>-- Select Team 1 --</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Team 2 */}
+                <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-2">
+                  <label className="text-[10px] font-black uppercase text-[#111827] tracking-wider">
+                    Team 2 (Opponent / Away)
+                  </label>
+                  <select
+                    value={singleMatchTeam2}
+                    onChange={(e) => setSingleMatchTeam2(e.target.value)}
+                    className="w-full bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[48px]"
+                  >
+                    <option value="" disabled>-- Select Team 2 --</option>
+                    {availableTeam2Options.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Date & 12-Hour AM/PM Time Selector */}
+              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                <span className="text-[10px] font-black uppercase text-[#6B7280] tracking-wider">
+                  Schedule Date & Time
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-[#6B7280] uppercase">Date</label>
+                    <input
+                      type="date"
+                      value={singleMatchDate}
+                      onChange={(e) => setSingleMatchDate(e.target.value)}
+                      className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[48px]"
+                    />
+                  </div>
+
+                  {/* 12-Hour AM/PM Time Picker */}
+                  <div>
+                    <label className="text-[10px] font-bold text-[#6B7280] uppercase flex items-center justify-between">
+                      <span>Start Time</span>
+                      <span className="text-[#9A6A05] font-black font-mono">
+                        {parseInt(singleMatchHour, 10)}:{singleMatchMinute} {singleMatchAmPm}
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5 mt-1">
+                      {/* Hour */}
+                      <select
+                        value={singleMatchHour}
+                        onChange={(e) => setSingleMatchHour(e.target.value)}
+                        className="bg-white border border-[#D1D5DB] rounded-xl px-2 py-2 text-xs font-bold text-[#111827] text-center min-h-[48px]"
+                      >
+                        {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map((h) => (
+                          <option key={h} value={h}>{parseInt(h, 10)}</option>
+                        ))}
+                      </select>
+
+                      {/* Minute */}
+                      <select
+                        value={singleMatchMinute}
+                        onChange={(e) => setSingleMatchMinute(e.target.value)}
+                        className="bg-white border border-[#D1D5DB] rounded-xl px-2 py-2 text-xs font-bold text-[#111827] text-center min-h-[48px]"
+                      >
+                        {["00", "15", "30", "45"].map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+
+                      {/* AM / PM Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setSingleMatchAmPm((prev) => prev === "AM" ? "PM" : "AM")}
+                        className="bg-white border border-[#D1D5DB] rounded-xl px-2 py-2 text-xs font-black text-[#111827] hover:bg-[#D9A928]/15 hover:border-[#D9A928] transition-colors min-h-[48px]"
+                      >
+                        {singleMatchAmPm}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Overs & Balls Controls */}
+              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-[#6B7280] tracking-wider">
+                    Match Overs
+                  </label>
+                  <span className="text-xs font-black text-[#9A6A05]">{singleMatchOvers} Overs Per Innings</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSingleMatchOvers((prev) => Math.max(1, prev - 1))}
+                    className="w-12 h-12 rounded-xl bg-white border border-[#D1D5DB] hover:bg-[#F3F4F6] text-[#111827] font-black text-lg flex items-center justify-center transition-colors min-h-[48px] shrink-0"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={singleMatchOvers}
+                    onChange={(e) => setSingleMatchOvers(Math.max(1, parseInt(e.target.value, 10) || 5))}
+                    className="flex-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-center text-sm font-black text-[#111827] min-h-[48px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSingleMatchOvers((prev) => Math.min(50, prev + 1))}
+                    className="w-12 h-12 rounded-xl bg-white border border-[#D1D5DB] hover:bg-[#F3F4F6] text-[#111827] font-black text-lg flex items-center justify-center transition-colors min-h-[48px] shrink-0"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Quick Overs Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-[#6B7280] mr-1">Presets:</span>
+                  {[1, 3, 5, 7, 10, 20].map((ov) => (
+                    <button
+                      key={ov}
+                      type="button"
+                      onClick={() => setSingleMatchOvers(ov)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-colors min-h-[32px] ${
+                        singleMatchOvers === ov
+                          ? "bg-[#D9A928] text-black shadow-xs"
+                          : "bg-white border border-[#D1D5DB] text-[#4B5563] hover:bg-[#F3F4F6]"
+                      }`}
+                    >
+                      {ov} ov
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Venue */}
+              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-[#6B7280] tracking-wider">
+                  Match Venue
+                </label>
+                <input
+                  type="text"
+                  value={singleMatchVenue}
+                  onChange={(e) => setSingleMatchVenue(e.target.value)}
+                  placeholder="e.g. TPL Cricket Ground"
+                  className="w-full bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[48px]"
+                />
+              </div>
+
+              {scheduleActionError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
+                  {scheduleActionError}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer (Sticky at Bottom) */}
+            <div className="shrink-0 px-5 sm:px-6 py-4 border-t border-[#E5E7EB] bg-white grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setScheduleActionError(null);
+                  setShowSingleMatchModal(false);
+                }}
+                disabled={isScheduleActionLoading}
+                className="py-3 sm:py-3.5 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors min-h-[48px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateSingleMatchSubmit}
+                disabled={isScheduleActionLoading || !singleMatchTeam1 || !singleMatchTeam2 || singleMatchTeam1 === singleMatchTeam2}
+                className="py-3 sm:py-3.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase shadow-md flex items-center justify-center gap-2 transition-colors min-h-[48px]"
+              >
+                {isScheduleActionLoading ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Creating Match...</span>
+                  </>
+                ) : (
+                  <span>Create Match</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── SCHEDULE GENERATOR MODAL (9 CROSS-GROUP MATCHES) ─────────────── */}
       {showScheduleGeneratorModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
@@ -1712,7 +2125,8 @@ function AdminPortalPage() {
               </div>
 
               {/* Match Format & Scheduling Parameters */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
+                {/* Date */}
                 <div>
                   <label className="text-[10px] font-bold text-[#6B7280] uppercase">Match 1 Date</label>
                   <input
@@ -1723,18 +2137,49 @@ function AdminPortalPage() {
                   />
                 </div>
 
+                {/* 12-Hour AM/PM Start Time Picker */}
                 <div>
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase">
-                    Start Time ({formatMatchTime(genStartTime)})
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase flex items-center justify-between">
+                    <span>Start Time</span>
+                    <span className="text-[#9A6A05] font-black font-mono">
+                      {parseInt(genStartHour, 10)}:{genStartMinute} {genStartAmPm}
+                    </span>
                   </label>
-                  <input
-                    type="time"
-                    value={genStartTime}
-                    onChange={(e) => setGenStartTime(e.target.value)}
-                    className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[44px]"
-                  />
+                  <div className="grid grid-cols-3 gap-1 mt-1">
+                    {/* Hour */}
+                    <select
+                      value={genStartHour}
+                      onChange={(e) => setGenStartHour(e.target.value)}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1.5 py-2 text-xs font-bold text-[#111827] text-center min-h-[44px]"
+                    >
+                      {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map((h) => (
+                        <option key={h} value={h}>{parseInt(h, 10)}</option>
+                      ))}
+                    </select>
+
+                    {/* Minute */}
+                    <select
+                      value={genStartMinute}
+                      onChange={(e) => setGenStartMinute(e.target.value)}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1.5 py-2 text-xs font-bold text-[#111827] text-center min-h-[44px]"
+                    >
+                      {["00", "15", "30", "45"].map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+
+                    {/* AM / PM Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setGenStartAmPm((prev) => prev === "AM" ? "PM" : "AM")}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1 py-2 text-xs font-black text-[#111827] hover:bg-[#D9A928]/15 hover:border-[#D9A928] transition-colors min-h-[44px]"
+                    >
+                      {genStartAmPm}
+                    </button>
+                  </div>
                 </div>
 
+                {/* Overs */}
                 <div>
                   <label className="text-[10px] font-bold text-[#6B7280] uppercase">Total Overs</label>
                   <input
@@ -1747,6 +2192,7 @@ function AdminPortalPage() {
                   />
                 </div>
 
+                {/* Interval */}
                 <div>
                   <label className="text-[10px] font-bold text-[#6B7280] uppercase">Interval (Mins)</label>
                   <input
@@ -1761,9 +2207,9 @@ function AdminPortalPage() {
               </div>
 
               {/* Fixture Preview Hint */}
-              <div className="p-3 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] text-[#374151] text-[11px] flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] text-[#374151] text-xs flex items-center justify-between">
                 <span>
-                  Generates <strong>9 cross-group fixtures</strong> scheduled at <strong>{genIntervalMinutes} min</strong> intervals starting at <strong>{formatMatchTime(genStartTime)}</strong>.
+                  Generates <strong>9 cross-group fixtures</strong> scheduled at <strong>{genIntervalMinutes} min</strong> intervals starting at <strong>{parseInt(genStartHour, 10)}:{genStartMinute} {genStartAmPm}</strong>.
                 </span>
               </div>
 
@@ -1908,24 +2354,50 @@ function AdminPortalPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-[#4B5563] uppercase">Date</label>
                   <input
                     type="date"
                     value={knockoutDate}
                     onChange={(e) => setKnockoutDate(e.target.value)}
-                    className="w-full mt-1 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl px-3 py-2 text-[#111827]"
+                    className="w-full mt-1 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl px-3 py-2 text-[#111827] min-h-[44px]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[#4B5563] uppercase">Time</label>
-                  <input
-                    type="time"
-                    value={knockoutTime}
-                    onChange={(e) => setKnockoutTime(e.target.value)}
-                    className="w-full mt-1 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl px-3 py-2 text-[#111827]"
-                  />
+                  <label className="text-[10px] font-bold text-[#4B5563] uppercase flex items-center justify-between">
+                    <span>Start Time</span>
+                    <span className="text-[#9A6A05] font-black font-mono">
+                      {parseInt(knockoutHour, 10)}:{knockoutMinute} {knockoutAmPm}
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 mt-1">
+                    <select
+                      value={knockoutHour}
+                      onChange={(e) => setKnockoutHour(e.target.value)}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1.5 py-2 text-xs font-bold text-[#111827] text-center min-h-[44px]"
+                    >
+                      {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map((h) => (
+                        <option key={h} value={h}>{parseInt(h, 10)}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={knockoutMinute}
+                      onChange={(e) => setKnockoutMinute(e.target.value)}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1.5 py-2 text-xs font-bold text-[#111827] text-center min-h-[44px]"
+                    >
+                      {["00", "15", "30", "45"].map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setKnockoutAmPm((prev) => prev === "AM" ? "PM" : "AM")}
+                      className="bg-white border border-[#D1D5DB] rounded-xl px-1 py-2 text-xs font-black text-[#111827] hover:bg-[#D9A928]/15 hover:border-[#D9A928] transition-colors min-h-[44px]"
+                    >
+                      {knockoutAmPm}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

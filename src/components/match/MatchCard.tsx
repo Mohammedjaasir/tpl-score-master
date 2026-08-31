@@ -7,13 +7,78 @@ import { Link } from "@tanstack/react-router";
 import { TeamLogo } from "@/components/team/TeamLogo";
 
 // Preset cricket action backdrops cycling per match
-const MATCH_BACKDROPS = [
-  "/hero-cricket-1.jpg",
-  "/hero-cricket-2.jpg",
-  "/hero-cricket-3.jpg",
-  "/hero-cricket-4.jpg",
-  "/hero-cricket-5.jpg",
-  "/hero-cricketer.jpg",
+// ── Curated Match Backdrop Configurations (9 Unique Thematic Compositions) ──────
+interface MatchBackdropConfig {
+  src: string;
+  position: string;
+  opacity: string;
+  accentGlow: string;
+}
+
+const MATCH_BACKDROPS: MatchBackdropConfig[] = [
+  // Match 1: Opening Clash — Grand Night Stadium Floodlights
+  {
+    src: "/card-stadium-night.jpg",
+    position: "object-center",
+    opacity: "opacity-15 sm:opacity-25",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top,_rgba(217,169,40,0.18)_0%,_transparent_65%)]",
+  },
+  // Match 2: Fast Bowling In Motion — Left-focused Bowler Silhouette
+  {
+    src: "/card-bowler-action.jpg",
+    position: "object-[left_center]",
+    opacity: "opacity-15 sm:opacity-22",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top_left,_rgba(217,169,40,0.16)_0%,_transparent_60%)]",
+  },
+  // Match 3: Iconic Batting Cover Drive — Right-focused Action
+  {
+    src: "/hero-cricketer.jpg",
+    position: "object-[right_center]",
+    opacity: "opacity-12 sm:opacity-18",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top_right,_rgba(217,169,40,0.15)_0%,_transparent_60%)]",
+  },
+  // Match 4: Boundary Shot under Stadium Atmosphere — Right-top
+  {
+    src: "/hero-cricket-1.jpg",
+    position: "object-[right_top]",
+    opacity: "opacity-12 sm:opacity-18",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top,_rgba(217,169,40,0.14)_0%,_transparent_65%)]",
+  },
+  // Match 5: Flying Stumps & Wicket Action — Left-focused
+  {
+    src: "/hero-cricket-4.jpg",
+    position: "object-[left_center]",
+    opacity: "opacity-12 sm:opacity-16",
+    accentGlow: "bg-[radial-gradient(ellipse_at_bottom_left,_rgba(217,169,40,0.14)_0%,_transparent_55%)]",
+  },
+  // Match 6: Sprinting Wicket Celebration — Left-top
+  {
+    src: "/hero-cricket-6.jpg",
+    position: "object-[left_top]",
+    opacity: "opacity-12 sm:opacity-18",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top_left,_rgba(217,169,40,0.15)_0%,_transparent_60%)]",
+  },
+  // Match 7: Golden Championship Trophy — Right-focused Trophy Glow
+  {
+    src: "/card-trophy-stadium.jpg",
+    position: "object-[right_center]",
+    opacity: "opacity-15 sm:opacity-22",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top_right,_rgba(217,169,40,0.2)_0%,_transparent_65%)]",
+  },
+  // Match 8: Milestone Century Bat-Raise Celebration — Right-center
+  {
+    src: "/hero-cricket-2.jpg",
+    position: "object-[right_center]",
+    opacity: "opacity-12 sm:opacity-18",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top,_rgba(217,169,40,0.15)_0%,_transparent_60%)]",
+  },
+  // Match 9: Roaring Malinga Celebration — Left-center
+  {
+    src: "/hero-cricket-3.jpg",
+    position: "object-[left_center]",
+    opacity: "opacity-12 sm:opacity-18",
+    accentGlow: "bg-[radial-gradient(ellipse_at_top_left,_rgba(217,169,40,0.16)_0%,_transparent_55%)]",
+  },
 ];
 
 // ── Status Pill ────────────────────────────────────────────────────────────────
@@ -61,7 +126,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   const dateFormatted = formatMatchDate(match?.scheduledAt || match?.startTime);
 
   const backdropIndex = Math.abs((match?.matchNumber || 1) - 1) % MATCH_BACKDROPS.length;
-  const backdropImage = MATCH_BACKDROPS[backdropIndex];
+  const backdrop = MATCH_BACKDROPS[backdropIndex];
 
   const targetRoute = scorerMode && !isDone ? "/match/$matchId" : "/scorecard/$matchId";
   const buttonLabel = isDone
@@ -107,7 +172,6 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
     const battingTeam = currentInn?.battingTeamId ? lookup.team(currentInn.battingTeamId) : team1;
     const isSecondInnings = state?.currentInningsIndex === 1;
 
-    // Authoritative effective match overs from live engine innings state or match record
     const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
     const secondInningsMaxOvers = state?.innings[1]?.maxOvers ?? effectiveMatchOvers;
     const targetRuns = inn1 ? (state?.innings[1]?.target ?? inn1.runs + 1) : 0;
@@ -116,16 +180,22 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
     const ballsRemaining = isSecondInnings && inn2 ? Math.max(0, maxLegalBalls - inn2.legalBalls) : 0;
 
     return (
-      <article className="group relative overflow-hidden rounded-3xl bg-[#0E0F12] border-2 border-[#D9A928]/50 shadow-2xl transition-all duration-300 hover:border-[#D9A928] flex flex-col justify-between w-full">
-        {/* Stadium Backdrop */}
+      <article className="group relative overflow-hidden rounded-3xl bg-[#0D0F13] border-2 border-[#D9A928]/60 shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-[#D9A928] flex flex-col justify-between w-full">
+        {/* Premium Cinematic Cricket Backdrop */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
           <img
-            src={backdropImage}
+            src={backdrop.src}
             alt=""
-            className="absolute right-0 top-0 h-full w-full sm:w-1/2 object-cover object-center opacity-20 sm:opacity-35 mix-blend-screen scale-105 group-hover:scale-110 transition-transform duration-700"
+            className={`absolute inset-0 w-full h-full object-cover ${backdrop.position} ${backdrop.opacity} filter grayscale contrast-125 brightness-90 mix-blend-luminosity scale-105 group-hover:scale-110 transition-transform duration-700 pointer-events-none`}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0E0F12] via-[#0E0F12]/90 to-[#0E0F12]/60" />
-          <div className="absolute top-0 right-1/4 w-72 h-72 bg-[#D9A928]/10 rounded-full blur-3xl pointer-events-none" />
+          {/* Multi-Directional Charcoal Overlays */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0D0F13] via-[#0D0F13]/85 to-[#0D0F13]/90" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0D0F13]/95 via-[#0D0F13]/75 to-[#0D0F13]/95" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(13,15,19,0.92)_0%,_rgba(13,15,19,0.75)_55%,_rgba(9,10,13,0.96)_100%)]" />
+          {/* TPL Gold Lighting Flare */}
+          <div className={`absolute inset-0 ${backdrop.accentGlow} pointer-events-none`} />
+          {/* Subtle Outer Vignette */}
+          <div className="absolute inset-0 shadow-[inset_0_0_40px_rgba(0,0,0,0.85)] pointer-events-none" />
         </div>
 
         {/* Card Content */}
@@ -153,7 +223,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
             
             {/* Team 1 (Batting First) */}
             <div className={`sm:col-span-2 flex items-center justify-start gap-4 p-3.5 sm:p-4 rounded-2xl transition-all ${
-              currentInn?.battingTeamId === firstTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/30"
+              currentInn?.battingTeamId === firstTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/40 border border-white/5"
             }`}>
               <TeamLogo
                 logoUrl={team1?.logoUrl}
@@ -192,7 +262,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
 
             {/* Team 2 (Batting Second / Chasing Team) */}
             <div className={`sm:col-span-2 flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl transition-all ${
-              currentInn?.battingTeamId === secondTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/30"
+              currentInn?.battingTeamId === secondTeamId ? "bg-white/[0.08] border border-[#D9A928]/40 shadow-inner" : "bg-black/40 border border-white/5"
             }`}>
               <div className="flex items-center justify-start gap-4">
                 <TeamLogo
@@ -284,15 +354,22 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   // ─────────────────────────────────────────────────────────────────────────────
   if (effectiveStatus === "UPCOMING" || effectiveStatus === "READY") {
     return (
-      <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-md hover:border-[#D9A928]/50 transition-all duration-200 flex flex-col justify-between w-full">
-        {/* Subtle Backdrop Accent with dark overlay */}
+      <article className="group relative overflow-hidden rounded-2xl bg-[#0D0F13] border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.35)] hover:border-[#D9A928]/50 transition-all duration-300 flex flex-col justify-between w-full">
+        {/* Premium Cinematic Cricket Backdrop */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
           <img
-            src={backdropImage}
+            src={backdrop.src}
             alt=""
-            className="w-full h-full object-cover object-center opacity-10 sm:opacity-20 group-hover:scale-105 transition-transform duration-500"
+            className={`absolute inset-0 w-full h-full object-cover ${backdrop.position} ${backdrop.opacity} filter grayscale contrast-125 brightness-90 mix-blend-luminosity scale-105 group-hover:scale-110 transition-transform duration-700 pointer-events-none`}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#14161A] via-[#14161A]/95 to-[#14161A]/80" />
+          {/* Multi-Directional Charcoal Overlays */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0D0F13] via-[#0D0F13]/85 to-[#0D0F13]/90" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0D0F13]/95 via-[#0D0F13]/80 to-[#0D0F13]/95" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(13,15,19,0.92)_0%,_rgba(13,15,19,0.78)_55%,_rgba(9,10,13,0.96)_100%)]" />
+          {/* TPL Gold Lighting Flare */}
+          <div className={`absolute inset-0 ${backdrop.accentGlow} pointer-events-none`} />
+          {/* Subtle Outer Vignette */}
+          <div className="absolute inset-0 shadow-[inset_0_0_40px_rgba(0,0,0,0.85)] pointer-events-none" />
         </div>
 
         <div className="relative z-10 flex flex-col p-3.5 sm:p-5 gap-3 sm:gap-4 flex-1 justify-between">
@@ -377,15 +454,22 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   // 3. COMPLETED MATCH CARD (RECENT RESULTS WITH FINAL SCORE & MVP)
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <article className="group relative overflow-hidden rounded-2xl bg-[#14161A] border border-white/10 shadow-md hover:border-white/25 transition-all duration-200 flex flex-col justify-between w-full">
-      {/* Subtle Backdrop Accent with dark overlay */}
+    <article className="group relative overflow-hidden rounded-2xl bg-[#0D0F13] border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.35)] hover:border-white/25 transition-all duration-300 flex flex-col justify-between w-full">
+      {/* Premium Cinematic Cricket Backdrop */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <img
-          src={backdropImage}
+          src={backdrop.src}
           alt=""
-          className="w-full h-full object-cover object-center opacity-10 group-hover:scale-105 transition-transform duration-500"
+          className={`absolute inset-0 w-full h-full object-cover ${backdrop.position} ${backdrop.opacity} filter grayscale contrast-125 brightness-90 mix-blend-luminosity scale-105 group-hover:scale-110 transition-transform duration-700 pointer-events-none`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#14161A] via-[#14161A]/95 to-[#14161A]/80" />
+        {/* Multi-Directional Charcoal Overlays */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0D0F13] via-[#0D0F13]/85 to-[#0D0F13]/90" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0D0F13]/95 via-[#0D0F13]/80 to-[#0D0F13]/95" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(13,15,19,0.92)_0%,_rgba(13,15,19,0.78)_55%,_rgba(9,10,13,0.96)_100%)]" />
+        {/* TPL Gold Lighting Flare */}
+        <div className={`absolute inset-0 ${backdrop.accentGlow} pointer-events-none`} />
+        {/* Subtle Outer Vignette */}
+        <div className="absolute inset-0 shadow-[inset_0_0_40px_rgba(0,0,0,0.85)] pointer-events-none" />
       </div>
 
       <div className="relative z-10 flex flex-col p-3.5 sm:p-5 gap-3 flex-1 justify-between">

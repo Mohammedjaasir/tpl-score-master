@@ -42,13 +42,58 @@ export function PointablesPage() {
 
   const hasTournamentData = stats.orangeCap.length > 0 || stats.purpleCap.length > 0 || completedCount > 0;
 
-  // Grouped Standings
-  const group1Teams = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
-  const g1TeamIds = new Set(group1Teams.length > 0 ? group1Teams.map((t) => t.id) : teams.slice(0, 3).map((t) => t.id));
-  const group1Standings = useMemo(() => calculateStandings(teams.filter((t) => g1TeamIds.has(t.id)), matches), [teams, matches, g1TeamIds]);
+  // Grouped Standings with persistent group assignment detection
+  const savedScheduleGroups = useMemo(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("tpl-schedule-groups");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (
+            Array.isArray(parsed?.group1) &&
+            Array.isArray(parsed?.group2) &&
+            parsed.group1.length === 3 &&
+            parsed.group2.length === 3
+          ) {
+            return parsed as { group1: string[]; group2: string[] };
+          }
+        }
+      } catch {}
+    }
+    return null;
+  }, []);
 
-  const group2Teams = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
-  const g2TeamIds = new Set(group2Teams.length > 0 ? group2Teams.map((t) => t.id) : teams.slice(3, 6).map((t) => t.id));
+  const g1TeamIds = useMemo(() => {
+    if (
+      savedScheduleGroups?.group1 &&
+      savedScheduleGroups.group1.every((id) => teams.some((t) => t.id === id))
+    ) {
+      return new Set(savedScheduleGroups.group1);
+    }
+    const g1 = teams.filter(
+      (t) =>
+        (t.groupName || "").includes("1") ||
+        (t.groupName || "").toUpperCase().includes("A")
+    );
+    return new Set(g1.length > 0 ? g1.map((t) => t.id) : teams.slice(0, 3).map((t) => t.id));
+  }, [teams, savedScheduleGroups]);
+
+  const g2TeamIds = useMemo(() => {
+    if (
+      savedScheduleGroups?.group2 &&
+      savedScheduleGroups.group2.every((id) => teams.some((t) => t.id === id))
+    ) {
+      return new Set(savedScheduleGroups.group2);
+    }
+    const g2 = teams.filter(
+      (t) =>
+        (t.groupName || "").includes("2") ||
+        (t.groupName || "").toUpperCase().includes("B")
+    );
+    return new Set(g2.length > 0 ? g2.map((t) => t.id) : teams.slice(3, 6).map((t) => t.id));
+  }, [teams, savedScheduleGroups]);
+
+  const group1Standings = useMemo(() => calculateStandings(teams.filter((t) => g1TeamIds.has(t.id)), matches), [teams, matches, g1TeamIds]);
   const group2Standings = useMemo(() => calculateStandings(teams.filter((t) => g2TeamIds.has(t.id)), matches), [teams, matches, g2TeamIds]);
 
   // Tournament Leaders Cards Highlights

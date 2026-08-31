@@ -33,7 +33,7 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-[#111111] flex flex-col font-sans selection:bg-[#D9A928]/30 selection:text-black">
       {/* ── Responsive Top Header ────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E5E5] shadow-xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E5E5] shadow-xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 gap-4">
           
           {/* Brand Logo & Tournament Badge */}
@@ -122,11 +122,11 @@ export function AppShell({
 
       {/* ── Main Content Body ────────────────────────────────────────── */}
       {fullBleedTop ? (
-        <main className={`flex-1 w-full ${hideNav ? "pb-4" : "pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
+        <main className={`flex-1 w-full ${hideNav ? "pb-4" : "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
           {children}
         </main>
       ) : (
-        <main className={`flex-1 mx-auto max-w-7xl w-full px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 ${hideNav ? "pb-4" : "pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
+        <main className={`flex-1 mx-auto max-w-7xl w-full px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 ${hideNav ? "pb-4" : "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"}`}>
           {children}
         </main>
       )}

@@ -1,11 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, ListChecks, Trophy, ClipboardList, User } from "lucide-react";
-import { Dock, DockIcon, DockItem, DockLabel } from "@/components/ui/dock";
 
 const navItems = [
   { to: "/home", label: "Dashboard", icon: Home },
   { to: "/matches", label: "Matches", icon: ListChecks },
-  { to: "/pointables", label: "POINTABLES", icon: Trophy },
+  { to: "/pointables", label: "Standings", icon: Trophy },
   { to: "/scorecards", label: "Scorecards", icon: ClipboardList },
   { to: "/profile", label: "Profile", icon: User },
 ] as const;
@@ -15,45 +14,50 @@ export function TplBottomDock() {
   const currentPath = routerState.location.pathname;
 
   return (
-    <div className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] inset-x-0 mx-auto w-fit z-50 pointer-events-auto flex justify-center px-3 max-w-full">
-      <Dock
-        panelHeight={52}
-        magnification={66}
-        distance={110}
-        className="bg-white/95 backdrop-blur-xl border border-black/10 shadow-[0_8px_30px_rgba(0,0,0,0.15)] dark:bg-black/90 dark:border-white/15 px-2.5 sm:px-3.5 py-1 rounded-full items-center"
-      >
+    <aside
+      aria-label="Mobile Navigation"
+      className="md:hidden fixed z-40 pointer-events-auto"
+      style={{
+        position: "fixed",
+        left: "50%",
+        transform: "translateX(-50%)",
+        bottom: "max(14px, calc(env(safe-area-inset-bottom, 0px) + 8px))",
+        width: "min(420px, calc(100vw - 28px))",
+        height: "68px",
+      }}
+    >
+      <nav className="w-full h-full bg-white/95 dark:bg-[#14161A]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/15 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.28)] flex items-center justify-between px-3 sm:px-4 select-none">
         {navItems.map((item) => {
-          const isActive = currentPath === item.to || (item.to === "/home" && currentPath === "/");
+          const isActive =
+            currentPath === item.to ||
+            (item.to === "/home" && (currentPath === "/" || currentPath === "")) ||
+            (item.to === "/matches" && currentPath.startsWith("/match")) ||
+            (item.to === "/pointables" && currentPath.startsWith("/pointables")) ||
+            (item.to === "/scorecards" && currentPath.startsWith("/scorecard")) ||
+            (item.to === "/profile" && (currentPath.startsWith("/profile") || currentPath.startsWith("/player")));
+
           const Icon = item.icon;
 
           return (
-            <DockItem
+            <Link
               key={item.to}
-              className={`aspect-square rounded-full transition-colors ${
+              to={item.to}
+              className={`tap group relative flex flex-col items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-full transition-all duration-200 ${
                 isActive
-                  ? "bg-[#D9A928] text-black shadow-md"
-                  : "bg-black/[0.04] text-black/70 hover:bg-black/[0.08] dark:bg-white/10 dark:text-white/80"
+                  ? "bg-[#D9A928] text-[#111111] shadow-md scale-105"
+                  : "bg-transparent text-[#4B5563] hover:text-[#111111] hover:bg-black/[0.05] dark:text-white/70 dark:hover:text-white dark:hover:bg-white/10"
               }`}
+              aria-label={item.label}
+              title={item.label}
             >
-              <DockLabel className="bg-black text-white font-extrabold text-[10px] tracking-wider uppercase border-0 shadow-lg px-2.5 py-1">
-                {item.label}
-              </DockLabel>
-              <DockIcon>
-                <Link
-                  to={item.to}
-                  className="flex h-full w-full items-center justify-center relative"
-                  aria-label={item.label}
-                >
-                  <Icon className={`h-4.5 w-4.5 sm:h-5 sm:w-5 ${isActive ? "text-black" : "text-current"}`} />
-                  {item.isLive && !isActive && (
-                    <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                  )}
-                </Link>
-              </DockIcon>
-            </DockItem>
+              <Icon className={`h-5 w-5 ${isActive ? "text-[#111111] stroke-[2.5]" : "stroke-[2]"}`} />
+              {isActive && (
+                <span className="sr-only">({item.label} - Active Page)</span>
+              )}
+            </Link>
           );
         })}
-      </Dock>
-    </div>
+      </nav>
+    </aside>
   );
 }

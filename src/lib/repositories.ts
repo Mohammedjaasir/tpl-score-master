@@ -284,6 +284,13 @@ class LookupCache {
     return Array.from(this.playersMap.values());
   }
 
+  getNextMatchNumber(): number {
+    const all = this.matches();
+    if (all.length === 0) return 1;
+    const max = Math.max(...all.map((m) => m.matchNumber || 0));
+    return max + 1;
+  }
+
   isHydrated(): boolean {
     return this.initialHydrated || this.matchesMap.size > 0;
   }
@@ -317,6 +324,15 @@ export interface MatchRepository {
   resetAllMatches(): Promise<void>;
   generateTournamentSchedule(input: GenerateScheduleInput): Promise<Match[]>;
   createMatch(match: Match): Promise<Match>;
+  createSingleMatch(input: {
+    teamAId: string;
+    teamBId: string;
+    scheduledAt: string;
+    overs: number;
+    ballsPerOver?: number;
+    venue?: string;
+    matchNumber?: number;
+  }): Promise<Match>;
   updateStatus(
     matchId: string,
     status?: MatchStatus,
@@ -575,6 +591,18 @@ export class SupabaseMatchRepository implements MatchRepository {
       const createdRows = await generateTournamentScheduleServerFn({ data: input });
       const domainMatches = createdRows.map((row, idx) => toMatch(row, idx + 1));
       lookup.setMatches(domainMatches);
+
+      // Synchronize team group assignments in local lookup cache
+      const currentTeams = lookup.getAllTeams();
+      if (currentTeams.length > 0) {
+        const updatedTeams = currentTeams.map((t) => {
+          if (input.group1TeamIds.includes(t.id)) return { ...t, groupName: "Group 1" };
+          if (input.group2TeamIds.includes(t.id)) return { ...t, groupName: "Group 2" };
+          return t;
+        });
+        lookup.setTeams(updatedTeams);
+      }
+
       return domainMatches;
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] generateTournamentSchedule server error:", err?.message);
@@ -599,6 +627,30 @@ export class SupabaseMatchRepository implements MatchRepository {
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] createMatch server error:", err?.message);
       throw new Error(`Failed to create match: ${err?.message || "Server error"}`);
+    }
+  }
+
+  async createSingleMatch(input: {
+    teamAId: string;
+    teamBId: string;
+    scheduledAt: string;
+    overs: number;
+    ballsPerOver?: number;
+    venue?: string;
+    matchNumber?: number;
+  }): Promise<Match> {
+    try {
+      const createdRow = await createSingleMatchServerFn({
+        data: input,
+      });
+
+      const assignedMatchNum = input.matchNumber || lookup.getNextMatchNumber();
+      const created = toMatch(createdRow, assignedMatchNum);
+      lookup.updateMatch(created.id, created);
+      return created;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] createSingleMatch server error:", err?.message);
+      throw new Error(`Failed to create single match fixture: ${err?.message || "Server error"}`);
     }
   }
 
