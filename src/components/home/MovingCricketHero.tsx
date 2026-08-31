@@ -40,7 +40,7 @@ export function MovingCricketHero({ liveCount }: MovingCricketHeroProps) {
       {/* ══════════════════════════════════════════════════════════════════════════════
           LAYER 3: Hero Content (Clean Sports Tournament Header)
           ══════════════════════════════════════════════════════════════════════════════ */}
-      <div className="relative z-20 mx-auto max-w-6xl w-full px-6 sm:px-8 py-12 sm:py-16 flex flex-col justify-center">
+      <div className="relative z-20 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 flex flex-col justify-center">
         
         {/* Season Tag */}
         <div className="flex items-center gap-2 mb-3">

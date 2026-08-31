@@ -169,6 +169,128 @@ export const resetScheduleServerFn = createServerFn({ method: "POST" }).handler(
 );
 
 /**
+ * Server Function: Safely resets ALL tournament matches, innings, deliveries, and match squads.
+ * Master players (registrations) and teams are strictly preserved.
+ */
+export const resetAllTournamentMatchesServerFn = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const supabaseAdmin = getServerSupabaseAdmin();
+
+    // 1. Delete from match_squads (if any)
+    const { error: squadsError } = await supabaseAdmin
+      .from("match_squads")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (squadsError) {
+      console.warn("[resetAllTournamentMatchesServerFn] squads notice:", squadsError.message);
+    }
+
+    // 2. Delete all deliveries / balls
+    const { error: ballsError } = await supabaseAdmin
+      .from("balls")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (ballsError) {
+      console.warn("[resetAllTournamentMatchesServerFn] balls notice:", ballsError.message);
+    }
+
+    // 3. Delete all innings
+    const { error: inningsError } = await supabaseAdmin
+      .from("innings")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (inningsError) {
+      console.warn("[resetAllTournamentMatchesServerFn] innings notice:", inningsError.message);
+    }
+
+    // 4. Delete all matches
+    const { error: matchesError } = await supabaseAdmin
+      .from("matches")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (matchesError) {
+      throw new Error(`Failed to delete tournament matches: ${matchesError.message}`);
+    }
+
+    return {
+      success: true,
+      message: "All tournament matches and scoring records successfully reset.",
+    };
+  }
+);
+
+export interface GenerateScheduleInput {
+  group1TeamIds: string[];
+  group2TeamIds: string[];
+  startDate: string;
+  startTime: string; // HH:mm or parsed 24h
+  overs: number;
+  ballsPerOver: number;
+  intervalMinutes: number;
+}
+
+/**
+ * Server Function: Generates 9 cross-group tournament matches between Group 1 and Group 2.
+ */
+export const generateTournamentScheduleServerFn = createServerFn({ method: "POST" })
+  .validator((input: GenerateScheduleInput) => input)
+  .handler(async ({ data: input }) => {
+    const supabaseAdmin = getServerSupabaseAdmin();
+
+    if (!input.group1TeamIds || input.group1TeamIds.length !== 3) {
+      throw new Error("Group 1 must contain exactly 3 teams.");
+    }
+    if (!input.group2TeamIds || input.group2TeamIds.length !== 3) {
+      throw new Error("Group 2 must contain exactly 3 teams.");
+    }
+
+    const allTeams = [...input.group1TeamIds, ...input.group2TeamIds];
+    const uniqueTeams = new Set(allTeams);
+    if (uniqueTeams.size !== 6) {
+      throw new Error("All 6 selected tournament teams must be distinct.");
+    }
+
+    const overs = Math.max(1, Number(input.overs) || 5);
+    const ballsPerOver = Math.max(1, Number(input.ballsPerOver) || 6);
+    const intervalMinutes = Math.max(15, Number(input.intervalMinutes) || 45);
+
+    // Parse base start datetime
+    const [hours, minutes] = (input.startTime || "09:00").split(":").map(Number);
+    const baseDate = new Date(`${input.startDate || "2026-08-30"}T${String(hours || 9).padStart(2, "0")}:${String(minutes || 0).padStart(2, "0")}:00`);
+
+    const fixturesToInsert: Omit<SupabaseMatch, "id" | "created_at" | "updated_at">[] = [];
+    let matchCount = 1;
+
+    // Generate 9 cross-group fixtures (3 x 3)
+    for (let i = 0; i < input.group1TeamIds.length; i++) {
+      for (let j = 0; j < input.group2TeamIds.length; j++) {
+        const scheduledTime = new Date(baseDate.getTime() + (matchCount - 1) * intervalMinutes * 60 * 1000);
+        fixturesToInsert.push({
+          team_a_id: input.group1TeamIds[i],
+          team_b_id: input.group2TeamIds[j],
+          start_time: scheduledTime.toISOString(),
+          status: "scheduled",
+          total_overs: overs,
+          balls_per_over: ballsPerOver,
+        });
+        matchCount++;
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("matches")
+      .insert(fixturesToInsert)
+      .select("*")
+      .order("start_time", { ascending: true });
+
+    if (error || !data) {
+      throw new Error(`Failed to generate schedule: ${error?.message || "Unknown error"}`);
+    }
+
+    return data as SupabaseMatch[];
+  });
+
+/**
  * Server Function: Creates a single new match fixture.
  */
 export const createMatchServerFn = createServerFn({ method: "POST" })

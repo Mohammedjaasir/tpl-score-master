@@ -14,6 +14,7 @@ export interface Player {
   teamId: string;
   avatar?: string | undefined;
   referenceId?: string | undefined;
+  slug?: string | undefined;
   soldPrice?: number | undefined;
   teamRole?: string | null | undefined;
   auctionStatus?: string | undefined;
@@ -47,6 +48,7 @@ export interface SupabaseTeam {
 export interface SupabaseRegistration {
   id: string;
   reference_id?: string | null;
+  slug?: string | null;
   player_name: string;
   player_phone?: string | null;
   status?: string | null;

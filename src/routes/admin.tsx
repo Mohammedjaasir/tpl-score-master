@@ -111,6 +111,19 @@ function AdminPortalPage() {
 
   // Tournament control modals
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showResetAllModal, setShowResetAllModal] = useState(false);
+  const [showScheduleGeneratorModal, setShowScheduleGeneratorModal] = useState(false);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
+
+  // Schedule generator state
+  const [genGroup1Teams, setGenGroup1Teams] = useState<string[]>(["", "", ""]);
+  const [genGroup2Teams, setGenGroup2Teams] = useState<string[]>(["", "", ""]);
+  const [genStartDate, setGenStartDate] = useState("2026-08-30");
+  const [genStartTime, setGenStartTime] = useState("09:00");
+  const [genOvers, setGenOvers] = useState(5);
+  const [genBallsPerOver, setGenBallsPerOver] = useState(6);
+  const [genIntervalMinutes, setGenIntervalMinutes] = useState(45);
+
   const [showKnockoutModal, setShowKnockoutModal] = useState(false);
   const [knockoutStage, setKnockoutStage] = useState<"Semi-Final 1" | "Semi-Final 2" | "Final">("Semi-Final 1");
   const [knockoutTeamA, setKnockoutTeamA] = useState("");
@@ -244,7 +257,118 @@ function AdminPortalPage() {
     }
   };
 
-  // ── RESET MATCHES HANDLER ────────────────────────────────────────────────
+  // Auto-populate group 1 & group 2 defaults when teams are available
+  useEffect(() => {
+    if (teams.length >= 6) {
+      if (!genGroup1Teams[0] && !genGroup2Teams[0]) {
+        const g1 = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
+        const g2 = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
+        if (g1.length >= 3 && g2.length >= 3) {
+          setGenGroup1Teams([g1[0].id, g1[1].id, g1[2].id]);
+          setGenGroup2Teams([g2[0].id, g2[1].id, g2[2].id]);
+        } else {
+          setGenGroup1Teams([teams[0].id, teams[1].id, teams[2].id]);
+          setGenGroup2Teams([teams[3].id, teams[4].id, teams[5].id]);
+        }
+      }
+    }
+  }, [teams]);
+
+  // ── RESET ALL TOURNAMENT MATCHES HANDLER ─────────────────────────────────
+  const handleResetAllMatches = async () => {
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
+    setResetSuccessMsg(null);
+
+    try {
+      // Purge all client-side localStorage scoring docs
+      if (typeof window !== "undefined") {
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < window.localStorage.length; i++) {
+            const k = window.localStorage.key(i);
+            if (k && k.startsWith("tpl-scoring:")) {
+              keysToRemove.push(k);
+            }
+          }
+          keysToRemove.forEach((k) => window.localStorage.removeItem(k));
+        } catch {}
+      }
+
+      await matchRepository.resetAllMatches();
+      queryClient.setQueryData(["matches"], []);
+      broadcastTournamentUpdate();
+      await refetchMatches();
+      setShowResetAllModal(false);
+      setResetSuccessMsg(
+        "All test matches and match-generated statistics have been reset. Master player and team data is preserved."
+      );
+    } catch (err: any) {
+      console.error("[handleResetAllMatches] Error:", err);
+      setScheduleActionError(err?.message || "Unable to reset all matches. Please try again.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  };
+
+  // ── GENERATE 9 MATCHES SCHEDULE SUBMIT ───────────────────────────────────
+  const handleGenerateScheduleSubmit = async () => {
+    if (genGroup1Teams.some((t) => !t) || genGroup2Teams.some((t) => !t)) {
+      setScheduleActionError("Please select all 3 teams for Group 1 and all 3 teams for Group 2.");
+      return;
+    }
+
+    const allSelected = [...genGroup1Teams, ...genGroup2Teams];
+    const unique = new Set(allSelected);
+    if (unique.size !== 6) {
+      setScheduleActionError("All 6 selected teams must be distinct with no duplicates.");
+      return;
+    }
+
+    if (!genStartDate) {
+      setScheduleActionError("Please choose a valid match start date.");
+      return;
+    }
+
+    if (!genStartTime) {
+      setScheduleActionError("Please choose a valid match start time.");
+      return;
+    }
+
+    if (genOvers < 1) {
+      setScheduleActionError("Total overs must be at least 1.");
+      return;
+    }
+
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
+    setResetSuccessMsg(null);
+
+    try {
+      const generated = await matchRepository.generateTournamentSchedule({
+        group1TeamIds: genGroup1Teams,
+        group2TeamIds: genGroup2Teams,
+        startDate: genStartDate,
+        startTime: genStartTime,
+        overs: Number(genOvers) || 5,
+        ballsPerOver: Number(genBallsPerOver) || 6,
+        intervalMinutes: Number(genIntervalMinutes) || 45,
+      });
+
+      queryClient.setQueryData(["matches"], generated);
+      broadcastTournamentUpdate();
+      await refetchMatches();
+      setShowScheduleGeneratorModal(false);
+      setResetSuccessMsg(`Successfully generated ${generated.length} cross-group tournament matches!`);
+    } catch (err: any) {
+      console.error("[handleGenerateScheduleSubmit] Error:", err);
+      setScheduleActionError(err?.message || "Failed to generate tournament schedule.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  };
+
+  // ── RESET UPCOMING MATCHES HANDLER ────────────────────────────────────────
   const handleResetMatches = async () => {
     setIsScheduleActionLoading(true);
     setScheduleActionError(null);
@@ -924,6 +1048,21 @@ function AdminPortalPage() {
         {/* ── SECTION 4: TOURNAMENT CONTROL ──────────────────────────────── */}
         {activeSection === "tournament" && (
           <div className="flex flex-col gap-6">
+            {resetSuccessMsg && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between gap-3 text-xs font-bold shadow-sm">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>{resetSuccessMsg}</span>
+                </div>
+                <button
+                  onClick={() => setResetSuccessMsg(null)}
+                  className="text-emerald-600 hover:text-emerald-900 text-[10px] uppercase font-black px-2 py-1 bg-white rounded-lg border border-emerald-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {scheduleActionError && (
               <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-between gap-3 text-xs font-bold shadow-sm">
                 <div className="flex items-center gap-2">
@@ -944,7 +1083,7 @@ function AdminPortalPage() {
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-[#111827]">Tournament Fixture Control</h3>
                 <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-                  Generate cross-pool group matches, schedule knockouts, or reset the schedule.
+                  Generate 9 cross-pool group matches, schedule knockouts, or reset test data.
                 </p>
               </div>
 
@@ -952,22 +1091,25 @@ function AdminPortalPage() {
                 <button
                   onClick={() => {
                     setScheduleActionError(null);
-                    setShowResetConfirm(true);
+                    setShowResetAllModal(true);
                   }}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all"
+                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-300 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all shadow-xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Reset Upcoming Fixtures</span>
+                  <span>Reset All Matches</span>
                 </button>
 
                 <button
-                  onClick={handleAutoGenerateSchedule}
+                  onClick={() => {
+                    setScheduleActionError(null);
+                    setShowScheduleGeneratorModal(true);
+                  }}
                   disabled={isScheduleActionLoading}
                   className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isScheduleActionLoading ? "animate-spin" : ""}`} />
-                  <span>Auto-Generate Schedule</span>
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>Generate Schedule (9 Matches)</span>
                 </button>
 
                 <button
@@ -1343,7 +1485,258 @@ function AdminPortalPage() {
         )}
       </main>
 
-      {/* ── RESET CONFIRMATION MODAL ─────────────────────────────────────── */}
+      {/* ── RESET ALL MATCHES MODAL ─────────────────────────────────────── */}
+      {showResetAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg bg-white border border-red-300 rounded-3xl p-6 sm:p-7 flex flex-col gap-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-red-100 pb-3">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="p-2.5 rounded-2xl bg-red-100 text-red-600">
+                  <AlertCircle className="h-6 w-6 shrink-0" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black uppercase text-[#111827]">Reset All Tournament Matches</h3>
+                  <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Permanent Tournament Wipe</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowResetAllModal(false)}
+                disabled={isScheduleActionLoading}
+                className="text-[#9CA3AF] hover:text-[#111827] p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-red-50/80 border border-red-200 text-xs flex flex-col gap-3">
+              <p className="font-extrabold text-red-900 leading-snug">
+                This will permanently delete all generated tournament matches and their match scoring data.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+                <div className="flex flex-col gap-1 p-2.5 rounded-xl bg-white border border-red-200 text-red-800">
+                  <span className="font-black text-[10px] uppercase text-red-600">Data Deleted:</span>
+                  <span>• {matches.length} Matches & Innings</span>
+                  <span>• All Deliveries & Over States</span>
+                  <span>• Wagon Wheel & Partnerships</span>
+                  <span>• Match-Derived Player Stats</span>
+                </div>
+                <div className="flex flex-col gap-1 p-2.5 rounded-xl bg-white border border-emerald-200 text-emerald-800">
+                  <span className="font-black text-[10px] uppercase text-emerald-600">Preserved Master Data:</span>
+                  <span>✓ {players.length} Registered Players</span>
+                  <span>✓ {teams.length} Official Teams</span>
+                  <span>✓ Player-Team Rosters</span>
+                  <span>✓ Permanent Profile Data</span>
+                </div>
+              </div>
+            </div>
+
+            {scheduleActionError && (
+              <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-red-800 text-xs font-bold">
+                {scheduleActionError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                onClick={() => {
+                  setScheduleActionError(null);
+                  setShowResetAllModal(false);
+                }}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetAllMatches}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2"
+              >
+                {isScheduleActionLoading ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Resetting All...</span>
+                  </>
+                ) : (
+                  <span>Confirm Reset All</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SCHEDULE GENERATOR MODAL (9 CROSS-GROUP MATCHES) ─────────────── */}
+      {showScheduleGeneratorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white border border-[#E5E7EB] rounded-3xl p-6 sm:p-7 flex flex-col gap-5 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+              <div>
+                <h3 className="text-base font-black uppercase text-[#111827]">Generate Tournament Schedule</h3>
+                <p className="text-xs text-[#6B7280]">9 Cross-Group Matches (Group 1 × Group 2)</p>
+              </div>
+              <button
+                onClick={() => setShowScheduleGeneratorModal(false)}
+                disabled={isScheduleActionLoading}
+                className="text-[#9CA3AF] hover:text-[#111827] p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Team Selection Groups */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Group 1 */}
+              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-[#9A6A05]">Group 1 (3 Teams)</span>
+                  <span className="text-[10px] font-bold text-[#6B7280]">Pool A</span>
+                </div>
+                {[0, 1, 2].map((idx) => (
+                  <div key={`g1-${idx}`}>
+                    <label className="text-[10px] font-bold text-[#6B7280] uppercase">Team {idx + 1}</label>
+                    <select
+                      value={genGroup1Teams[idx] || ""}
+                      onChange={(e) => {
+                        const updated = [...genGroup1Teams];
+                        updated[idx] = e.target.value;
+                        setGenGroup1Teams(updated);
+                      }}
+                      className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928]"
+                    >
+                      <option value="">-- Choose Team --</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Group 2 */}
+              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-[#111827]">Group 2 (3 Teams)</span>
+                  <span className="text-[10px] font-bold text-[#6B7280]">Pool B</span>
+                </div>
+                {[0, 1, 2].map((idx) => (
+                  <div key={`g2-${idx}`}>
+                    <label className="text-[10px] font-bold text-[#6B7280] uppercase">Team {idx + 4}</label>
+                    <select
+                      value={genGroup2Teams[idx] || ""}
+                      onChange={(e) => {
+                        const updated = [...genGroup2Teams];
+                        updated[idx] = e.target.value;
+                        setGenGroup2Teams(updated);
+                      }}
+                      className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928]"
+                    >
+                      <option value="">-- Choose Team --</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Match Format & Scheduling Parameters */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
+              <div>
+                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Match 1 Date</label>
+                <input
+                  type="date"
+                  value={genStartDate}
+                  onChange={(e) => setGenStartDate(e.target.value)}
+                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#6B7280] uppercase">
+                  Start Time ({formatMatchTime(genStartTime)})
+                </label>
+                <input
+                  type="time"
+                  value={genStartTime}
+                  onChange={(e) => setGenStartTime(e.target.value)}
+                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Total Overs</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={genOvers}
+                  onChange={(e) => setGenOvers(Math.max(1, parseInt(e.target.value, 10) || 5))}
+                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Interval (Mins)</label>
+                <input
+                  type="number"
+                  min="15"
+                  max="120"
+                  value={genIntervalMinutes}
+                  onChange={(e) => setGenIntervalMinutes(Math.max(15, parseInt(e.target.value, 10) || 45))}
+                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
+                />
+              </div>
+            </div>
+
+            {/* Fixture Preview Hint */}
+            <div className="p-3 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-[11px] flex items-center justify-between">
+              <span>This will generate <strong>9 cross-group matches</strong> scheduled at <strong>{genIntervalMinutes} min</strong> intervals starting at <strong>{formatMatchTime(genStartTime)}</strong>.</span>
+            </div>
+
+            {scheduleActionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
+                {scheduleActionError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                onClick={() => {
+                  setScheduleActionError(null);
+                  setShowScheduleGeneratorModal(false);
+                }}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateScheduleSubmit}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase shadow-md flex items-center justify-center gap-2"
+              >
+                {isScheduleActionLoading ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Generating 9 Matches...</span>
+                  </>
+                ) : (
+                  <span>Generate 9 Matches</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESET UPCOMING CONFIRMATION MODAL ─────────────────────────────── */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-white border border-red-200 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl">

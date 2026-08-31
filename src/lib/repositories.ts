@@ -12,6 +12,9 @@ import { supabase } from "@/lib/supabase";
 import {
   saveScheduleServerFn,
   resetScheduleServerFn,
+  resetAllTournamentMatchesServerFn,
+  generateTournamentScheduleServerFn,
+  type GenerateScheduleInput,
   createMatchServerFn,
   updateMatchStatusServerFn,
 } from "@/lib/server-fns/matches";
@@ -93,6 +96,7 @@ export function toPlayer(row: SupabaseRegistration): Player {
     teamId: row.team_id || "",
     avatar: row.profile_photo_url || undefined,
     referenceId: row.reference_id || undefined,
+    slug: row.slug || (row.player_name ? row.player_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : undefined),
     soldPrice: row.sold_price || undefined,
     teamRole: row.team_role || undefined,
     auctionStatus: row.auction_status || undefined,
@@ -237,9 +241,24 @@ class LookupCache {
     return this.teamsMap.get(id);
   }
 
-  player(id?: string): Player | undefined {
-    if (!id) return undefined;
-    return this.playersMap.get(id);
+  player(idOrSlug?: string): Player | undefined {
+    if (!idOrSlug) return undefined;
+    const direct = this.playersMap.get(idOrSlug);
+    if (direct) return direct;
+
+    const normalized = idOrSlug.toLowerCase().trim();
+    for (const p of this.playersMap.values()) {
+      if (
+        p.id === idOrSlug ||
+        (p.slug && p.slug.toLowerCase() === normalized) ||
+        (p.referenceId && p.referenceId.toLowerCase() === normalized) ||
+        p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === normalized ||
+        p.name.toLowerCase() === normalized
+      ) {
+        return p;
+      }
+    }
+    return undefined;
   }
 
   playersOf(teamId: string): Player[] {
@@ -294,6 +313,8 @@ export interface MatchRepository {
   get(id: string): Promise<Match | undefined>;
   saveSchedule(matches: Match[]): Promise<Match[]>;
   resetSchedule(): Promise<void>;
+  resetAllMatches(): Promise<void>;
+  generateTournamentSchedule(input: GenerateScheduleInput): Promise<Match[]>;
   createMatch(match: Match): Promise<Match>;
   updateStatus(
     matchId: string,
@@ -535,6 +556,28 @@ export class SupabaseMatchRepository implements MatchRepository {
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] resetSchedule server error:", err?.message);
       throw new Error(`Failed to reset upcoming fixtures: ${err?.message || "Server error"}`);
+    }
+  }
+
+  async resetAllMatches(): Promise<void> {
+    try {
+      await resetAllTournamentMatchesServerFn();
+      lookup.setMatches([]);
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] resetAllMatches server error:", err?.message);
+      throw new Error(`Failed to reset all tournament matches: ${err?.message || "Server error"}`);
+    }
+  }
+
+  async generateTournamentSchedule(input: GenerateScheduleInput): Promise<Match[]> {
+    try {
+      const createdRows = await generateTournamentScheduleServerFn({ data: input });
+      const domainMatches = createdRows.map((row, idx) => toMatch(row, idx + 1));
+      lookup.setMatches(domainMatches);
+      return domainMatches;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] generateTournamentSchedule server error:", err?.message);
+      throw new Error(`Failed to generate schedule: ${err?.message || "Server error"}`);
     }
   }
 
