@@ -257,22 +257,61 @@ function AdminPortalPage() {
     }
   };
 
-  // Auto-populate group 1 & group 2 defaults when teams are available
+  // Auto-populate group 1 & group 2 defaults with unique teams when teams are loaded
   useEffect(() => {
     if (teams.length >= 6) {
       if (!genGroup1Teams[0] && !genGroup2Teams[0]) {
         const g1 = teams.filter((t) => (t.groupName || "").includes("1") || (t.groupName || "").toUpperCase().includes("A"));
         const g2 = teams.filter((t) => (t.groupName || "").includes("2") || (t.groupName || "").toUpperCase().includes("B"));
         if (g1.length >= 3 && g2.length >= 3) {
-          setGenGroup1Teams([g1[0].id, g1[1].id, g1[2].id]);
-          setGenGroup2Teams([g2[0].id, g2[1].id, g2[2].id]);
-        } else {
-          setGenGroup1Teams([teams[0].id, teams[1].id, teams[2].id]);
-          setGenGroup2Teams([teams[3].id, teams[4].id, teams[5].id]);
+          const g1Ids = [g1[0].id, g1[1].id, g1[2].id];
+          const g2Ids = [g2[0].id, g2[1].id, g2[2].id];
+          const combined = new Set([...g1Ids, ...g2Ids]);
+          if (combined.size === 6) {
+            setGenGroup1Teams(g1Ids);
+            setGenGroup2Teams(g2Ids);
+            return;
+          }
         }
+        // Fallback to first 6 unique teams
+        setGenGroup1Teams([teams[0].id, teams[1].id, teams[2].id]);
+        setGenGroup2Teams([teams[3].id, teams[4].id, teams[5].id]);
       }
     }
   }, [teams]);
+
+  // Modal body scroll lock and escape key handler
+  useEffect(() => {
+    const isAnyModalOpen = showScheduleGeneratorModal || showResetAllModal || showResetConfirm;
+    if (!isAnyModalOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isScheduleActionLoading) {
+        setShowScheduleGeneratorModal(false);
+        setShowResetAllModal(false);
+        setShowResetConfirm(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showScheduleGeneratorModal, showResetAllModal, showResetConfirm, isScheduleActionLoading]);
+
+  // Memoized list of all currently selected team IDs across both groups
+  const selectedTeamIds = useMemo(() => {
+    return [...genGroup1Teams, ...genGroup2Teams].filter(Boolean);
+  }, [genGroup1Teams, genGroup2Teams]);
+
+  // Returns all teams that are either the currently selected value for this slot OR not selected anywhere else
+  const getAvailableTeamsForSlot = (currentVal: string) => {
+    return teams.filter((t) => t.id === currentVal || !selectedTeamIds.includes(t.id));
+  };
 
   // ── RESET ALL TOURNAMENT MATCHES HANDLER ─────────────────────────────────
   const handleResetAllMatches = async () => {
@@ -321,7 +360,7 @@ function AdminPortalPage() {
     const allSelected = [...genGroup1Teams, ...genGroup2Teams];
     const unique = new Set(allSelected);
     if (unique.size !== 6) {
-      setScheduleActionError("All 6 selected teams must be distinct with no duplicates.");
+      setScheduleActionError("Please select 6 different teams. A team cannot appear in both groups.");
       return;
     }
 
@@ -1569,158 +1608,188 @@ function AdminPortalPage() {
 
       {/* ── SCHEDULE GENERATOR MODAL (9 CROSS-GROUP MATCHES) ─────────────── */}
       {showScheduleGeneratorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white border border-[#E5E7EB] rounded-3xl p-6 sm:p-7 flex flex-col gap-5 shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
+          <div className="w-full max-w-2xl bg-white border border-[#E5E7EB] rounded-3xl flex flex-col shadow-2xl my-auto max-h-[calc(100dvh-2rem)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header (Fixed/Sticky at Top) */}
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 sm:px-6 py-4 shrink-0 bg-white">
               <div>
-                <h3 className="text-base font-black uppercase text-[#111827]">Generate Tournament Schedule</h3>
+                <h3 className="text-base sm:text-lg font-black uppercase text-[#111827]">Generate Tournament Schedule</h3>
                 <p className="text-xs text-[#6B7280]">9 Cross-Group Matches (Group 1 × Group 2)</p>
               </div>
               <button
                 onClick={() => setShowScheduleGeneratorModal(false)}
                 disabled={isScheduleActionLoading}
-                className="text-[#9CA3AF] hover:text-[#111827] p-1"
+                className="text-[#9CA3AF] hover:text-[#111827] p-2 rounded-xl hover:bg-[#F3F4F6] transition-colors"
+                aria-label="Close Modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Team Selection Groups */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Group 1 */}
-              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase text-[#9A6A05]">Group 1 (3 Teams)</span>
-                  <span className="text-[10px] font-bold text-[#6B7280]">Pool A</span>
-                </div>
-                {[0, 1, 2].map((idx) => (
-                  <div key={`g1-${idx}`}>
-                    <label className="text-[10px] font-bold text-[#6B7280] uppercase">Team {idx + 1}</label>
-                    <select
-                      value={genGroup1Teams[idx] || ""}
-                      onChange={(e) => {
-                        const updated = [...genGroup1Teams];
-                        updated[idx] = e.target.value;
-                        setGenGroup1Teams(updated);
-                      }}
-                      className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928]"
-                    >
-                      <option value="">-- Choose Team --</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 sm:py-5 flex flex-col gap-4 overscroll-contain">
+              {/* Group Exclusion Notice Banner */}
+              <div className="p-3 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-xs font-medium flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#D9A928] shrink-0" />
+                <span>
+                  Select 6 different teams. Teams selected in one group are unavailable in the other group.
+                </span>
+              </div>
+
+              {/* Team Selection Groups (2-col Desktop, 1-col Mobile) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Group 1 */}
+                <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+                    <span className="text-xs font-black uppercase text-[#9A6A05]">Group 1 (3 Teams)</span>
+                    <span className="text-[10px] font-bold text-[#6B7280]">Pool A</span>
                   </div>
-                ))}
-              </div>
+                  {[0, 1, 2].map((idx) => {
+                    const currentVal = genGroup1Teams[idx] || "";
+                    const availableTeams = getAvailableTeamsForSlot(currentVal);
 
-              {/* Group 2 */}
-              <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase text-[#111827]">Group 2 (3 Teams)</span>
-                  <span className="text-[10px] font-bold text-[#6B7280]">Pool B</span>
+                    return (
+                      <div key={`g1-${idx}`}>
+                        <label className="text-[10px] font-bold text-[#6B7280] uppercase">
+                          Team {idx + 1}
+                        </label>
+                        <select
+                          value={currentVal}
+                          onChange={(e) => {
+                            const updated = [...genGroup1Teams];
+                            updated[idx] = e.target.value;
+                            setGenGroup1Teams(updated);
+                          }}
+                          className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 sm:py-3 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[44px]"
+                        >
+                          <option value="">-- Select Team {idx + 1} --</option>
+                          {availableTeams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
                 </div>
-                {[0, 1, 2].map((idx) => (
-                  <div key={`g2-${idx}`}>
-                    <label className="text-[10px] font-bold text-[#6B7280] uppercase">Team {idx + 4}</label>
-                    <select
-                      value={genGroup2Teams[idx] || ""}
-                      onChange={(e) => {
-                        const updated = [...genGroup2Teams];
-                        updated[idx] = e.target.value;
-                        setGenGroup2Teams(updated);
-                      }}
-                      className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928]"
-                    >
-                      <option value="">-- Choose Team --</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
+
+                {/* Group 2 */}
+                <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+                    <span className="text-xs font-black uppercase text-[#111827]">Group 2 (3 Teams)</span>
+                    <span className="text-[10px] font-bold text-[#6B7280]">Pool B</span>
                   </div>
-                ))}
+                  {[0, 1, 2].map((idx) => {
+                    const currentVal = genGroup2Teams[idx] || "";
+                    const availableTeams = getAvailableTeamsForSlot(currentVal);
+
+                    return (
+                      <div key={`g2-${idx}`}>
+                        <label className="text-[10px] font-bold text-[#6B7280] uppercase">
+                          Team {idx + 4}
+                        </label>
+                        <select
+                          value={currentVal}
+                          onChange={(e) => {
+                            const updated = [...genGroup2Teams];
+                            updated[idx] = e.target.value;
+                            setGenGroup2Teams(updated);
+                          }}
+                          className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 sm:py-3 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[44px]"
+                        >
+                          <option value="">-- Select Team {idx + 4} --</option>
+                          {availableTeams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Match Format & Scheduling Parameters */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
+                <div>
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase">Match 1 Date</label>
+                  <input
+                    type="date"
+                    value={genStartDate}
+                    onChange={(e) => setGenStartDate(e.target.value)}
+                    className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase">
+                    Start Time ({formatMatchTime(genStartTime)})
+                  </label>
+                  <input
+                    type="time"
+                    value={genStartTime}
+                    onChange={(e) => setGenStartTime(e.target.value)}
+                    className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase">Total Overs</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={genOvers}
+                    onChange={(e) => setGenOvers(Math.max(1, parseInt(e.target.value, 10) || 5))}
+                    className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase">Interval (Mins)</label>
+                  <input
+                    type="number"
+                    min="15"
+                    max="120"
+                    value={genIntervalMinutes}
+                    onChange={(e) => setGenIntervalMinutes(Math.max(15, parseInt(e.target.value, 10) || 45))}
+                    className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 text-xs font-bold text-[#111827] min-h-[44px]"
+                  />
+                </div>
+              </div>
+
+              {/* Fixture Preview Hint */}
+              <div className="p-3 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] text-[#374151] text-[11px] flex items-center justify-between">
+                <span>
+                  Generates <strong>9 cross-group fixtures</strong> scheduled at <strong>{genIntervalMinutes} min</strong> intervals starting at <strong>{formatMatchTime(genStartTime)}</strong>.
+                </span>
+              </div>
+
+              {scheduleActionError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
+                  {scheduleActionError}
+                </div>
+              )}
             </div>
 
-            {/* Match Format & Scheduling Parameters */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E7EB]">
-              <div>
-                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Match 1 Date</label>
-                <input
-                  type="date"
-                  value={genStartDate}
-                  onChange={(e) => setGenStartDate(e.target.value)}
-                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-[#6B7280] uppercase">
-                  Start Time ({formatMatchTime(genStartTime)})
-                </label>
-                <input
-                  type="time"
-                  value={genStartTime}
-                  onChange={(e) => setGenStartTime(e.target.value)}
-                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Total Overs</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={genOvers}
-                  onChange={(e) => setGenOvers(Math.max(1, parseInt(e.target.value, 10) || 5))}
-                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-[#6B7280] uppercase">Interval (Mins)</label>
-                <input
-                  type="number"
-                  min="15"
-                  max="120"
-                  value={genIntervalMinutes}
-                  onChange={(e) => setGenIntervalMinutes(Math.max(15, parseInt(e.target.value, 10) || 45))}
-                  className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827]"
-                />
-              </div>
-            </div>
-
-            {/* Fixture Preview Hint */}
-            <div className="p-3 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-[11px] flex items-center justify-between">
-              <span>This will generate <strong>9 cross-group matches</strong> scheduled at <strong>{genIntervalMinutes} min</strong> intervals starting at <strong>{formatMatchTime(genStartTime)}</strong>.</span>
-            </div>
-
-            {scheduleActionError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
-                {scheduleActionError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            {/* Modal Footer (Sticky at Bottom) */}
+            <div className="shrink-0 px-5 sm:px-6 py-4 border-t border-[#E5E7EB] bg-white grid grid-cols-2 gap-3">
               <button
                 onClick={() => {
                   setScheduleActionError(null);
                   setShowScheduleGeneratorModal(false);
                 }}
                 disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase"
+                className="py-3 sm:py-3.5 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors min-h-[48px]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleGenerateScheduleSubmit}
                 disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase shadow-md flex items-center justify-center gap-2"
+                className="py-3 sm:py-3.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase shadow-md flex items-center justify-center gap-2 transition-colors min-h-[48px]"
               >
                 {isScheduleActionLoading ? (
                   <>
