@@ -22,11 +22,11 @@ export function TplBottomDock() {
         left: "50%",
         transform: "translateX(-50%)",
         bottom: "max(14px, calc(env(safe-area-inset-bottom, 0px) + 8px))",
-        width: "min(420px, calc(100vw - 28px))",
+        width: "min(370px, calc(100vw - 40px))",
         height: "68px",
       }}
     >
-      <nav className="w-full h-full bg-white/95 dark:bg-[#14161A]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/15 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.28)] flex items-center justify-between px-3 sm:px-4 select-none">
+      <nav className="w-full h-full bg-white/95 dark:bg-[#14161A]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/15 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.28)] flex items-center justify-between px-3 select-none">
         {navItems.map((item) => {
           const isActive =
             currentPath === item.to ||
