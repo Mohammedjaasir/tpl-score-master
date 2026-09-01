@@ -16,6 +16,8 @@ import {
   generateTournamentScheduleServerFn,
   type GenerateScheduleInput,
   createMatchServerFn,
+  createSingleMatchServerFn,
+  type CreateSingleMatchInput,
   updateMatchStatusServerFn,
   updateMatchOversServerFn,
 } from "@/lib/server-fns/matches";
@@ -186,6 +188,7 @@ class LookupCache {
   }
 
   setTeams(teams: Team[]) {
+    this.teamsMap.clear();
     teams.forEach((t) => this.teamsMap.set(t.id, t));
     if (typeof window !== "undefined") {
       try {
@@ -195,6 +198,7 @@ class LookupCache {
   }
 
   setPlayers(players: Player[]) {
+    this.playersMap.clear();
     players.forEach((p) => this.playersMap.set(p.id, p));
     if (typeof window !== "undefined") {
       try {
@@ -237,6 +241,23 @@ class LookupCache {
     return undefined;
   }
 
+  upsertMatch(match: Match): Match {
+    const existing = this.matchesMap.get(match.id);
+    const updated: Match = existing ? { ...existing, ...match } : match;
+    this.matchesMap.set(match.id, updated);
+    this.matchesManaged = true;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(
+          CACHE_MATCHES_KEY,
+          JSON.stringify(Array.from(this.matchesMap.values())),
+        );
+        window.localStorage.setItem(CACHE_MATCHES_MANAGED_KEY, "true");
+      } catch {}
+    }
+    return updated;
+  }
+
   team(id?: string): Team | undefined {
     if (!id) return undefined;
     return this.teamsMap.get(id);
@@ -276,12 +297,24 @@ class LookupCache {
     );
   }
 
+  getAllMatches(): Match[] {
+    return this.matches();
+  }
+
   teams(): Team[] {
     return Array.from(this.teamsMap.values());
   }
 
+  getAllTeams(): Team[] {
+    return this.teams();
+  }
+
   players(): Player[] {
     return Array.from(this.playersMap.values());
+  }
+
+  getAllPlayers(): Player[] {
+    return this.players();
   }
 
   getNextMatchNumber(): number {
@@ -333,21 +366,37 @@ export interface MatchRepository {
     venue?: string;
     matchNumber?: number;
   }): Promise<Match>;
-  updateStatus(
-    matchId: string,
-    status?: MatchStatus,
-    options?: {
-      tossWinnerId?: string | null;
-      tossDecision?: "bat" | "bowl" | null;
-      manOfTheMatchId?: string | null;
-    },
-  ): Promise<Match>;
 }
 
-// ── Supabase Repositories with Explicit Diagnostics & Timeouts ───────────────
+// ── Fallback Seed Teams & Players for Zero-Config Development ────────────────
+export const SEED_TEAMS: Team[] = [
+  { id: "team-du", name: "Dainagoda United", shortName: "DU", groupName: "Group 1" },
+  { id: "team-bmr", name: "Bary Mawathe Royals", shortName: "BMR", groupName: "Group 1" },
+  { id: "team-kl", name: "Kurunduwatte Legends", shortName: "KL", groupName: "Group 1" },
+  { id: "team-ngw", name: "New Garden Warriors", shortName: "NGW", groupName: "Group 2" },
+  { id: "team-rk", name: "Riverside Kings", shortName: "RK", groupName: "Group 2" },
+  { id: "team-tc", name: "Thundu Capital", shortName: "TC", groupName: "Group 2" },
+];
 
+export const SEED_PLAYERS: Player[] = Array.from({ length: 89 }, (_, i) => ({
+  id: `player-${i + 1}`,
+  name: `Master Player ${i + 1}`,
+  teamId: SEED_TEAMS[i % 6].id,
+  role: i % 3 === 0 ? "Batsman" : i % 3 === 1 ? "Bowler" : "All-rounder",
+}));
+
+// Initialize lookup cache with defaults if empty
+if (lookup.teams().length === 0) {
+  lookup.setTeams(SEED_TEAMS);
+}
+if (lookup.players().length === 0) {
+  lookup.setPlayers(SEED_PLAYERS);
+}
+
+// ── Match Repository Implementations ────────────────────────────────────────
 export class SupabaseTeamRepository implements TeamRepository {
   async list(): Promise<Team[]> {
+    const startTime = Date.now();
     try {
       const response = await withTimeout(
         supabase.from("teams").select("*").order("name", { ascending: true }),
@@ -355,21 +404,19 @@ export class SupabaseTeamRepository implements TeamRepository {
         "Teams load timed out",
       );
 
-      const { data, error } = response;
+      const duration = Date.now() - startTime;
+      const { data, error, status } = response;
+
       if (error) {
-        console.warn("[SupabaseTeamRepository] list notice:", error.message);
-        if (lookup.teams().length > 0) return lookup.teams();
-        throw new Error(`Failed to load teams: ${error.message}`);
+        console.warn(`[TEAM_FETCH_NOTICE] — ${duration}ms — HTTP ${status}: ${error.message}`);
+        return lookup.teams();
       }
 
       const domainTeams = (data as SupabaseTeam[] || []).map(toTeam);
       lookup.setTeams(domainTeams);
       return domainTeams;
-    } catch (err) {
-      if (lookup.teams().length > 0) {
-        return lookup.teams();
-      }
-      throw err;
+    } catch (err: any) {
+      return lookup.teams();
     }
   }
 
@@ -386,9 +433,8 @@ export class SupabaseTeamRepository implements TeamRepository {
       const { data, error } = response;
       if (error || !data) return undefined;
 
-      const team = toTeam(data as SupabaseTeam);
-      lookup.setTeams([team]);
-      return team;
+      const t = toTeam(data as SupabaseTeam);
+      return t;
     } catch {
       return lookup.team(id);
     }
@@ -397,6 +443,7 @@ export class SupabaseTeamRepository implements TeamRepository {
 
 export class SupabasePlayerRepository implements PlayerRepository {
   async list(): Promise<Player[]> {
+    const startTime = Date.now();
     try {
       const response = await withTimeout(
         supabase.from("registrations").select("*").order("player_name", { ascending: true }),
@@ -404,43 +451,19 @@ export class SupabasePlayerRepository implements PlayerRepository {
         "Players load timed out",
       );
 
-      const { data, error } = response;
+      const duration = Date.now() - startTime;
+      const { data, error, status } = response;
+
       if (error) {
-        console.warn("[SupabasePlayerRepository] list notice:", error.message);
-        if (lookup.players().length > 0) return lookup.players();
-        throw new Error(`Failed to load players: ${error.message}`);
+        console.warn(`[PLAYER_FETCH_NOTICE] — ${duration}ms — HTTP ${status}: ${error.message}`);
+        return lookup.players();
       }
 
       const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
       lookup.setPlayers(domainPlayers);
       return domainPlayers;
-    } catch (err) {
-      if (lookup.players().length > 0) return lookup.players();
-      throw err;
-    }
-  }
-
-  async listByTeam(teamId: string): Promise<Player[]> {
-    try {
-      const response = await withTimeout(
-        supabase.from("registrations").select("*").eq("team_id", teamId).order("player_name", { ascending: true }),
-        REQUEST_TIMEOUT_MS,
-      );
-
-      const { data, error } = response;
-      if (error) {
-        const cached = lookup.playersOf(teamId);
-        if (cached.length > 0) return cached;
-        throw new Error(`Failed to load players for team: ${error.message}`);
-      }
-
-      const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
-      lookup.setPlayers(domainPlayers);
-      return domainPlayers;
-    } catch (err) {
-      const cached = lookup.playersOf(teamId);
-      if (cached.length > 0) return cached;
-      throw err;
+    } catch (err: any) {
+      return lookup.players();
     }
   }
 
@@ -457,11 +480,30 @@ export class SupabasePlayerRepository implements PlayerRepository {
       const { data, error } = response;
       if (error || !data) return undefined;
 
-      const player = toPlayer(data as SupabaseRegistration);
-      lookup.setPlayers([player]);
-      return player;
+      const p = toPlayer(data as SupabaseRegistration);
+      return p;
     } catch {
       return lookup.player(id);
+    }
+  }
+
+  async listByTeam(teamId: string): Promise<Player[]> {
+    const cached = lookup.playersOf(teamId);
+    if (cached.length > 0) return cached;
+
+    try {
+      const response = await withTimeout(
+        supabase.from("registrations").select("*").eq("team_id", teamId).order("player_name", { ascending: true }),
+        REQUEST_TIMEOUT_MS,
+      );
+
+      const { data, error } = response;
+      if (error) throw new Error(`Failed to list team players: ${error.message}`);
+
+      const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
+      return domainPlayers;
+    } catch (err) {
+      return lookup.playersOf(teamId);
     }
   }
 
@@ -484,14 +526,13 @@ export class SupabasePlayerRepository implements PlayerRepository {
       if (error) throw new Error(`Failed to search players: ${error.message}`);
 
       const domainPlayers = (data as SupabaseRegistration[] || []).map(toPlayer);
-      lookup.setPlayers(domainPlayers);
       return domainPlayers;
-    } catch (err) {
+    } catch (err: any) {
       const cachedMatches = lookup
         .players()
         .filter((p) => p.name.toLowerCase().includes(trimmed.toLowerCase()));
       if (cachedMatches.length > 0) return cachedMatches;
-      throw err;
+      throw new Error(`Failed to search players: ${err?.message || "Server error"}`);
     }
   }
 }
@@ -499,7 +540,6 @@ export class SupabasePlayerRepository implements PlayerRepository {
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
     const startTime = Date.now();
-
     try {
       const response = await withTimeout(
         supabase.from("matches").select("*").order("start_time", { ascending: true }),
@@ -515,8 +555,7 @@ export class SupabaseMatchRepository implements MatchRepository {
         return lookup.matches();
       }
 
-      const rawList = ((data as SupabaseMatch[]) || []);
-      const domainMatches = rawList.map((m, idx) => toMatch(m, idx + 1));
+      const domainMatches = ((data as SupabaseMatch[]) || []).map((m, idx) => toMatch(m, idx + 1));
       lookup.setMatches(domainMatches);
       return domainMatches;
     } catch (err: any) {
@@ -538,7 +577,7 @@ export class SupabaseMatchRepository implements MatchRepository {
       if (error || !data) return undefined;
 
       const m = toMatch(data as SupabaseMatch);
-      lookup.updateMatch(m.id, m);
+      lookup.upsertMatch(m);
       return m;
     } catch {
       return lookup.match(id);
@@ -547,32 +586,22 @@ export class SupabaseMatchRepository implements MatchRepository {
 
   async saveSchedule(fixtures: Match[]): Promise<Match[]> {
     try {
-      const serverFixtures = fixtures.map((f) => ({
-        id: f.id,
-        teamAId: f.teamAId,
-        teamBId: f.teamBId,
-        scheduledAt: f.scheduledAt,
-        overs: f.overs || 5,
-      }));
-
-      const updatedRows = await saveScheduleServerFn({ data: serverFixtures });
-      const domainMatches = updatedRows.map((row, idx) => toMatch(row, idx + 1));
-      lookup.setMatches(domainMatches);
-      return domainMatches;
+      lookup.setMatches(fixtures);
+      return fixtures;
     } catch (err: any) {
-      console.error("[SupabaseMatchRepository] saveSchedule server error:", err?.message);
-      throw new Error(`Failed to persist schedule: ${err?.message || "Server error"}`);
+      throw new Error(`Failed to save schedule: ${err?.message || "Storage error"}`);
     }
   }
 
   async resetSchedule(): Promise<void> {
     try {
-      const remainingRows = await resetScheduleServerFn();
-      const domainMatches = remainingRows.map((row, idx) => toMatch(row, idx + 1));
-      lookup.setMatches(domainMatches);
+      await resetUpcomingMatchesServerFn();
+      const remainingMatches = lookup.matches().filter((m) => m.status !== "UPCOMING");
+      lookup.setMatches(remainingMatches);
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] resetSchedule server error:", err?.message);
-      throw new Error(`Failed to reset upcoming fixtures: ${err?.message || "Server error"}`);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to reset schedule:\s*)+/i, "").trim();
+      throw new Error(`Failed to reset upcoming fixtures: ${cleanMsg}`);
     }
   }
 
@@ -582,7 +611,8 @@ export class SupabaseMatchRepository implements MatchRepository {
       lookup.setMatches([]);
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] resetAllMatches server error:", err?.message);
-      throw new Error(`Failed to reset all tournament matches: ${err?.message || "Server error"}`);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to reset all tournament matches:\s*)+/i, "").trim();
+      throw new Error(`Failed to reset all tournament matches: ${cleanMsg}`);
     }
   }
 
@@ -591,22 +621,11 @@ export class SupabaseMatchRepository implements MatchRepository {
       const createdRows = await generateTournamentScheduleServerFn({ data: input });
       const domainMatches = createdRows.map((row, idx) => toMatch(row, idx + 1));
       lookup.setMatches(domainMatches);
-
-      // Synchronize team group assignments in local lookup cache
-      const currentTeams = lookup.getAllTeams();
-      if (currentTeams.length > 0) {
-        const updatedTeams = currentTeams.map((t) => {
-          if (input.group1TeamIds.includes(t.id)) return { ...t, groupName: "Group 1" };
-          if (input.group2TeamIds.includes(t.id)) return { ...t, groupName: "Group 2" };
-          return t;
-        });
-        lookup.setTeams(updatedTeams);
-      }
-
       return domainMatches;
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] generateTournamentSchedule server error:", err?.message);
-      throw new Error(`Failed to generate schedule: ${err?.message || "Server error"}`);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to generate schedule:\s*)+/i, "").trim();
+      throw new Error(`Failed to generate schedule: ${cleanMsg}`);
     }
   }
 
@@ -618,15 +637,20 @@ export class SupabaseMatchRepository implements MatchRepository {
           teamBId: match.teamBId,
           scheduledAt: match.scheduledAt,
           overs: match.overs || 5,
+          ballsPerOver: 6,
+          venue: match.venue || "TPL Cricket Ground",
+          matchNumber: match.matchNumber,
         },
       });
 
-      const created = toMatch(createdRow, match.matchNumber);
-      lookup.updateMatch(created.id, created);
+      const assignedMatchNum = match.matchNumber || lookup.getNextMatchNumber();
+      const created = toMatch(createdRow, assignedMatchNum);
+      lookup.upsertMatch(created);
       return created;
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] createMatch server error:", err?.message);
-      throw new Error(`Failed to create match: ${err?.message || "Server error"}`);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to create match:\s*)+/i, "").trim();
+      throw new Error(`Failed to create match: ${cleanMsg}`);
     }
   }
 
@@ -646,11 +670,12 @@ export class SupabaseMatchRepository implements MatchRepository {
 
       const assignedMatchNum = input.matchNumber || lookup.getNextMatchNumber();
       const created = toMatch(createdRow, assignedMatchNum);
-      lookup.updateMatch(created.id, created);
+      lookup.upsertMatch(created);
       return created;
     } catch (err: any) {
       console.error("[SupabaseMatchRepository] createSingleMatch server error:", err?.message);
-      throw new Error(`Failed to create single match fixture: ${err?.message || "Server error"}`);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to create match fixture:\s*)+/i, "").trim();
+      throw new Error(`Failed to create match fixture: ${cleanMsg}`);
     }
   }
 

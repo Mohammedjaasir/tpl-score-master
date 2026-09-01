@@ -116,7 +116,7 @@ function AdminPortalPage() {
   const [showScheduleGeneratorModal, setShowScheduleGeneratorModal] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
-  // Single Match state
+  // Single Match state (12-hour format)
   const [singleMatchTeam1, setSingleMatchTeam1] = useState("");
   const [singleMatchTeam2, setSingleMatchTeam2] = useState("");
   const [singleMatchDate, setSingleMatchDate] = useState("2026-08-30");
@@ -358,6 +358,34 @@ function AdminPortalPage() {
     setShowSingleMatchModal(true);
   };
 
+  const handleOpenScheduleGenerator = () => {
+    setScheduleActionError(null);
+    setResetSuccessMsg(null);
+    const g1 = teams.filter(
+      (t) =>
+        (t.groupName || "").includes("1") ||
+        (t.groupName || "").toUpperCase().includes("A") ||
+        ["team-du", "team-bmr", "team-kl"].includes(t.id),
+    );
+    const g2 = teams.filter(
+      (t) =>
+        (t.groupName || "").includes("2") ||
+        (t.groupName || "").toUpperCase().includes("B") ||
+        ["team-ngw", "team-rk", "team-tc"].includes(t.id),
+    );
+    if (g1.length >= 3) {
+      setGenGroup1Teams([g1[0].id, g1[1].id, g1[2].id]);
+    } else if (teams.length >= 6) {
+      setGenGroup1Teams([teams[0].id, teams[1].id, teams[2].id]);
+    }
+    if (g2.length >= 3) {
+      setGenGroup2Teams([g2[0].id, g2[1].id, g2[2].id]);
+    } else if (teams.length >= 6) {
+      setGenGroup2Teams([teams[3].id, teams[4].id, teams[5].id]);
+    }
+    setShowScheduleGeneratorModal(true);
+  };
+
   // Modal body scroll lock and escape key handler
   useEffect(() => {
     const isAnyModalOpen =
@@ -445,15 +473,26 @@ function AdminPortalPage() {
         matchNumber: nextMatchNumber,
       });
 
-      const updatedMatches = await matchRepository.list();
-      queryClient.setQueryData(["matches"], updatedMatches);
-      broadcastTournamentUpdate();
-      await refetchMatches();
+      // 1. Immediately update UI state and close modal upon confirmed creation
+      queryClient.setQueryData<Match[]>(["matches"], (old = []) => {
+        const exists = old.some((m) => m.id === created.id);
+        return exists ? old.map((m) => (m.id === created.id ? created : m)) : [...old, created];
+      });
       setShowSingleMatchModal(false);
+      setScheduleActionError(null);
       setResetSuccessMsg(`Match #${String(created.matchNumber).padStart(2, "0")} created successfully.`);
+
+      // 2. Perform background revalidation safely without failing user creation
+      try {
+        broadcastTournamentUpdate();
+        await refetchMatches();
+      } catch (syncErr) {
+        console.warn("[handleCreateSingleMatchSubmit] Background sync notice:", syncErr);
+      }
     } catch (err: any) {
       console.error("[handleCreateSingleMatchSubmit] Error:", err);
-      setScheduleActionError(err?.message || "Failed to create single match fixture.");
+      const cleanMsg = (err?.message || "Failed to create match fixture.").replace(/^(Failed to create (single )?match fixture:\s*)+/i, "").trim();
+      setScheduleActionError(cleanMsg);
     } finally {
       setIsScheduleActionLoading(false);
     }
@@ -487,12 +526,18 @@ function AdminPortalPage() {
 
       await matchRepository.resetAllMatches();
       queryClient.setQueryData(["matches"], []);
-      broadcastTournamentUpdate();
-      await refetchMatches();
       setShowResetAllModal(false);
+      setScheduleActionError(null);
       setResetSuccessMsg(
         "All test matches and match-generated statistics have been reset. Master player records, teams, and group assignments are strictly preserved."
       );
+
+      try {
+        broadcastTournamentUpdate();
+        await refetchMatches();
+      } catch (syncErr) {
+        console.warn("[handleResetAllMatches] Background sync notice:", syncErr);
+      }
     } catch (err: any) {
       console.error("[handleResetAllMatches] Error:", err);
       setScheduleActionError(err?.message || "Unable to reset all matches. Please try again.");
@@ -532,16 +577,6 @@ function AdminPortalPage() {
     try {
       const startTime24 = parseTime12To24(genStartHour, genStartMinute, genStartAmPm);
 
-      // Save group assignments in localStorage for persistent group configuration
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            "tpl-schedule-groups",
-            JSON.stringify({ group1: genGroup1Teams, group2: genGroup2Teams })
-          );
-        } catch {}
-      }
-
       const generated = await matchRepository.generateTournamentSchedule({
         group1TeamIds: genGroup1Teams,
         group2TeamIds: genGroup2Teams,
@@ -553,10 +588,16 @@ function AdminPortalPage() {
       });
 
       queryClient.setQueryData(["matches"], generated);
-      broadcastTournamentUpdate();
-      await refetchMatches();
       setShowScheduleGeneratorModal(false);
+      setScheduleActionError(null);
       setResetSuccessMsg(`Successfully generated ${generated.length} cross-group tournament matches!`);
+
+      try {
+        broadcastTournamentUpdate();
+        await refetchMatches();
+      } catch (syncErr) {
+        console.warn("[handleGenerateScheduleSubmit] Background sync notice:", syncErr);
+      }
     } catch (err: any) {
       console.error("[handleGenerateScheduleSubmit] Error:", err);
       setScheduleActionError(err?.message || "Failed to generate tournament schedule.");
@@ -582,8 +623,14 @@ function AdminPortalPage() {
       await matchRepository.resetSchedule();
       const remainingMatches = await matchRepository.list();
       queryClient.setQueryData(["matches"], remainingMatches);
-      broadcastTournamentUpdate();
       setShowResetConfirm(false);
+      setScheduleActionError(null);
+
+      try {
+        broadcastTournamentUpdate();
+      } catch (syncErr) {
+        console.warn("[handleResetMatches] Background sync notice:", syncErr);
+      }
     } catch (err: any) {
       console.error("[handleResetMatches] Error:", err);
       setScheduleActionError(err?.message || "Unable to reset upcoming fixtures. Please try again.");
@@ -617,11 +664,20 @@ function AdminPortalPage() {
       };
 
       const created = await matchRepository.createMatch(newMatch);
-      const updated = [...matches, created];
-      queryClient.setQueryData(["matches"], updated);
-      broadcastTournamentUpdate();
-      await refetchMatches();
+      queryClient.setQueryData<Match[]>(["matches"], (old = []) => {
+        const exists = old.some((m) => m.id === created.id);
+        return exists ? old.map((m) => (m.id === created.id ? created : m)) : [...old, created];
+      });
       setShowKnockoutModal(false);
+      setScheduleActionError(null);
+      setResetSuccessMsg(`Knockout fixture #${String(created.matchNumber).padStart(2, "0")} scheduled successfully.`);
+
+      try {
+        broadcastTournamentUpdate();
+        await refetchMatches();
+      } catch (syncErr) {
+        console.warn("[handleScheduleKnockout] Background sync notice:", syncErr);
+      }
     } catch (err: any) {
       console.error("[handleScheduleKnockout] Error:", err);
       setScheduleActionError(err?.message || "Unable to schedule knockout match. Please try again.");
@@ -1296,10 +1352,7 @@ function AdminPortalPage() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setScheduleActionError(null);
-                    setShowScheduleGeneratorModal(true);
-                  }}
+                  onClick={handleOpenScheduleGenerator}
                   disabled={isScheduleActionLoading}
                   className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all min-h-[48px]"
                 >
@@ -1773,6 +1826,8 @@ function AdminPortalPage() {
           </div>
         </div>
       )}
+
+
 
       {/* ── CREATE SINGLE MATCH MODAL ─────────────────────────────────────── */}
       {showSingleMatchModal && (
@@ -2290,6 +2345,54 @@ function AdminPortalPage() {
                   </>
                 ) : (
                   <span>Confirm Reset</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESET ALL TOURNAMENT MATCHES CONFIRMATION MODAL ──────────────── */}
+      {showResetAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white border border-red-200 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl">
+            <div className="flex items-center gap-3 text-red-600">
+              <AlertCircle className="h-6 w-6 shrink-0" />
+              <h3 className="text-base font-black uppercase text-[#111827]">Reset All Tournament Matches?</h3>
+            </div>
+            <p className="text-xs text-[#4B5563] leading-relaxed">
+              This will safely clear <strong>all match fixtures, innings, and live scoring events</strong>.
+              <br /><br />
+              <span className="text-emerald-700 font-bold">✓ Master Teams, Players, Rosters, and Group Configurations are strictly preserved.</span>
+            </p>
+            {scheduleActionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
+                {scheduleActionError}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setScheduleActionError(null);
+                  setShowResetAllModal(false);
+                }}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors min-h-[48px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetAllMatches}
+                disabled={isScheduleActionLoading}
+                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2 min-h-[48px]"
+              >
+                {isScheduleActionLoading ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Resetting All...</span>
+                  </>
+                ) : (
+                  <span>Confirm Reset All</span>
                 )}
               </button>
             </div>

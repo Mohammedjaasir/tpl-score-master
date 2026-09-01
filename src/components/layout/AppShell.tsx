@@ -106,10 +106,10 @@ export function AppShell({
               <span>Admin</span>
             </Link>
 
-            {/* Profile Avatar Button */}
+            {/* Profile Avatar Button (Desktop only) */}
             <Link
               to="/profile"
-              className="tap p-2 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#111111] border border-[#E5E7EB] transition-colors"
+              className="tap hidden md:inline-flex p-2 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#111111] border border-[#E5E7EB] transition-colors"
               aria-label="Player Profile"
               title="Player Profile & Credentials"
             >

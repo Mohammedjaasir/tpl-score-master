@@ -289,19 +289,8 @@ export const generateTournamentScheduleServerFn = createServerFn({ method: "POST
       .order("start_time", { ascending: true });
 
     if (error || !data) {
-      throw new Error(`Failed to generate schedule: ${error?.message || "Unknown error"}`);
-    }
-
-    // Persist Group 1 and Group 2 team assignments in database teams table
-    try {
-      for (const id of input.group1TeamIds) {
-        await supabaseAdmin.from("teams").update({ group_name: "Group 1" }).eq("id", id);
-      }
-      for (const id of input.group2TeamIds) {
-        await supabaseAdmin.from("teams").update({ group_name: "Group 2" }).eq("id", id);
-      }
-    } catch (teamGroupErr: any) {
-      console.warn("[generateTournamentScheduleServerFn] Teams group update notice:", teamGroupErr?.message);
+      const errMsg = (error?.message || "Unknown error").replace(/^(Failed to generate schedule:\s*)+/i, "").trim();
+      throw new Error(`Failed to generate schedule: ${errMsg}`);
     }
 
     return data as SupabaseMatch[];
@@ -353,19 +342,6 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
     const overs = Math.max(1, Math.min(50, Math.floor(Number(input.overs) || 5)));
     const ballsPerOver = Math.max(1, Math.min(12, Math.floor(Number(input.ballsPerOver) || 6)));
 
-    // 5. Determine unique match number
-    let matchNumber = input.matchNumber;
-    if (!matchNumber || matchNumber <= 0) {
-      const { data: existingMatches } = await supabaseAdmin
-        .from("matches")
-        .select("match_number")
-        .order("match_number", { ascending: false })
-        .limit(1);
-
-      const highestMatchNum = existingMatches?.[0]?.match_number || 0;
-      matchNumber = highestMatchNum + 1;
-    }
-
     const row: Omit<SupabaseMatch, "id" | "created_at" | "updated_at"> = {
       team_a_id: input.teamAId,
       team_b_id: input.teamBId,
@@ -373,7 +349,6 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
       status: "scheduled",
       total_overs: overs,
       balls_per_over: ballsPerOver,
-      match_number: matchNumber,
     };
 
     const { data, error } = await supabaseAdmin
@@ -383,7 +358,8 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to create match fixture: ${error?.message || "Unknown error"}`);
+      const errMsg = (error?.message || "Unknown error").replace(/^(Failed to create match fixture:\s*)+/i, "").trim();
+      throw new Error(`Failed to create match fixture: ${errMsg}`);
     }
 
     return data as SupabaseMatch;

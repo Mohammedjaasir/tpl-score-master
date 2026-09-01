@@ -42,56 +42,26 @@ export function PointablesPage() {
 
   const hasTournamentData = stats.orangeCap.length > 0 || stats.purpleCap.length > 0 || completedCount > 0;
 
-  // Grouped Standings with persistent group assignment detection
-  const savedScheduleGroups = useMemo(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const raw = window.localStorage.getItem("tpl-schedule-groups");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (
-            Array.isArray(parsed?.group1) &&
-            Array.isArray(parsed?.group2) &&
-            parsed.group1.length === 3 &&
-            parsed.group2.length === 3
-          ) {
-            return parsed as { group1: string[]; group2: string[] };
-          }
-        }
-      } catch {}
-    }
-    return null;
-  }, []);
-
+  // Grouped Standings with master team group assignment
   const g1TeamIds = useMemo(() => {
-    if (
-      savedScheduleGroups?.group1 &&
-      savedScheduleGroups.group1.every((id) => teams.some((t) => t.id === id))
-    ) {
-      return new Set(savedScheduleGroups.group1);
-    }
     const g1 = teams.filter(
       (t) =>
         (t.groupName || "").includes("1") ||
-        (t.groupName || "").toUpperCase().includes("A")
+        (t.groupName || "").toUpperCase().includes("A") ||
+        ["team-du", "team-bmr", "team-kl"].includes(t.id),
     );
     return new Set(g1.length > 0 ? g1.map((t) => t.id) : teams.slice(0, 3).map((t) => t.id));
-  }, [teams, savedScheduleGroups]);
+  }, [teams]);
 
   const g2TeamIds = useMemo(() => {
-    if (
-      savedScheduleGroups?.group2 &&
-      savedScheduleGroups.group2.every((id) => teams.some((t) => t.id === id))
-    ) {
-      return new Set(savedScheduleGroups.group2);
-    }
     const g2 = teams.filter(
       (t) =>
         (t.groupName || "").includes("2") ||
-        (t.groupName || "").toUpperCase().includes("B")
+        (t.groupName || "").toUpperCase().includes("B") ||
+        ["team-ngw", "team-rk", "team-tc"].includes(t.id),
     );
     return new Set(g2.length > 0 ? g2.map((t) => t.id) : teams.slice(3, 6).map((t) => t.id));
-  }, [teams, savedScheduleGroups]);
+  }, [teams]);
 
   const group1Standings = useMemo(() => calculateStandings(teams.filter((t) => g1TeamIds.has(t.id)), matches), [teams, matches, g1TeamIds]);
   const group2Standings = useMemo(() => calculateStandings(teams.filter((t) => g2TeamIds.has(t.id)), matches), [teams, matches, g2TeamIds]);

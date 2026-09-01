@@ -25,9 +25,6 @@ export interface TeamStanding {
 }
 
 export function calculateStandings(teams: Team[], matches: Match[]): TeamStanding[] {
-  // Only process completed matches
-  const completedMatches = matches.filter((m) => m.status === "COMPLETED");
-
   const map = new Map<
     string,
     {
@@ -59,27 +56,33 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     });
   });
 
-  completedMatches.forEach((m) => {
-    const statsA = map.get(m.teamAId);
-    const statsB = map.get(m.teamBId);
-    if (!statsA || !statsB) return;
-
-    statsA.played += 1;
-    statsB.played += 1;
-
+  matches.forEach((m) => {
     let runsA = 0;
     let legalBallsA = 0;
     let runsB = 0;
     let legalBallsB = 0;
     let winnerId: string | null = m.winnerId ?? null;
     let isTie = false;
+    let isMatchCompleted = m.status === "COMPLETED";
 
+    // Attempt to hydrate match state from local storage scoring document
     if (typeof window !== "undefined") {
       try {
         const raw = window.localStorage.getItem("tpl-scoring:" + m.id);
         if (raw) {
           const doc = JSON.parse(raw);
-          const state = buildMatchState({ match: m, setup: doc.setup, deliveries: doc.deliveries });
+          const state = buildMatchState({
+            match: m,
+            setup: doc.setup || { playingXI: {} },
+            deliveries: doc.deliveries || [],
+            secondInningsStarted: doc.secondInningsStarted || false,
+            secondInningsOpeners: doc.secondInningsOpeners,
+          });
+
+          if (doc.isCompleted || state.phase === "complete") {
+            isMatchCompleted = true;
+          }
+
           const inn1 = state.innings[0];
           const inn2 = state.innings[1];
           if (inn1) {
@@ -100,13 +103,45 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
               legalBallsA = team2Balls;
             }
 
-            if (team1Runs > team2Runs) winnerId = inn1.battingTeamId;
-            else if (team2Runs > team1Runs) winnerId = inn2 ? inn2.battingTeamId : null;
-            else if (team1Runs === team2Runs && team2Balls > 0) isTie = true;
+            const target = inn2?.target ?? (team1Runs + 1);
+            if (inn2 && team2Runs >= target) {
+              winnerId = inn2.battingTeamId;
+            } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team2Runs < team1Runs) {
+              winnerId = inn1.battingTeamId;
+            } else if (inn1 && !inn2 && (state.phase === "complete" || doc.isCompleted)) {
+              winnerId = inn1.battingTeamId;
+            } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team1Runs === team2Runs && team2Balls > 0) {
+              isTie = true;
+            }
           }
         }
       } catch {}
     }
+
+    // Fallback: Infer winner from resultText or winnerId if not resolved from scoring document
+    if (!winnerId && !isTie && m.resultText) {
+      const resLower = m.resultText.toLowerCase();
+      if (resLower.includes("won by") || resLower.includes(" won")) {
+        const teamA = teams.find((t) => t.id === m.teamAId);
+        const teamB = teams.find((t) => t.id === m.teamBId);
+        if (teamA && (resLower.startsWith(teamA.name.toLowerCase()) || resLower.startsWith(teamA.shortName.toLowerCase()))) {
+          winnerId = teamA.id;
+        } else if (teamB && (resLower.startsWith(teamB.name.toLowerCase()) || resLower.startsWith(teamB.shortName.toLowerCase()))) {
+          winnerId = teamB.id;
+        }
+      } else if (resLower.includes("tie") || resLower.includes("tied")) {
+        isTie = true;
+      }
+    }
+
+    if (!isMatchCompleted && !winnerId && !isTie) return;
+
+    const statsA = map.get(m.teamAId);
+    const statsB = map.get(m.teamBId);
+    if (!statsA || !statsB) return;
+
+    statsA.played += 1;
+    statsB.played += 1;
 
     if (winnerId === m.teamAId) {
       statsA.won += 1;
@@ -120,6 +155,11 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
       statsA.tied += 1;
       statsA.points += 1;
       statsB.tied += 1;
+      statsB.points += 1;
+    } else {
+      statsA.noResult += 1;
+      statsA.points += 1;
+      statsB.noResult += 1;
       statsB.points += 1;
     }
 
