@@ -53,6 +53,13 @@ if (typeof globalThis !== "undefined" && typeof (globalThis as any).WebSocket ==
   };
 }
 
+export const isSupabaseConfigured = Boolean(
+  rawUrl &&
+    !rawUrl.includes("placeholder") &&
+    rawKey &&
+    !rawKey.includes("placeholder"),
+);
+
 export const supabase = createClient(validUrl, validKey, {
   auth: {
     persistSession: typeof window !== "undefined",

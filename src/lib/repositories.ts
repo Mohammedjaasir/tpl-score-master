@@ -8,7 +8,7 @@ import type {
   SupabaseTeam,
   Team,
 } from "@/types/cricket";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   saveScheduleServerFn,
   resetScheduleServerFn,
@@ -23,7 +23,7 @@ import {
 } from "@/lib/server-fns/matches";
 
 export const TOURNAMENT_NAME = "TPL 2026";
-const REQUEST_TIMEOUT_MS = 6000; // 6 seconds maximum
+const REQUEST_TIMEOUT_MS = 3500; // 3.5 seconds maximum timeout
 
 /**
  * Strict timeout wrapper preventing infinite network hangs.
@@ -396,6 +396,9 @@ if (lookup.players().length === 0) {
 // ── Match Repository Implementations ────────────────────────────────────────
 export class SupabaseTeamRepository implements TeamRepository {
   async list(): Promise<Team[]> {
+    if (!isSupabaseConfigured) {
+      return lookup.teams();
+    }
     const startTime = Date.now();
     try {
       const response = await withTimeout(
@@ -424,6 +427,8 @@ export class SupabaseTeamRepository implements TeamRepository {
     const cached = lookup.team(id);
     if (cached) return cached;
 
+    if (!isSupabaseConfigured) return cached;
+
     try {
       const response = await withTimeout(
         supabase.from("teams").select("*").eq("id", id).single(),
@@ -443,6 +448,9 @@ export class SupabaseTeamRepository implements TeamRepository {
 
 export class SupabasePlayerRepository implements PlayerRepository {
   async list(): Promise<Player[]> {
+    if (!isSupabaseConfigured) {
+      return lookup.players();
+    }
     const startTime = Date.now();
     try {
       const response = await withTimeout(
@@ -471,6 +479,8 @@ export class SupabasePlayerRepository implements PlayerRepository {
     const cached = lookup.player(id);
     if (cached) return cached;
 
+    if (!isSupabaseConfigured) return cached;
+
     try {
       const response = await withTimeout(
         supabase.from("registrations").select("*").eq("id", id).single(),
@@ -491,6 +501,8 @@ export class SupabasePlayerRepository implements PlayerRepository {
     const cached = lookup.playersOf(teamId);
     if (cached.length > 0) return cached;
 
+    if (!isSupabaseConfigured) return cached;
+
     try {
       const response = await withTimeout(
         supabase.from("registrations").select("*").eq("team_id", teamId).order("player_name", { ascending: true }),
@@ -510,6 +522,12 @@ export class SupabasePlayerRepository implements PlayerRepository {
   async search(query: string): Promise<Player[]> {
     const trimmed = query.trim();
     if (!trimmed) return this.list();
+
+    if (!isSupabaseConfigured) {
+      return lookup
+        .players()
+        .filter((p) => p.name.toLowerCase().includes(trimmed.toLowerCase()));
+    }
 
     try {
       const response = await withTimeout(
@@ -539,6 +557,9 @@ export class SupabasePlayerRepository implements PlayerRepository {
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {
+    if (!isSupabaseConfigured) {
+      return lookup.matches();
+    }
     const startTime = Date.now();
     try {
       const response = await withTimeout(

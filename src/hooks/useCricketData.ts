@@ -9,7 +9,7 @@ import {
 import type { Match, Player, Team } from "@/types/cricket";
 import { buildMatchState } from "@/lib/scoring/engine";
 import { useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export function usePrefetchCricketData() {
   useEffect(() => {
@@ -134,19 +134,22 @@ export function useMatches() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // 1. Cross-device Realtime channel for global match updates
-    const channel = supabase.channel("tpl-tournament-matches", {
-      config: { broadcast: { self: false } },
-    });
+    // 1. Cross-device Realtime channel for global match updates (only when Supabase is configured)
+    let channel: any = null;
+    if (isSupabaseConfigured) {
+      channel = supabase.channel("tpl-tournament-matches", {
+        config: { broadcast: { self: false } },
+      });
 
-    channel
-      .on("broadcast", { event: "tournament_updated" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["matches"] });
-      })
-      .on("broadcast", { event: "match_status_changed" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["matches"] });
-      })
-      .subscribe();
+      channel
+        .on("broadcast", { event: "tournament_updated" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["matches"] });
+        })
+        .on("broadcast", { event: "match_status_changed" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["matches"] });
+        })
+        .subscribe();
+    }
 
     // 2. BroadcastChannel for instant local cross-tab / cross-window sync
     let bc: BroadcastChannel | null = null;
@@ -167,7 +170,7 @@ export function useMatches() {
 
     return () => {
       window.removeEventListener("storage", handleStorage);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
       if (bc) bc.close();
     };
   }, [queryClient]);
