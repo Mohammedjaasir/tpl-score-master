@@ -21,10 +21,10 @@ function PublicHome() {
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
-    // Strict 5s maximum on initial loading state to avoid indefinite spinners
+    // Strict 3.5s maximum on initial loading state to avoid indefinite spinners
     const timer = setTimeout(() => {
       setLoadingTimedOut(true);
-    }, 5000);
+    }, 3500);
 
     return () => clearTimeout(timer);
   }, []);
@@ -34,7 +34,7 @@ function PublicHome() {
   const upcomingMatches = allMatches.filter((m) => m.status === "UPCOMING" || m.status === "READY");
   const completedMatches = allMatches.filter((m) => m.status === "COMPLETED");
 
-  // Loading state strictly terminates if query finishes OR 5s timer expires OR data is present
+  // Loading state strictly terminates if query finishes OR 3.5s timer expires OR data is present
   const isLoading = queryLoading && !loadingTimedOut && allMatches.length === 0;
   const isError = (queryError || (loadingTimedOut && allMatches.length === 0)) && allMatches.length === 0;
 
@@ -51,7 +51,7 @@ function PublicHome() {
       {/* Main Public Sections Container (Max 1280px-1400px centered with responsive padding) */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10 pb-16 flex flex-col gap-10">
 
-        {/* ── SECTION 1: LIVE MATCHES (HERO PROMINENCE) ────────────────── */}
+        {/* ── SECTION 1: LIVE MATCH ACTION (HERO PROMINENCE) ───────────── */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between px-1 border-b border-[#E5E5E5] pb-2.5">
             <div className="flex items-center gap-2.5">
@@ -77,30 +77,30 @@ function PublicHome() {
             </Link>
           </div>
 
-          {/* Loading Skeleton */}
+          {/* Loading State with Safe Timeout */}
           {isLoading && (
             <div className="card-surface p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
               <RefreshCw className="h-7 w-7 text-[#D9A928] animate-spin" />
-              <p className="text-xs font-bold text-[#5F6368]">Loading live tournament matches from database...</p>
+              <p className="text-xs font-bold text-[#5F6368]">Loading live matches...</p>
             </div>
           )}
 
           {/* Error / Timeout State with Retry */}
           {isError && !isLoading && (
-            <div className="card-surface p-6 sm:p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
-              <AlertCircle className="h-9 w-9 text-[#D9A928]" />
-              <p className="text-sm sm:text-base font-black text-[#111111] uppercase tracking-wide">
-                Unable to load live matches right now
-              </p>
+            <div className="card-surface p-8 sm:p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
+              <AlertCircle className="h-8 w-8 text-[#D9A928]" />
+              <h3 className="text-sm sm:text-base font-black text-[#111111] uppercase tracking-wide">
+                UNABLE TO LOAD LIVE MATCHES
+              </h3>
               <p className="text-xs text-[#5F6368] max-w-sm">
-                {error instanceof Error ? error.message : "Please check your network connection and try again."}
+                Unable to retrieve live tournament data right now.
               </p>
               <button
                 onClick={handleRetry}
                 className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-6 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-md transition-all"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                <span>Try Again</span>
+                <span>RETRY</span>
               </button>
             </div>
           )}
@@ -114,7 +114,7 @@ function PublicHome() {
             </div>
           )}
 
-          {/* Exact Reference Empty State when 0 matches are live */}
+          {/* Clean Empty State when 0 matches are live */}
           {!isLoading && !isError && liveMatches.length === 0 && (
             <NoLiveMatchesCard />
           )}

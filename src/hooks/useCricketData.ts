@@ -180,12 +180,22 @@ export function useMatches() {
     },
     initialData: () => {
       const cached = lookup.matches();
-      return cached.length > 0 ? cached.map(getEffectiveMatch) : undefined;
+      return (cached.length > 0 || lookup.isHydrated()) ? cached.map(getEffectiveMatch) : undefined;
     },
     staleTime: 1000 * 5, // 5 seconds for live matches
     retry: 1,
     retryDelay: 1000,
   });
+}
+
+export function useLiveMatches() {
+  const query = useMatches();
+  const liveMatches = (query.data || []).filter((m) => m.status === "LIVE");
+  return {
+    ...query,
+    liveMatches,
+    hasLiveMatches: liveMatches.length > 0,
+  };
 }
 
 export function useMatch(matchId?: string) {

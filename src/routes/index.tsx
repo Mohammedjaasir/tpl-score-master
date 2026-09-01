@@ -19,10 +19,10 @@ function PublicHome() {
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
-    // Independent component-level timeout enforcing a strict 5s maximum on initial loading state
+    // Strict 3.5s maximum on initial loading state to avoid indefinite spinners
     const timer = setTimeout(() => {
       setLoadingTimedOut(true);
-    }, 5000);
+    }, 3500);
 
     return () => clearTimeout(timer);
   }, []);
@@ -32,7 +32,7 @@ function PublicHome() {
   const upcomingMatches = allMatches.filter((m) => m.status === "UPCOMING" || m.status === "READY");
   const completedMatches = allMatches.filter((m) => m.status === "COMPLETED");
 
-  // Loading state strictly terminates if query finishes OR 5s timer expires OR data is present
+  // Loading state strictly terminates if query finishes OR 3.5s timer expires OR data is present
   const isLoading = queryLoading && !loadingTimedOut && allMatches.length === 0;
   const isError = (queryError || (loadingTimedOut && allMatches.length === 0)) && allMatches.length === 0;
 
@@ -49,13 +49,13 @@ function PublicHome() {
       {/* Main Public Sections Container */}
       <div className="mx-auto max-w-6xl px-4 pt-8 pb-16 flex flex-col gap-8">
 
-        {/* ── SECTION 1: LIVE MATCHES (REAL MATCHES ONLY) ───────────── */}
+        {/* ── SECTION 1: LIVE MATCH ACTION (REAL MATCHES ONLY) ──────── */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <Radio className={`h-4 w-4 ${liveMatches.length > 0 ? "text-red-500 animate-pulse" : "text-[#5F6368]"}`} />
               <h2 className="text-sm md:text-base font-black uppercase tracking-wider text-[#111111]">
-                LIVE MATCHES
+                LIVE MATCH ACTION
               </h2>
             </div>
             {liveMatches.length > 0 && (
@@ -66,42 +66,52 @@ function PublicHome() {
             )}
           </div>
 
-          {isLoading ? (
-            <div className="card-surface p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl">
+          {/* Loading State with Safe Timeout */}
+          {isLoading && (
+            <div className="card-surface p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
               <RefreshCw className="h-6 w-6 text-[#D9A928] animate-spin" />
-              <p className="text-xs font-bold text-[#5F6368]">Loading live tournament matches...</p>
+              <p className="text-xs font-bold text-[#5F6368]">Loading live matches...</p>
             </div>
-          ) : isError ? (
-            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl">
+          )}
+
+          {/* Error / Timeout State with Retry */}
+          {isError && !isLoading && (
+            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
               <AlertCircle className="h-8 w-8 text-[#D9A928]" />
-              <p className="text-sm font-black text-[#111111] uppercase tracking-wide">
-                Unable to load match data
-              </p>
+              <h3 className="text-sm sm:text-base font-black text-[#111111] uppercase tracking-wide">
+                UNABLE TO LOAD LIVE MATCHES
+              </h3>
               <p className="text-xs text-[#5F6368] max-w-sm">
-                Check your network connection or verify tournament broadcast settings.
+                Unable to retrieve live tournament data right now.
               </p>
               <button
                 onClick={handleRetry}
-                className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-md transition-all"
+                className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-6 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-md transition-all"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                <span>Retry Connection</span>
+                <span>RETRY</span>
               </button>
             </div>
-          ) : liveMatches.length > 0 ? (
+          )}
+
+          {/* Real Live Match Cards */}
+          {!isLoading && !isError && liveMatches.length > 0 && (
             <div className="flex flex-col gap-4">
               {liveMatches.map((m) => (
                 <MatchCard key={m.id} match={m} scorerMode={false} />
               ))}
             </div>
-          ) : (
-            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-2 border border-[#E5E5E5] bg-white rounded-3xl">
+          )}
+
+          {/* Clean Empty State when 0 matches are live */}
+          {!isLoading && !isError && liveMatches.length === 0 && (
+            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-2 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
               <Radio className="h-6 w-6 text-[#5F6368]/40 mb-1" />
-              <p className="text-xs font-black text-[#5F6368] uppercase tracking-wider">
+              <h3 className="text-xs font-black text-[#5F6368] uppercase tracking-wider">
                 NO LIVE MATCHES RIGHT NOW
-              </p>
+              </h3>
               <p className="text-[11px] text-[#5F6368]/70">
-                Check the schedule below or view upcoming match scorecards.
+                There are no live matches currently in progress.
               </p>
             </div>
           )}
