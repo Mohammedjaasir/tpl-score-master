@@ -22,6 +22,7 @@ import {
   ChevronRight,
   TrendingUp,
   Sparkles,
+  Calendar,
 } from "lucide-react";
 import { TeamLogo } from "@/components/team/TeamLogo";
 
@@ -40,6 +41,7 @@ export function PointablesPage() {
   const completedCount = matches.filter((m) => m.status === "COMPLETED").length;
   const isLoading = (loadingTeams || loadingMatches) && teams.length === 0;
 
+  const hasScheduledMatches = matches.length > 0 && standings.length > 0;
   const hasTournamentData = stats.orangeCap.length > 0 || stats.purpleCap.length > 0 || completedCount > 0;
 
   // Grouped Standings with master team group assignment
@@ -115,12 +117,9 @@ export function PointablesPage() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <span className="px-3.5 py-1.5 rounded-full bg-white border border-[#E5E5E5] text-xs font-black text-[#111111] uppercase shadow-xs">
-              {completedCount} Completed {completedCount === 1 ? "Match" : "Matches"}
-            </span>
             <Link
               to="/stats"
-              className="tap inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-xs font-black text-black uppercase shadow-xs transition-colors"
+              className="tap inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-xs font-black text-black uppercase shadow-xs transition-colors"
             >
               <span>Full Stats</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -153,7 +152,24 @@ export function PointablesPage() {
           </div>
         )}
 
-        {!isLoading && (
+        {/* Empty Standings State when no matches are scheduled */}
+        {!isLoading && !hasScheduledMatches && (
+          <div className="card-surface p-12 sm:p-16 flex flex-col items-center justify-center text-center gap-4 border border-[#E5E5E5] bg-white rounded-3xl shadow-sm my-2">
+            <div className="h-16 w-16 rounded-2xl bg-[#D9A928]/10 border border-[#D9A928]/30 flex items-center justify-center text-[#9A6A05] mb-1">
+              <Trophy className="h-8 w-8" />
+            </div>
+            <div className="max-w-md flex flex-col gap-1.5">
+              <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-[#111111]">
+                No Standings Available
+              </h3>
+              <p className="text-xs sm:text-sm text-[#5F6368] font-medium leading-relaxed">
+                No tournament matches have been scheduled yet.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && hasScheduledMatches && (
           <>
             {/* ==================================================================== */}
             {/* 1. STANDINGS TABLES (GROUP A & GROUP B) */}
@@ -1403,15 +1419,6 @@ export function PointablesPage() {
             </div>
 
           </>
-        )}
-
-        {/* Empty Standings State if 0 teams */}
-        {!isLoading && standings.length === 0 && (
-          <div className="card-surface p-12 text-center bg-white border border-[#E5E5E5] rounded-3xl flex flex-col items-center gap-3">
-            <Trophy className="h-10 w-10 text-[#5F6368]/30" />
-            <p className="text-sm font-black text-[#111111] uppercase">NO POINTS DATA AVAILABLE YET</p>
-            <p className="text-xs text-[#5F6368]">Tournament teams and standings will appear here once loaded.</p>
-          </div>
         )}
 
       </div>

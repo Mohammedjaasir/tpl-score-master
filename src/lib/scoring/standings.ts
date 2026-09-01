@@ -24,7 +24,30 @@ export interface TeamStanding {
   legalBallsAgainst: number;
 }
 
+/**
+ * Authoritative TPL Tournament Standings Calculation Engine.
+ *
+ * Derives standings strictly from scheduled/active tournament fixtures and completed match results.
+ * If no matches are scheduled, returns an empty array to trigger the Points Table empty state.
+ */
 export function calculateStandings(teams: Team[], matches: Match[]): TeamStanding[] {
+  // If no matches exist in the tournament, standings must be empty
+  if (!matches || matches.length === 0) {
+    return [];
+  }
+
+  // Filter teams to ONLY those participating in the current tournament fixtures
+  const scheduledTeamIds = new Set<string>();
+  matches.forEach((m) => {
+    if (m.teamAId) scheduledTeamIds.add(m.teamAId);
+    if (m.teamBId) scheduledTeamIds.add(m.teamBId);
+  });
+
+  const participatingTeams = teams.filter((t) => scheduledTeamIds.has(t.id));
+  if (participatingTeams.length === 0) {
+    return [];
+  }
+
   const map = new Map<
     string,
     {
@@ -41,7 +64,7 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     }
   >();
 
-  teams.forEach((t) => {
+  participatingTeams.forEach((t) => {
     map.set(t.id, {
       played: 0,
       won: 0,
@@ -103,15 +126,17 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
               legalBallsA = team2Balls;
             }
 
-            const target = inn2?.target ?? (team1Runs + 1);
-            if (inn2 && team2Runs >= target) {
-              winnerId = inn2.battingTeamId;
-            } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team2Runs < team1Runs) {
-              winnerId = inn1.battingTeamId;
-            } else if (inn1 && !inn2 && (state.phase === "complete" || doc.isCompleted)) {
-              winnerId = inn1.battingTeamId;
-            } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team1Runs === team2Runs && team2Balls > 0) {
-              isTie = true;
+            if (!winnerId) {
+              const target = inn2?.target ?? (team1Runs + 1);
+              if (inn2 && team2Runs >= target) {
+                winnerId = inn2.battingTeamId;
+              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team2Runs < team1Runs) {
+                winnerId = inn1.battingTeamId;
+              } else if (inn1 && !inn2 && (state.phase === "complete" || doc.isCompleted)) {
+                winnerId = inn1.battingTeamId;
+              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team1Runs === team2Runs && team2Balls > 0) {
+                isTie = true;
+              }
             }
           }
         }
@@ -174,7 +199,7 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     statsB.legalBallsAgainst += legalBallsA;
   });
 
-  const list: TeamStanding[] = teams.map((t) => {
+  const list: TeamStanding[] = participatingTeams.map((t) => {
     const s = map.get(t.id)!;
     const rpoFor = runsPerOver(s.runsFor, s.legalBallsFor);
     const rpoAgainst = runsPerOver(s.runsAgainst, s.legalBallsAgainst);
@@ -220,4 +245,60 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
   });
 
   return list;
+}
+
+export const getTournamentStandings = calculateStandings;
+
+export interface GroupedTournamentStandings {
+  groupA: TeamStanding[];
+  groupB: TeamStanding[];
+  hasStandings: boolean;
+  all: TeamStanding[];
+}
+
+export function getGroupedTournamentStandings(
+  teams: Team[],
+  matches: Match[],
+): GroupedTournamentStandings {
+  if (!matches || matches.length === 0) {
+    return {
+      groupA: [],
+      groupB: [],
+      hasStandings: false,
+      all: [],
+    };
+  }
+
+  const all = calculateStandings(teams, matches);
+  if (all.length === 0) {
+    return {
+      groupA: [],
+      groupB: [],
+      hasStandings: false,
+      all: [],
+    };
+  }
+
+  const g1Teams = teams.filter(
+    (t) =>
+      (t.groupName || "").includes("1") ||
+      (t.groupName || "").toUpperCase().includes("A") ||
+      ["team-du", "team-bmr", "team-kl"].includes(t.id),
+  );
+  const g2Teams = teams.filter(
+    (t) =>
+      (t.groupName || "").includes("2") ||
+      (t.groupName || "").toUpperCase().includes("B") ||
+      ["team-ngw", "team-rk", "team-tc"].includes(t.id),
+  );
+
+  const groupA = calculateStandings(g1Teams, matches);
+  const groupB = calculateStandings(g2Teams, matches);
+
+  return {
+    groupA,
+    groupB,
+    hasStandings: groupA.length > 0 || groupB.length > 0 || all.length > 0,
+    all,
+  };
 }

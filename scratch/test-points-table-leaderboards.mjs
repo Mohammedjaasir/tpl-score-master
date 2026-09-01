@@ -145,13 +145,13 @@ async function main() {
   console.log(`  ✓ After live +4 run boundary: Ashfak runs = ${updatedBatters[0].runs}, fours = ${updatedBatters[0].fours}`);
   if (updatedBatters[0].runs !== 131 || updatedBatters[0].fours !== 13) throw new Error("Test 14 Failed");
 
-  // ── TEST 15 & 16: Reset All Matches Returns Empty Leaderboards & Zero Standings ──
+  // ── TEST 15 & 16: Reset All Matches Returns Empty Leaderboards & Empty Standings Array ──
   console.log("\n[TEST 15 & 16: Tournament Reset Behavior]");
   const resetStandings = calculateStandings(testTeams, []);
   const resetStats = calculateTournamentStats([]);
-  console.log(`  ✓ Reset Standings: Matches = ${resetStandings[0].played}, Points = ${resetStandings[0].points}, NRR = ${resetStandings[0].nrr}`);
+  console.log(`  ✓ Reset Standings: returned ${resetStandings.length} teams (Empty State triggered)`);
   console.log(`  ✓ Reset Leaderboards: Orange Cap Count = ${resetStats.orangeCap.length}, Purple Cap Count = ${resetStats.purpleCap.length}`);
-  if (resetStandings[0].played !== 0 || resetStandings[0].points !== 0 || resetStandings[0].nrr !== 0) throw new Error("Test 16 Failed");
+  if (resetStandings.length !== 0) throw new Error("Test 16 Failed: resetStandings must be empty array on 0 matches");
   if (resetStats.orangeCap.length !== 0 || resetStats.purpleCap.length !== 0) throw new Error("Test 15 Failed");
 
   // ── TEST 17 & 18: Master Player & Team Data Safety ─────────────────────────

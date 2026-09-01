@@ -96,14 +96,14 @@ async function main() {
   if (rrReduced.toFixed(2) !== "10.00") throw new Error("Test 6 Failed");
 
   // ── TEST 7: Standings Reset ────────────────────────────────────────────────
-  console.log("\n[TEST 7: Reset All Matches Returns NRR = 0.00]");
+  console.log("\n[TEST 7: Reset All Matches Returns Empty Standings Array]");
   const dummyTeams = [
     { id: "t1", name: "Team One", shortName: "T1" },
     { id: "t2", name: "Team Two", shortName: "T2" },
   ];
   const resetStandings = calculateStandings(dummyTeams, []);
-  console.log(`  ✓ Reset Standings: Team 1 NRR = ${resetStandings[0].nrr.toFixed(3)}, Team 2 NRR = ${resetStandings[1].nrr.toFixed(3)}`);
-  if (resetStandings[0].nrr !== 0 || resetStandings[1].nrr !== 0) throw new Error("Test 7 Failed");
+  console.log(`  ✓ Reset Standings: returns ${resetStandings.length} teams (Empty State triggered)`);
+  if (resetStandings.length !== 0) throw new Error("Test 7 Failed: resetStandings must be empty array");
 
   // ── TEST 8: 7-over match ───────────────────────────────────────────────────
   console.log("\n[TEST 8: 7-over match rates]");
