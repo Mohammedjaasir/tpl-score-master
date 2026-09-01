@@ -136,6 +136,7 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
     overs: row.total_overs || 5,
     scheduledAt: row.start_time,
     status,
+    winnerId: row.winner_id ?? undefined,
     resultText: undefined,
     manOfTheMatchId: row.man_of_the_match_id ?? undefined,
   };
@@ -353,8 +354,9 @@ export interface MatchRepository {
   list(): Promise<Match[]>;
   get(id: string): Promise<Match | undefined>;
   saveSchedule(matches: Match[]): Promise<Match[]>;
-  resetSchedule(): Promise<void>;
-  resetAllMatches(): Promise<void>;
+  resetSchedule(): Promise<Match[]>;
+  resetAllMatches(): Promise<Match[]>;
+  resetPendingFixtures(): Promise<Match[]>;
   generateTournamentSchedule(input: GenerateScheduleInput): Promise<Match[]>;
   createMatch(match: Match): Promise<Match>;
   createSingleMatch(input: {
@@ -614,26 +616,44 @@ export class SupabaseMatchRepository implements MatchRepository {
     }
   }
 
-  async resetSchedule(): Promise<void> {
-    try {
-      await resetUpcomingMatchesServerFn();
-      const remainingMatches = lookup.matches().filter((m) => m.status !== "UPCOMING");
-      lookup.setMatches(remainingMatches);
-    } catch (err: any) {
-      console.error("[SupabaseMatchRepository] resetSchedule server error:", err?.message);
-      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to reset schedule:\s*)+/i, "").trim();
-      throw new Error(`Failed to reset upcoming fixtures: ${cleanMsg}`);
-    }
+  async resetSchedule(): Promise<Match[]> {
+    return this.resetPendingFixtures();
   }
 
-  async resetAllMatches(): Promise<void> {
+  async resetAllMatches(): Promise<Match[]> {
+    return this.resetPendingFixtures();
+  }
+
+  async resetPendingFixtures(): Promise<Match[]> {
     try {
-      await resetAllTournamentMatchesServerFn();
-      lookup.setMatches([]);
+      if (isSupabaseConfigured) {
+        await resetScheduleServerFn();
+      }
+
+      // Strictly protect and preserve all COMPLETED and LIVE matches in domain cache
+      const allCurrent = lookup.matches();
+      const preservedMatches = allCurrent.filter((m) => m.status === "COMPLETED" || m.status === "LIVE");
+
+      // Clean up localStorage scoring documents ONLY for removed upcoming/ready matches
+      if (typeof window !== "undefined") {
+        try {
+          const removedIds = allCurrent
+            .filter((m) => m.status !== "COMPLETED" && m.status !== "LIVE")
+            .map((m) => m.id);
+          removedIds.forEach((id) => {
+            window.localStorage.removeItem("tpl-scoring:" + id);
+            window.localStorage.removeItem("tpl-live-match:" + id);
+            window.localStorage.removeItem("tpl-match-state:" + id);
+          });
+        } catch {}
+      }
+
+      lookup.setMatches(preservedMatches);
+      return preservedMatches;
     } catch (err: any) {
-      console.error("[SupabaseMatchRepository] resetAllMatches server error:", err?.message);
-      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to reset all tournament matches:\s*)+/i, "").trim();
-      throw new Error(`Failed to reset all tournament matches: ${cleanMsg}`);
+      console.error("[SupabaseMatchRepository] resetPendingFixtures server error:", err?.message);
+      const cleanMsg = (err?.message || "Server error").replace(/^(Failed to reset upcoming fixtures:\s*)+/i, "").trim();
+      throw new Error(`Failed to reset pending fixtures: ${cleanMsg}`);
     }
   }
 

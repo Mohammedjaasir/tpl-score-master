@@ -94,9 +94,27 @@ function getEffectiveMatch(m: Match): Match {
           secondInningsStarted: doc.secondInningsStarted || false,
           secondInningsOpeners: doc.secondInningsOpeners,
         });
+
+        let winnerId = m.winnerId;
+        if (!winnerId) {
+          const inn1 = computed.innings[0];
+          const inn2 = computed.innings[1];
+          if (inn1 && inn2) {
+            const target = inn2.target ?? (inn1.runs + 1);
+            if (inn2.runs >= target) {
+              winnerId = inn2.battingTeamId;
+            } else if (inn2.isComplete || computed.phase === "complete" || doc.isCompleted) {
+              if (inn2.runs < inn1.runs) {
+                winnerId = inn1.battingTeamId;
+              }
+            }
+          }
+        }
+
         return {
           ...m,
           status: "COMPLETED",
+          winnerId,
           resultText: computed.resultText ?? m.resultText,
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
@@ -110,9 +128,24 @@ function getEffectiveMatch(m: Match): Match {
           secondInningsOpeners: doc.secondInningsOpeners,
         });
         if (computed.phase === "complete") {
+          let winnerId = m.winnerId;
+          if (!winnerId) {
+            const inn1 = computed.innings[0];
+            const inn2 = computed.innings[1];
+            if (inn1 && inn2) {
+              const target = inn2.target ?? (inn1.runs + 1);
+              if (inn2.runs >= target) {
+                winnerId = inn2.battingTeamId;
+              } else if (inn2.runs < inn1.runs) {
+                winnerId = inn1.battingTeamId;
+              }
+            }
+          }
+
           return {
             ...m,
             status: "COMPLETED",
+            winnerId,
             resultText: computed.resultText ?? m.resultText,
             manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
           };

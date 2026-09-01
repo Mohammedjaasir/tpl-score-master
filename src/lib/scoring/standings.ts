@@ -31,22 +31,13 @@ export interface TeamStanding {
  * If no matches are scheduled, returns an empty array to trigger the Points Table empty state.
  */
 export function calculateStandings(teams: Team[], matches: Match[]): TeamStanding[] {
-  // If no matches exist in the tournament, standings must be empty
-  if (!matches || matches.length === 0) {
+  // If no matches exist in the tournament or no teams provided, standings are empty
+  if (!teams || teams.length === 0 || !matches || matches.length === 0) {
     return [];
   }
 
-  // Filter teams to ONLY those participating in the current tournament fixtures
-  const scheduledTeamIds = new Set<string>();
-  matches.forEach((m) => {
-    if (m.teamAId) scheduledTeamIds.add(m.teamAId);
-    if (m.teamBId) scheduledTeamIds.add(m.teamBId);
-  });
-
-  const participatingTeams = teams.filter((t) => scheduledTeamIds.has(t.id));
-  if (participatingTeams.length === 0) {
-    return [];
-  }
+  // Every team in the passed group/list is included unconditionally
+  const participatingTeams = teams;
 
   const map = new Map<
     string,
@@ -80,10 +71,15 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
   });
 
   matches.forEach((m) => {
-    let runsA = 0;
-    let legalBallsA = 0;
-    let runsB = 0;
-    let legalBallsB = 0;
+    let runsForA = 0;
+    let nrrBallsForA = 0;
+    let runsForB = 0;
+    let nrrBallsForB = 0;
+    let runsAgainstA = 0;
+    let nrrBallsAgainstA = 0;
+    let runsAgainstB = 0;
+    let nrrBallsAgainstB = 0;
+
     let winnerId: string | null = m.winnerId ?? null;
     let isTie = false;
     let isMatchCompleted = m.status === "COMPLETED";
@@ -109,32 +105,51 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
           const inn1 = state.innings[0];
           const inn2 = state.innings[1];
           if (inn1) {
-            const team1Runs = inn1.runs;
-            const team1Balls = inn1.legalBalls;
-            const team2Runs = inn2 ? inn2.runs : 0;
-            const team2Balls = inn2 ? inn2.legalBalls : 0;
+            const maxOvers1 = inn1.maxOvers || m.overs || 5;
+            const maxOvers2 = inn2?.maxOvers || maxOvers1;
+
+            const runs1 = inn1.runs;
+            const balls1 = inn1.legalBalls;
+            const isAllOut1 = inn1.isComplete && inn1.wickets >= Math.max(1, (inn1.batters?.length || 11) - 1);
+            // Official ICC NRR Rule: All out uses full overs quota (e.g. 5.0 ov = 30 balls)
+            const inn1NrrBalls = isAllOut1 ? maxOvers1 * 6 : Math.max(balls1, 1);
+
+            const runs2 = inn2 ? inn2.runs : 0;
+            const balls2 = inn2 ? inn2.legalBalls : 0;
+            const isAllOut2 = inn2 ? (inn2.isComplete && inn2.wickets >= Math.max(1, (inn2.batters?.length || 11) - 1)) : false;
+            const inn2NrrBalls = inn2 ? (isAllOut2 ? maxOvers2 * 6 : Math.max(balls2, 1)) : 0;
 
             if (inn1.battingTeamId === m.teamAId) {
-              runsA = team1Runs;
-              legalBallsA = team1Balls;
-              runsB = team2Runs;
-              legalBallsB = team2Balls;
+              runsForA = runs1;
+              nrrBallsForA = inn1NrrBalls;
+              runsAgainstA = runs2;
+              nrrBallsAgainstA = inn2NrrBalls;
+
+              runsForB = runs2;
+              nrrBallsForB = inn2NrrBalls;
+              runsAgainstB = runs1;
+              nrrBallsAgainstB = inn1NrrBalls;
             } else {
-              runsB = team1Runs;
-              legalBallsB = team1Balls;
-              runsA = team2Runs;
-              legalBallsA = team2Balls;
+              runsForB = runs1;
+              nrrBallsForB = inn1NrrBalls;
+              runsAgainstB = runs2;
+              nrrBallsAgainstB = inn2NrrBalls;
+
+              runsForA = runs2;
+              nrrBallsForA = inn2NrrBalls;
+              runsAgainstA = runs1;
+              nrrBallsAgainstA = inn1NrrBalls;
             }
 
             if (!winnerId) {
-              const target = inn2?.target ?? (team1Runs + 1);
-              if (inn2 && team2Runs >= target) {
+              const target = inn2?.target ?? (runs1 + 1);
+              if (inn2 && runs2 >= target) {
                 winnerId = inn2.battingTeamId;
-              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team2Runs < team1Runs) {
+              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && runs2 < runs1) {
                 winnerId = inn1.battingTeamId;
               } else if (inn1 && !inn2 && (state.phase === "complete" || doc.isCompleted)) {
                 winnerId = inn1.battingTeamId;
-              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && team1Runs === team2Runs && team2Balls > 0) {
+              } else if (inn2 && (inn2.isComplete || state.phase === "complete" || doc.isCompleted) && runs1 === runs2 && balls2 > 0) {
                 isTie = true;
               }
             }
@@ -163,40 +178,47 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
 
     const statsA = map.get(m.teamAId);
     const statsB = map.get(m.teamBId);
-    if (!statsA || !statsB) return;
+    if (!statsA && !statsB) return;
 
-    statsA.played += 1;
-    statsB.played += 1;
-
-    if (winnerId === m.teamAId) {
-      statsA.won += 1;
-      statsA.points += 2;
-      statsB.lost += 1;
-    } else if (winnerId === m.teamBId) {
-      statsB.won += 1;
-      statsB.points += 2;
-      statsA.lost += 1;
-    } else if (isTie) {
-      statsA.tied += 1;
-      statsA.points += 1;
-      statsB.tied += 1;
-      statsB.points += 1;
-    } else {
-      statsA.noResult += 1;
-      statsA.points += 1;
-      statsB.noResult += 1;
-      statsB.points += 1;
+    if (statsA) {
+      statsA.played += 1;
+      if (winnerId === m.teamAId) {
+        statsA.won += 1;
+        statsA.points += 2;
+      } else if (winnerId === m.teamBId) {
+        statsA.lost += 1;
+      } else if (isTie) {
+        statsA.tied += 1;
+        statsA.points += 1;
+      } else {
+        statsA.noResult += 1;
+        statsA.points += 1;
+      }
+      statsA.runsFor += runsForA;
+      statsA.legalBallsFor += nrrBallsForA;
+      statsA.runsAgainst += runsAgainstA;
+      statsA.legalBallsAgainst += nrrBallsAgainstA;
     }
 
-    statsA.runsFor += runsA;
-    statsA.legalBallsFor += legalBallsA;
-    statsA.runsAgainst += runsB;
-    statsA.legalBallsAgainst += legalBallsB;
-
-    statsB.runsFor += runsB;
-    statsB.legalBallsFor += legalBallsB;
-    statsB.runsAgainst += runsA;
-    statsB.legalBallsAgainst += legalBallsA;
+    if (statsB) {
+      statsB.played += 1;
+      if (winnerId === m.teamBId) {
+        statsB.won += 1;
+        statsB.points += 2;
+      } else if (winnerId === m.teamAId) {
+        statsB.lost += 1;
+      } else if (isTie) {
+        statsB.tied += 1;
+        statsB.points += 1;
+      } else {
+        statsB.noResult += 1;
+        statsB.points += 1;
+      }
+      statsB.runsFor += runsForB;
+      statsB.legalBallsFor += nrrBallsForB;
+      statsB.runsAgainst += runsAgainstB;
+      statsB.legalBallsAgainst += nrrBallsAgainstB;
+    }
   });
 
   const list: TeamStanding[] = participatingTeams.map((t) => {
@@ -204,7 +226,7 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
     const rpoFor = runsPerOver(s.runsFor, s.legalBallsFor);
     const rpoAgainst = runsPerOver(s.runsAgainst, s.legalBallsAgainst);
     const nrr = s.played > 0 && (s.legalBallsFor > 0 || s.legalBallsAgainst > 0)
-      ? rpoFor - rpoAgainst
+      ? Number((rpoFor - rpoAgainst).toFixed(2))
       : 0;
 
     return {
@@ -279,18 +301,29 @@ export function getGroupedTournamentStandings(
     };
   }
 
-  const g1Teams = teams.filter(
-    (t) =>
-      (t.groupName || "").includes("1") ||
-      (t.groupName || "").toUpperCase().includes("A") ||
-      ["team-du", "team-bmr", "team-kl"].includes(t.id),
-  );
-  const g2Teams = teams.filter(
-    (t) =>
-      (t.groupName || "").includes("2") ||
-      (t.groupName || "").toUpperCase().includes("B") ||
-      ["team-ngw", "team-rk", "team-tc"].includes(t.id),
-  );
+  const g1Teams = teams.filter((t) => {
+    const g = (t.groupName || "").toUpperCase().trim();
+    if (g.includes("1") || g.includes("A")) return true;
+    if (g.includes("2") || g.includes("B")) return false;
+    return ["team-du", "team-bmr", "team-kl"].includes(t.id);
+  });
+
+  const g2Teams = teams.filter((t) => {
+    const g = (t.groupName || "").toUpperCase().trim();
+    if (g.includes("2") || g.includes("B")) return true;
+    if (g.includes("1") || g.includes("A")) return false;
+    return ["team-ngw", "team-rk", "team-tc"].includes(t.id);
+  });
+
+  // If any newly created team has not been explicitly assigned Group A/B, include them gracefully
+  const unassigned = teams.filter((t) => !g1Teams.includes(t) && !g2Teams.includes(t));
+  unassigned.forEach((t) => {
+    if (g1Teams.length <= g2Teams.length) {
+      g1Teams.push(t);
+    } else {
+      g2Teams.push(t);
+    }
+  });
 
   const groupA = calculateStandings(g1Teams, matches);
   const groupB = calculateStandings(g2Teams, matches);

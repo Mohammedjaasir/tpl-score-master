@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { useMatches, useTeams } from "@/hooks/useCricketData";
-import { calculateStandings } from "@/lib/scoring/standings";
+import { calculateStandings, getGroupedTournamentStandings } from "@/lib/scoring/standings";
 import { calculateTournamentStats } from "@/lib/scoring/statistics";
 import { lookup } from "@/lib/repositories";
 import {
@@ -36,37 +36,16 @@ export function PointablesPage() {
 
   const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<"batting" | "bowling" | "power" | "allrounders" | "fielding" | "potm">("batting");
 
-  const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
+  const { groupA: group1Standings, groupB: group2Standings, all: standings } = useMemo(
+    () => getGroupedTournamentStandings(teams, matches),
+    [teams, matches],
+  );
   const stats = useMemo(() => calculateTournamentStats(matches), [matches]);
   const completedCount = matches.filter((m) => m.status === "COMPLETED").length;
   const isLoading = (loadingTeams || loadingMatches) && teams.length === 0;
 
   const hasScheduledMatches = matches.length > 0 && standings.length > 0;
   const hasTournamentData = stats.orangeCap.length > 0 || stats.purpleCap.length > 0 || completedCount > 0;
-
-  // Grouped Standings with master team group assignment
-  const g1TeamIds = useMemo(() => {
-    const g1 = teams.filter(
-      (t) =>
-        (t.groupName || "").includes("1") ||
-        (t.groupName || "").toUpperCase().includes("A") ||
-        ["team-du", "team-bmr", "team-kl"].includes(t.id),
-    );
-    return new Set(g1.length > 0 ? g1.map((t) => t.id) : teams.slice(0, 3).map((t) => t.id));
-  }, [teams]);
-
-  const g2TeamIds = useMemo(() => {
-    const g2 = teams.filter(
-      (t) =>
-        (t.groupName || "").includes("2") ||
-        (t.groupName || "").toUpperCase().includes("B") ||
-        ["team-ngw", "team-rk", "team-tc"].includes(t.id),
-    );
-    return new Set(g2.length > 0 ? g2.map((t) => t.id) : teams.slice(3, 6).map((t) => t.id));
-  }, [teams]);
-
-  const group1Standings = useMemo(() => calculateStandings(teams.filter((t) => g1TeamIds.has(t.id)), matches), [teams, matches, g1TeamIds]);
-  const group2Standings = useMemo(() => calculateStandings(teams.filter((t) => g2TeamIds.has(t.id)), matches), [teams, matches, g2TeamIds]);
 
   // Tournament Leaders Cards Highlights
   const highestRunScorer = stats.orangeCap[0];
@@ -194,79 +173,85 @@ export function PointablesPage() {
 
                     {/* Mobile Standings Cards (Visible on mobile: md:hidden) */}
                     <div className="md:hidden flex flex-col divide-y divide-[#E5E5E5]">
-                      {group1Standings.map((team, idx) => {
-                        const isQualified = idx < 2;
-                        const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+                      {group1Standings.length === 0 ? (
+                        <div className="p-6 text-center text-xs font-bold text-[#5F6368]">
+                          No Group A teams registered yet.
+                        </div>
+                      ) : (
+                        group1Standings.map((team, idx) => {
+                          const isQualified = idx < 2;
+                          const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
 
-                        return (
-                          <div
-                            key={team.teamId}
-                            className={`p-3.5 flex flex-col gap-2.5 ${
-                              idx === 0 ? "bg-[#D9A928]/5" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span
-                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
-                                    isQualified
-                                      ? "bg-[#D9A928] text-black shadow-xs"
-                                      : "bg-slate-200 text-[#5F6368]"
-                                  }`}
-                                >
-                                  {team.pos}
-                                </span>
-                                <TeamLogo
-                                  logoUrl={team.logoUrl}
-                                  name={team.teamName}
-                                  shortName={team.teamShortName}
-                                  size="xs"
-                                />
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
-                                    {team.teamName}
-                                  </p>
-                                  <p className="text-[10px] text-[#5F6368] font-bold uppercase">
-                                    {team.teamShortName}
-                                  </p>
+                          return (
+                            <div
+                              key={team.teamId}
+                              className={`p-3.5 flex flex-col gap-2.5 ${
+                                idx === 0 ? "bg-[#D9A928]/5" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span
+                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
+                                      isQualified
+                                        ? "bg-[#D9A928] text-black shadow-xs"
+                                        : "bg-slate-200 text-[#5F6368]"
+                                    }`}
+                                  >
+                                    {team.pos}
+                                  </span>
+                                  <TeamLogo
+                                    logoUrl={team.logoUrl}
+                                    name={team.teamName}
+                                    shortName={team.teamShortName}
+                                    size="xs"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                      {team.teamName}
+                                    </p>
+                                    <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                      {team.teamShortName}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <span className="font-black text-xs text-[#111111] bg-[#D9A928]/25 px-2.5 py-1 rounded-lg border border-[#D9A928]/30 tabular-nums">
+                                    {team.points} PTS
+                                  </span>
                                 </div>
                               </div>
 
-                              <div className="text-right shrink-0">
-                                <span className="font-black text-xs text-[#111111] bg-[#D9A928]/25 px-2.5 py-1 rounded-lg border border-[#D9A928]/30 tabular-nums">
-                                  {team.points} PTS
-                                </span>
+                              {/* Stats Grid */}
+                              <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
+                                  <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
+                                  <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
+                                  <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
+                                  <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
+                                  <span className="font-black text-[#111111] tabular-nums">
+                                    {team.played > 0 ? nrrFormatted : "0.00"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
-                                <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
-                                <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
-                                <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
-                                <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
-                                <span className="font-black text-[#111111] tabular-nums">
-                                  {team.played > 0 ? nrrFormatted : "0.00"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </div>
 
                     {/* Desktop & Tablet Table (Hidden on mobile: hidden md:block) */}
@@ -285,61 +270,69 @@ export function PointablesPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#E5E5E5]">
-                          {group1Standings.map((team, idx) => {
-                            const isQualified = idx < 2;
-                            const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+                          {group1Standings.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-6 text-center text-[#5F6368] font-medium">
+                                No Group A teams registered yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            group1Standings.map((team, idx) => {
+                              const isQualified = idx < 2;
+                              const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
 
-                            return (
-                              <tr
-                                key={team.teamId}
-                                className={`hover:bg-[#FAFAF8] transition-colors ${
-                                  idx === 0 ? "bg-[#D9A928]/5" : ""
-                                }`}
-                              >
-                                <td className="px-3 py-3 text-center font-black text-[#111111] tabular-nums">
-                                  <span
-                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black ${
-                                      isQualified
-                                        ? "bg-[#D9A928] text-black shadow-xs"
-                                        : "bg-slate-200 text-[#5F6368]"
-                                    }`}
-                                  >
-                                    {team.pos}
-                                  </span>
-                                </td>
+                              return (
+                                <tr
+                                  key={team.teamId}
+                                  className={`hover:bg-[#FAFAF8] transition-colors ${
+                                    idx === 0 ? "bg-[#D9A928]/5" : ""
+                                  }`}
+                                >
+                                  <td className="px-3 py-3 text-center font-black text-[#111111] tabular-nums">
+                                    <span
+                                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black ${
+                                        isQualified
+                                          ? "bg-[#D9A928] text-black shadow-xs"
+                                          : "bg-slate-200 text-[#5F6368]"
+                                      }`}
+                                    >
+                                      {team.pos}
+                                    </span>
+                                  </td>
 
-                                <td className="px-3 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <TeamLogo
-                                      logoUrl={team.logoUrl}
-                                      name={team.teamName}
-                                      shortName={team.teamShortName}
-                                      size="xs"
-                                    />
-                                    <div className="min-w-0">
-                                      <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
-                                        {team.teamName}
-                                      </p>
-                                      <p className="text-[10px] text-[#5F6368] font-bold uppercase">
-                                        {team.teamShortName}
-                                      </p>
+                                  <td className="px-3 py-3">
+                                    <div className="flex items-center gap-2">
+                                      <TeamLogo
+                                        logoUrl={team.logoUrl}
+                                        name={team.teamName}
+                                        shortName={team.teamShortName}
+                                        size="xs"
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                          {team.teamName}
+                                        </p>
+                                        <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                          {team.teamShortName}
+                                        </p>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
+                                  </td>
 
-                                <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.played}</td>
-                                <td className="px-2 py-3 text-center font-black text-emerald-700 tabular-nums">{team.won}</td>
-                                <td className="px-2 py-3 text-center font-bold text-rose-700 tabular-nums">{team.lost}</td>
-                                <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.tied + team.noResult}</td>
-                                <td className="px-3 py-3 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-xs sm:text-sm">
-                                  {team.points}
-                                </td>
-                                <td className="px-3 py-3 text-right font-black tabular-nums text-[#111111]">
-                                  {team.played > 0 ? nrrFormatted : "0.00"}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                  <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.played}</td>
+                                  <td className="px-2 py-3 text-center font-black text-emerald-700 tabular-nums">{team.won}</td>
+                                  <td className="px-2 py-3 text-center font-bold text-rose-700 tabular-nums">{team.lost}</td>
+                                  <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.tied + team.noResult}</td>
+                                  <td className="px-3 py-3 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-xs sm:text-sm">
+                                    {team.points}
+                                  </td>
+                                  <td className="px-3 py-3 text-right font-black tabular-nums text-[#111111]">
+                                    {team.played > 0 ? nrrFormatted : "0.00"}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -363,79 +356,85 @@ export function PointablesPage() {
 
                     {/* Mobile Standings Cards (Visible on mobile: md:hidden) */}
                     <div className="md:hidden flex flex-col divide-y divide-[#E5E5E5]">
-                      {group2Standings.map((team, idx) => {
-                        const isQualified = idx < 2;
-                        const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+                      {group2Standings.length === 0 ? (
+                        <div className="p-6 text-center text-xs font-bold text-[#5F6368]">
+                          No Group B teams registered yet.
+                        </div>
+                      ) : (
+                        group2Standings.map((team, idx) => {
+                          const isQualified = idx < 2;
+                          const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
 
-                        return (
-                          <div
-                            key={team.teamId}
-                            className={`p-3.5 flex flex-col gap-2.5 ${
-                              idx === 0 ? "bg-purple-500/5" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span
-                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
-                                    isQualified
-                                      ? "bg-purple-600 text-white shadow-xs"
-                                      : "bg-slate-200 text-[#5F6368]"
-                                  }`}
-                                >
-                                  {team.pos}
-                                </span>
-                                <TeamLogo
-                                  logoUrl={team.logoUrl}
-                                  name={team.teamName}
-                                  shortName={team.teamShortName}
-                                  size="xs"
-                                />
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
-                                    {team.teamName}
-                                  </p>
-                                  <p className="text-[10px] text-[#5F6368] font-bold uppercase">
-                                    {team.teamShortName}
-                                  </p>
+                          return (
+                            <div
+                              key={team.teamId}
+                              className={`p-3.5 flex flex-col gap-2.5 ${
+                                idx === 0 ? "bg-[#D9A928]/5" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span
+                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black shrink-0 ${
+                                      isQualified
+                                        ? "bg-purple-600 text-white shadow-xs"
+                                        : "bg-slate-200 text-[#5F6368]"
+                                    }`}
+                                  >
+                                    {team.pos}
+                                  </span>
+                                  <TeamLogo
+                                    logoUrl={team.logoUrl}
+                                    name={team.teamName}
+                                    shortName={team.teamShortName}
+                                    size="xs"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                      {team.teamName}
+                                    </p>
+                                    <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                      {team.teamShortName}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <span className="font-black text-xs text-[#111111] bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/30 tabular-nums">
+                                    {team.points} PTS
+                                  </span>
                                 </div>
                               </div>
 
-                              <div className="text-right shrink-0">
-                                <span className="font-black text-xs text-[#111111] bg-[#D9A928]/25 px-2.5 py-1 rounded-lg border border-[#D9A928]/30 tabular-nums">
-                                  {team.points} PTS
-                                </span>
+                              {/* Stats Grid */}
+                              <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
+                                  <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
+                                  <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
+                                  <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
+                                  <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
+                                  <span className="font-black text-[#111111] tabular-nums">
+                                    {team.played > 0 ? nrrFormatted : "0.00"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-5 gap-1.5 text-center bg-[#F9FAFB] rounded-xl p-2 border border-[#E5E5E5] text-[11px]">
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">P</span>
-                                <span className="font-black text-[#111111] tabular-nums">{team.played}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-emerald-700 uppercase">W</span>
-                                <span className="font-black text-emerald-700 tabular-nums">{team.won}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-rose-700 uppercase">L</span>
-                                <span className="font-black text-rose-700 tabular-nums">{team.lost}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">T/NR</span>
-                                <span className="font-black text-[#5F6368] tabular-nums">{team.tied + team.noResult}</span>
-                              </div>
-                              <div>
-                                <span className="block text-[9px] font-bold text-[#5F6368] uppercase">NRR</span>
-                                <span className="font-black text-[#111111] tabular-nums">
-                                  {team.played > 0 ? nrrFormatted : "0.00"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </div>
 
                     {/* Desktop & Tablet Table (Hidden on mobile: hidden md:block) */}
@@ -449,66 +448,74 @@ export function PointablesPage() {
                             <th className="px-2 py-3 text-center font-bold">W</th>
                             <th className="px-2 py-3 text-center font-bold">L</th>
                             <th className="px-2 py-3 text-center font-bold">T/NR</th>
-                            <th className="px-3 py-3 text-center font-black text-[#111111] bg-[#D9A928]/15">PTS</th>
+                            <th className="px-3 py-3 text-center font-black text-[#111111] bg-purple-500/15">PTS</th>
                             <th className="px-3 py-3 text-right font-black">NRR</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#E5E5E5]">
-                          {group2Standings.map((team, idx) => {
-                            const isQualified = idx < 2;
-                            const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
+                          {group2Standings.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-6 text-center text-[#5F6368] font-medium">
+                                No Group B teams registered yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            group2Standings.map((team, idx) => {
+                              const isQualified = idx < 2;
+                              const nrrFormatted = team.nrr > 0 ? `+${team.nrr.toFixed(2)}` : team.nrr.toFixed(2);
 
-                            return (
-                              <tr
-                                key={team.teamId}
-                                className={`hover:bg-[#FAFAF8] transition-colors ${
-                                  idx === 0 ? "bg-purple-500/5" : ""
-                                }`}
-                              >
-                                <td className="px-3 py-3 text-center font-black text-[#111111] tabular-nums">
-                                  <span
-                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black ${
-                                      isQualified
-                                        ? "bg-purple-600 text-white shadow-xs"
-                                        : "bg-slate-200 text-[#5F6368]"
-                                    }`}
-                                  >
-                                    {team.pos}
-                                  </span>
-                                </td>
+                              return (
+                                <tr
+                                  key={team.teamId}
+                                  className={`hover:bg-[#FAFAF8] transition-colors ${
+                                    idx === 0 ? "bg-purple-500/5" : ""
+                                  }`}
+                                >
+                                  <td className="px-3 py-3 text-center font-black text-[#111111] tabular-nums">
+                                    <span
+                                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-black ${
+                                        isQualified
+                                          ? "bg-purple-600 text-white shadow-xs"
+                                          : "bg-slate-200 text-[#5F6368]"
+                                      }`}
+                                    >
+                                      {team.pos}
+                                    </span>
+                                  </td>
 
-                                <td className="px-3 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <TeamLogo
-                                      logoUrl={team.logoUrl}
-                                      name={team.teamName}
-                                      shortName={team.teamShortName}
-                                      size="xs"
-                                    />
-                                    <div className="min-w-0">
-                                      <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
-                                        {team.teamName}
-                                      </p>
-                                      <p className="text-[10px] text-[#5F6368] font-bold uppercase">
-                                        {team.teamShortName}
-                                      </p>
+                                  <td className="px-3 py-3">
+                                    <div className="flex items-center gap-2">
+                                      <TeamLogo
+                                        logoUrl={team.logoUrl}
+                                        name={team.teamName}
+                                        shortName={team.teamShortName}
+                                        size="xs"
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-extrabold text-[#111111] uppercase truncate text-xs">
+                                          {team.teamName}
+                                        </p>
+                                        <p className="text-[10px] text-[#5F6368] font-bold uppercase">
+                                          {team.teamShortName}
+                                        </p>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
+                                  </td>
 
-                                <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.played}</td>
-                                <td className="px-2 py-3 text-center font-black text-emerald-700 tabular-nums">{team.won}</td>
-                                <td className="px-2 py-3 text-center font-bold text-rose-700 tabular-nums">{team.lost}</td>
-                                <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.tied + team.noResult}</td>
-                                <td className="px-3 py-3 text-center font-black text-[#111111] bg-[#D9A928]/10 tabular-nums text-xs sm:text-sm">
-                                  {team.points}
-                                </td>
-                                <td className="px-3 py-3 text-right font-black tabular-nums text-[#111111]">
-                                  {team.played > 0 ? nrrFormatted : "0.00"}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                  <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.played}</td>
+                                  <td className="px-2 py-3 text-center font-black text-emerald-700 tabular-nums">{team.won}</td>
+                                  <td className="px-2 py-3 text-center font-bold text-rose-700 tabular-nums">{team.lost}</td>
+                                  <td className="px-2 py-3 text-center font-bold text-[#5F6368] tabular-nums">{team.tied + team.noResult}</td>
+                                  <td className="px-3 py-3 text-center font-black text-[#111111] bg-purple-500/10 tabular-nums text-xs sm:text-sm">
+                                    {team.points}
+                                  </td>
+                                  <td className="px-3 py-3 text-right font-black tabular-nums text-[#111111]">
+                                    {team.played > 0 ? nrrFormatted : "0.00"}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>

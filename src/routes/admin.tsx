@@ -498,49 +498,31 @@ function AdminPortalPage() {
     }
   };
 
-  // ── RESET ALL TOURNAMENT MATCHES HANDLER ─────────────────────────────────
-  const handleResetAllMatches = async () => {
+  // ── RESET PENDING FIXTURES HANDLER ───────────────────────────────────────
+  const handleResetPendingFixtures = async () => {
     setIsScheduleActionLoading(true);
     setScheduleActionError(null);
     setResetSuccessMsg(null);
 
     try {
-      // Purge all client-side localStorage scoring docs ONLY (Preserve group assignments & config)
-      if (typeof window !== "undefined") {
-        try {
-          const keysToRemove: string[] = [];
-          for (let i = 0; i < window.localStorage.length; i++) {
-            const k = window.localStorage.key(i);
-            if (
-              k &&
-              (k.startsWith("tpl-scoring:") ||
-                k.startsWith("tpl-live-match:") ||
-                k.startsWith("tpl-match-state:"))
-            ) {
-              keysToRemove.push(k);
-            }
-          }
-          keysToRemove.forEach((k) => window.localStorage.removeItem(k));
-        } catch {}
-      }
-
-      await matchRepository.resetAllMatches();
-      queryClient.setQueryData(["matches"], []);
+      const remainingMatches = await matchRepository.resetPendingFixtures();
+      queryClient.setQueryData(["matches"], remainingMatches);
+      setShowResetConfirm(false);
       setShowResetAllModal(false);
       setScheduleActionError(null);
       setResetSuccessMsg(
-        "All test matches and match-generated statistics have been reset. Master player records, teams, and group assignments are strictly preserved."
+        "Pending tournament fixtures have been reset. Completed match records, ball-by-ball data, statistics, points, and NRR are strictly preserved."
       );
 
       try {
         broadcastTournamentUpdate();
         await refetchMatches();
       } catch (syncErr) {
-        console.warn("[handleResetAllMatches] Background sync notice:", syncErr);
+        console.warn("[handleResetPendingFixtures] Background sync notice:", syncErr);
       }
     } catch (err: any) {
-      console.error("[handleResetAllMatches] Error:", err);
-      setScheduleActionError(err?.message || "Unable to reset all matches. Please try again.");
+      console.error("[handleResetPendingFixtures] Error:", err);
+      setScheduleActionError(err?.message || "Unable to reset pending fixtures. Please try again.");
     } finally {
       setIsScheduleActionLoading(false);
     }
@@ -601,39 +583,6 @@ function AdminPortalPage() {
     } catch (err: any) {
       console.error("[handleGenerateScheduleSubmit] Error:", err);
       setScheduleActionError(err?.message || "Failed to generate tournament schedule.");
-    } finally {
-      setIsScheduleActionLoading(false);
-    }
-  };
-
-  // ── RESET UPCOMING MATCHES HANDLER ────────────────────────────────────────
-  const handleResetMatches = async () => {
-    setIsScheduleActionLoading(true);
-    setScheduleActionError(null);
-
-    try {
-      // Clear scoring docs for upcoming matches
-      if (typeof window !== "undefined") {
-        try {
-          matches.filter((m) => m.status === "UPCOMING" || m.status === "READY").forEach((m) => {
-            window.localStorage.removeItem("tpl-scoring:" + m.id);
-          });
-        } catch {}
-      }
-      await matchRepository.resetSchedule();
-      const remainingMatches = await matchRepository.list();
-      queryClient.setQueryData(["matches"], remainingMatches);
-      setShowResetConfirm(false);
-      setScheduleActionError(null);
-
-      try {
-        broadcastTournamentUpdate();
-      } catch (syncErr) {
-        console.warn("[handleResetMatches] Background sync notice:", syncErr);
-      }
-    } catch (err: any) {
-      console.error("[handleResetMatches] Error:", err);
-      setScheduleActionError(err?.message || "Unable to reset upcoming fixtures. Please try again.");
     } finally {
       setIsScheduleActionLoading(false);
     }
@@ -1374,14 +1323,20 @@ function AdminPortalPage() {
 
                 <button
                   onClick={() => {
+                    const pendingCount = matches.filter((m) => m.status === "UPCOMING" || m.status === "READY").length;
+                    if (pendingCount === 0) {
+                      setScheduleActionError(null);
+                      setResetSuccessMsg("NO PENDING FIXTURES TO RESET. Completed matches and tournament standings are safely preserved.");
+                      return;
+                    }
                     setScheduleActionError(null);
-                    setShowResetAllModal(true);
+                    setShowResetConfirm(true);
                   }}
                   disabled={isScheduleActionLoading}
                   className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-300 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all shadow-xs min-h-[48px]"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Reset All Matches</span>
+                  <span>Reset Pending Fixtures</span>
                 </button>
               </div>
             </div>
@@ -2306,22 +2261,35 @@ function AdminPortalPage() {
         </div>
       )}
 
-      {/* ── RESET UPCOMING CONFIRMATION MODAL ─────────────────────────────── */}
+      {/* ── RESET PENDING FIXTURES CONFIRMATION MODAL ─────────────────────── */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-white border border-red-200 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl">
             <div className="flex items-center gap-3 text-red-600">
               <AlertCircle className="h-6 w-6 shrink-0" />
-              <h3 className="text-base font-black uppercase text-[#111827]">Reset Upcoming Fixtures?</h3>
+              <h3 className="text-base font-black uppercase text-[#111827]">Reset Pending Fixtures?</h3>
             </div>
-            <p className="text-xs text-[#4B5563] leading-relaxed">
-              This will clear scheduled fixtures that have not started. <span className="font-bold text-[#111827]">LIVE</span> and <span className="font-bold text-[#111827]">COMPLETED</span> matches will not be affected.
-            </p>
+            
+            <div className="flex flex-col gap-2.5 text-xs text-[#4B5563] leading-relaxed">
+              <p>
+                Pending and scheduled tournament fixtures will be deleted.
+              </p>
+              <p className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-800 font-bold">
+                ✓ Completed matches, results, statistics, points, and NRR will be strictly preserved.
+              </p>
+              {matches.some((m) => m.status === "LIVE") && (
+                <p className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 font-bold">
+                  ⚠️ One or more matches are currently LIVE. Live scoring and active matches will also be preserved.
+                </p>
+              )}
+            </div>
+
             {scheduleActionError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
                 {scheduleActionError}
               </div>
             )}
+            
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 onClick={() => {
@@ -2329,14 +2297,14 @@ function AdminPortalPage() {
                   setShowResetConfirm(false);
                 }}
                 disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors"
+                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors min-h-[48px]"
               >
                 Cancel
               </button>
               <button
-                onClick={handleResetMatches}
+                onClick={handleResetPendingFixtures}
                 disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2"
+                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2 min-h-[48px]"
               >
                 {isScheduleActionLoading ? (
                   <>
@@ -2344,55 +2312,7 @@ function AdminPortalPage() {
                     <span>Resetting...</span>
                   </>
                 ) : (
-                  <span>Confirm Reset</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── RESET ALL TOURNAMENT MATCHES CONFIRMATION MODAL ──────────────── */}
-      {showResetAllModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white border border-red-200 rounded-3xl p-6 flex flex-col gap-5 shadow-2xl">
-            <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle className="h-6 w-6 shrink-0" />
-              <h3 className="text-base font-black uppercase text-[#111827]">Reset All Tournament Matches?</h3>
-            </div>
-            <p className="text-xs text-[#4B5563] leading-relaxed">
-              This will safely clear <strong>all match fixtures, innings, and live scoring events</strong>.
-              <br /><br />
-              <span className="text-emerald-700 font-bold">✓ Master Teams, Players, Rosters, and Group Configurations are strictly preserved.</span>
-            </p>
-            {scheduleActionError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold">
-                {scheduleActionError}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setScheduleActionError(null);
-                  setShowResetAllModal(false);
-                }}
-                disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-bold text-xs uppercase transition-colors min-h-[48px]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetAllMatches}
-                disabled={isScheduleActionLoading}
-                className="py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase shadow-md transition-colors flex items-center justify-center gap-2 min-h-[48px]"
-              >
-                {isScheduleActionLoading ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Resetting All...</span>
-                  </>
-                ) : (
-                  <span>Confirm Reset All</span>
+                  <span>Reset Pending</span>
                 )}
               </button>
             </div>
