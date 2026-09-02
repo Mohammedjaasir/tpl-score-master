@@ -85,11 +85,27 @@ export function toTeam(row: SupabaseTeam): Team {
 }
 
 export function toPlayer(row: SupabaseRegistration): Player {
+  // Check localStorage custom override first
+  let customRole: PlayerRole | undefined;
+  if (typeof window !== "undefined") {
+    try {
+      const rawRoles = window.localStorage.getItem("tpl_player_custom_roles");
+      if (rawRoles) {
+        const rolesMap = JSON.parse(rawRoles);
+        if (rolesMap[row.id]) customRole = rolesMap[row.id];
+      }
+    } catch {}
+  }
+
   const rawRole = (row.player_role || "").toLowerCase();
-  let role: PlayerRole = "All-rounder";
-  if (rawRole.includes("bat")) role = "Batsman";
-  else if (rawRole.includes("bowl")) role = "Bowler";
-  else if (rawRole.includes("keep")) role = "Wicketkeeper";
+  let role: PlayerRole = customRole || "Batter";
+  if (!customRole) {
+    if (rawRole.includes("all") || rawRole.includes("round")) role = "All-rounder";
+    else if (rawRole.includes("bowl")) role = "Bowler";
+    else if (rawRole.includes("keep")) role = "Wicketkeeper";
+    else if (rawRole.includes("bat")) role = "Batter";
+    else role = "Batter"; // Strict default: NEVER automatic All-rounder
+  }
 
   return {
     id: row.id,
@@ -284,6 +300,30 @@ class LookupCache {
     return undefined;
   }
 
+  updatePlayer(id: string, patch: Partial<Player>): Player | undefined {
+    const existing = this.playersMap.get(id);
+    if (existing) {
+      const updated: Player = { ...existing, ...patch };
+      this.playersMap.set(id, updated);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            CACHE_PLAYERS_KEY,
+            JSON.stringify(Array.from(this.playersMap.values())),
+          );
+          if (patch.role) {
+            const rawRoles = window.localStorage.getItem("tpl_player_custom_roles");
+            const rolesMap = rawRoles ? JSON.parse(rawRoles) : {};
+            rolesMap[id] = patch.role;
+            window.localStorage.setItem("tpl_player_custom_roles", JSON.stringify(rolesMap));
+          }
+        } catch {}
+      }
+      return updated;
+    }
+    return undefined;
+  }
+
   playersOf(teamId: string): Player[] {
     return Array.from(this.playersMap.values()).filter((p) => p.teamId === teamId);
   }
@@ -348,6 +388,7 @@ export interface PlayerRepository {
   listByTeam(teamId: string): Promise<Player[]>;
   get(id: string): Promise<Player | undefined>;
   search(query: string): Promise<Player[]>;
+  updateRole(playerId: string, role: PlayerRole): Promise<Player>;
 }
 
 export interface MatchRepository {
@@ -384,7 +425,7 @@ export const SEED_PLAYERS: Player[] = Array.from({ length: 89 }, (_, i) => ({
   id: `player-${i + 1}`,
   name: `Master Player ${i + 1}`,
   teamId: SEED_TEAMS[i % 6].id,
-  role: i % 3 === 0 ? "Batsman" : i % 3 === 1 ? "Bowler" : "All-rounder",
+  role: i % 3 === 0 ? "Batter" : i % 3 === 1 ? "Bowler" : "Wicketkeeper",
 }));
 
 // Initialize lookup cache with defaults if empty
@@ -554,6 +595,27 @@ export class SupabasePlayerRepository implements PlayerRepository {
       if (cachedMatches.length > 0) return cachedMatches;
       throw new Error(`Failed to search players: ${err?.message || "Server error"}`);
     }
+  }
+
+  async updateRole(playerId: string, role: PlayerRole): Promise<Player> {
+    const updated = lookup.updatePlayer(playerId, { role });
+    if (isSupabaseConfigured) {
+      try {
+        await withTimeout(
+          supabase
+            .from("registrations")
+            .update({ player_role: role })
+            .eq("id", playerId),
+          REQUEST_TIMEOUT_MS,
+          "Update player role timed out",
+        );
+      } catch (err) {
+        console.warn("[updateRole] Supabase update notice:", err);
+      }
+    }
+    const result = updated || (await this.get(playerId));
+    if (!result) throw new Error(`Player ${playerId} not found`);
+    return result;
   }
 }
 

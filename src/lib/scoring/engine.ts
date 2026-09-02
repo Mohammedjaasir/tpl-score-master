@@ -1,15 +1,19 @@
-import type {
-  BallSummary,
-  BatterStat,
-  BowlerStat,
-  Delivery,
-  FallOfWicket,
-  InningsState,
-  Match,
-  MatchSetup,
-  MatchState,
-  OverGroup,
+import {
+  BALLS_PER_OVER,
+  TPL_TOURNAMENT_RULES,
+  type BallSummary,
+  type BatterStat,
+  type BowlerStat,
+  type Delivery,
+  type FallOfWicket,
+  type InningsState,
+  type Match,
+  type MatchSetup,
+  type MatchState,
+  type OverGroup,
 } from "@/types/cricket";
+
+export { BALLS_PER_OVER, TPL_TOURNAMENT_RULES };
 
 /** ---------- delivery helpers (pure) ---------- */
 
@@ -47,23 +51,23 @@ function facesBall(d: Delivery): boolean {
 }
 
 export function oversText(legalBalls: number): string {
-  return `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`;
+  return `${Math.floor(legalBalls / BALLS_PER_OVER)}.${legalBalls % BALLS_PER_OVER}`;
 }
 
 /**
  * Converts legal balls to exact mathematical overs.
- * e.g., 20 legal balls = 3 + 2/6 = 3.333... overs
+ * e.g. In TPL 5-ball overs: 12 legal balls = 2.4 overs (2 + 2/5 = 2.4)
  */
 export function legalBallsToOvers(legalBalls: number): number {
-  return legalBalls > 0 ? legalBalls / 6 : 0;
+  return legalBalls > 0 ? legalBalls / BALLS_PER_OVER : 0;
 }
 
 /**
  * Computes canonical runs per over (Run Rate) from runs and legal balls.
- * e.g., 45 runs in 20 legal balls = (45 / 20) * 6 = 13.50
+ * e.g. In TPL 5-ball overs: 45 runs in 15 legal balls = (45 / 15) * 5 = 15.00
  */
 export function runsPerOver(runs: number, legalBalls: number): number {
-  return legalBalls > 0 ? (runs / legalBalls) * 6 : 0;
+  return legalBalls > 0 ? (runs / legalBalls) * BALLS_PER_OVER : 0;
 }
 
 export function ballLabel(d?: Delivery | null): { label: string; kind: BallSummary["kind"] } {
@@ -199,7 +203,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
       ensureBatter(nonStrikerId);
     }
 
-    const overNumber = Math.floor(legalBalls / 6);
+    const overNumber = Math.floor(legalBalls / BALLS_PER_OVER);
     let group = overGroups[overGroups.length - 1];
     if (!group || group.overNumber !== overNumber || group.complete) {
       group = {
@@ -286,20 +290,17 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
           wicketNumber: wickets,
           runs,
           oversText: ballOversText,
-          batterOutId: outId,
-          dismissalType: d.wicket?.type,
-          bowlerId: d.bowlerId,
-          fielderId: d.wicket?.fielderId,
+          overs: ballOversText,
+          batterId: outId,
         });
-        // Preserve completed partnership in history before resetting
+
         completedPartnerships.push({
-          wicketNumber: wickets,
           runs: partnershipRuns,
           balls: partnershipBalls,
           batterAId: strikerId || "",
           batterBId: nonStrikerId || "",
           batterOutId: outId,
-          oversText: ballOversText,
+          overs: ballOversText,
         });
       } else if (outBatter) {
         outBatter.dismissal = "Retired Hurt";
@@ -314,8 +315,7 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
       partnershipBalls = 0;
     }
 
-    // end of over
-    if (isLegal(d) && legalBalls % 6 === 0) {
+    if (isLegal(d) && legalBalls % BALLS_PER_OVER === 0) {
       group.complete = true;
       const tmp = strikerId;
       strikerId = nonStrikerId;
@@ -328,10 +328,10 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     b.strikeRate = b.balls > 0 ? (b.runs / b.balls) * 100 : 0;
   }
   for (const b of bowlers.values()) {
-    b.economy = b.legalBalls > 0 ? b.runs / (b.legalBalls / 6) : 0;
+    b.economy = b.legalBalls > 0 ? b.runs / (b.legalBalls / BALLS_PER_OVER) : 0;
   }
 
-  const maxBalls = config.maxOvers * 6;
+  const maxBalls = config.maxOvers * BALLS_PER_OVER;
   const maxWickets = config.battingXI.length >= 2 ? config.battingXI.length - 1 : 10;
   const allOut = wickets >= maxWickets;
   const chased = config.target !== undefined && runs >= config.target;
@@ -343,12 +343,9 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     ? overGroups[overGroups.length - 2]?.bowlerId
     : lastGroup?.bowlerId;
 
-  // Derive currentBowlerId:
-  // If an over is in progress, currentBowlerId is overInProgress.bowlerId.
-  // If the over just completed, currentBowlerId is undefined (needsBowler is true).
   const currentBowlerId =
     overInProgress?.bowlerId ??
-    (deliveries.length > 0 && legalBalls % 6 !== 0
+    (deliveries.length > 0 && legalBalls % BALLS_PER_OVER !== 0
       ? deliveries[deliveries.length - 1]?.bowlerId
       : undefined);
 
@@ -379,8 +376,8 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     legalBalls,
     extras,
     oversText: oversText(legalBalls),
-    oversFloat: legalBalls / 6,
-    crr: legalBalls > 0 ? runs / (legalBalls / 6) : 0,
+    oversFloat: legalBalls / BALLS_PER_OVER,
+    crr: legalBalls > 0 ? runs / (legalBalls / BALLS_PER_OVER) : 0,
     maxOvers: config.maxOvers,
     strikerId,
     nonStrikerId,
@@ -410,10 +407,96 @@ export function buildInnings(config: InningsConfig, deliveries: Delivery[]): Inn
     state.runsNeeded = Math.max(0, config.target - runs);
     state.ballsRemaining = Math.max(0, maxBalls - legalBalls);
     state.requiredRunRate =
-      state.ballsRemaining > 0 ? (state.runsNeeded / state.ballsRemaining) * 6 : 0;
+      state.ballsRemaining > 0 ? (state.runsNeeded / state.ballsRemaining) * BALLS_PER_OVER : 0;
   }
 
   return state;
+}
+
+/**
+ * Validates whether a bowler is legally eligible to bowl in the current innings
+ * based on the TPL tournament rules:
+ * - Exactly one bowler can bowl 2 overs (10 legal balls)
+ * - All other bowlers can bowl 1 over (5 legal balls)
+ * - No consecutive overs for the same bowler
+ */
+export interface BowlerEligibilityResult {
+  canBowl: boolean;
+  reason?: string;
+  oversBowledText: string;
+  legalBallsBowled: number;
+  maxOversAllowed: number;
+}
+
+export function validateBowlerEligibility(
+  bowlerId: string,
+  innings?: InningsState,
+  previousBowlerId?: string,
+): BowlerEligibilityResult {
+  if (!innings) {
+    return {
+      canBowl: true,
+      oversBowledText: "0.0",
+      legalBallsBowled: 0,
+      maxOversAllowed: TPL_TOURNAMENT_RULES.STANDARD_BOWLER_MAX_OVERS,
+    };
+  }
+
+  const stat = innings.bowlers?.find((b) => b.playerId === bowlerId);
+  const legalBallsBowled = stat?.legalBalls ?? 0;
+  const oversBowledText = oversText(legalBallsBowled);
+
+  // 1. Consecutive over check
+  const prevId = previousBowlerId ?? innings.previousBowlerId;
+  if (prevId && bowlerId === prevId && innings.legalBalls > 0) {
+    return {
+      canBowl: false,
+      reason: "Bowler cannot bowl consecutive overs.",
+      oversBowledText,
+      legalBallsBowled,
+      maxOversAllowed: TPL_TOURNAMENT_RULES.MAX_OVERS_PER_BOWLER,
+    };
+  }
+
+  // 2. Absolute max overs check (10 legal balls / 2 overs)
+  const maxBallsAllowed = TPL_TOURNAMENT_RULES.MAX_OVERS_PER_BOWLER * BALLS_PER_OVER;
+  if (legalBallsBowled >= maxBallsAllowed) {
+    return {
+      canBowl: false,
+      reason: `Bowler has reached the maximum of ${TPL_TOURNAMENT_RULES.MAX_OVERS_PER_BOWLER} overs (${maxBallsAllowed} legal balls).`,
+      oversBowledText,
+      legalBallsBowled,
+      maxOversAllowed: TPL_TOURNAMENT_RULES.MAX_OVERS_PER_BOWLER,
+    };
+  }
+
+  // 3. Check 1-over bowler limit vs 2-over quota
+  const standardLimit = TPL_TOURNAMENT_RULES.STANDARD_BOWLER_MAX_OVERS * BALLS_PER_OVER;
+  if (legalBallsBowled >= standardLimit) {
+    // Check how many other bowlers in this innings have already bowled > 1 over
+    const otherBowlersWithMultipleOvers = (innings.bowlers || []).filter(
+      (b) => b.playerId !== bowlerId && b.legalBalls > standardLimit,
+    );
+    if (otherBowlersWithMultipleOvers.length >= TPL_TOURNAMENT_RULES.SECOND_OVER_BOWLER_COUNT) {
+      return {
+        canBowl: false,
+        reason: `Only ${TPL_TOURNAMENT_RULES.SECOND_OVER_BOWLER_COUNT} bowler can bowl 2 overs. This bowler has already completed 1 over.`,
+        oversBowledText,
+        legalBallsBowled,
+        maxOversAllowed: TPL_TOURNAMENT_RULES.STANDARD_BOWLER_MAX_OVERS,
+      };
+    }
+  }
+
+  return {
+    canBowl: true,
+    oversBowledText,
+    legalBallsBowled,
+    maxOversAllowed:
+      legalBallsBowled >= standardLimit
+        ? TPL_TOURNAMENT_RULES.MAX_OVERS_PER_BOWLER
+        : TPL_TOURNAMENT_RULES.STANDARD_BOWLER_MAX_OVERS,
+  };
 }
 
 /** ---------- full match reduction ---------- */

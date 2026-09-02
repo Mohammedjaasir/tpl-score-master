@@ -1,4 +1,5 @@
 import type { Match } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import type { MatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
 import { OpenersScreen } from "@/components/match/OpenersScreen";
@@ -28,7 +29,7 @@ export function InningsBreakScreen({ match, store }: Props) {
 
   // Second innings target & balls calculation
   const secondInningsMaxOvers = doc.setup.secondInningsReducedOvers ?? doc.setup.reducedOvers ?? match.overs;
-  const totalSecondInningsBalls = secondInningsMaxOvers * 6;
+  const totalSecondInningsBalls = secondInningsMaxOvers * BALLS_PER_OVER;
   const target = firstInnings.runs + 1;
 
   // If 2nd innings not started yet — show break summary and opener selection

@@ -1,4 +1,5 @@
 import type { Match, MatchState, BatterStat, BowlerStat, Delivery } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 import { buildMatchState, oversText } from "@/lib/scoring/engine";
 
@@ -312,7 +313,7 @@ export function calculatePlayerPerformance(
   const battingAverage = dismissedCount > 0 ? totalRuns / dismissedCount : totalRuns;
   const battingStrikeRate = totalBalls > 0 ? (totalRuns / totalBalls) * 100 : 0;
 
-  const bowlingEconomy = totalLegalBalls > 0 ? (totalRunsConceded / totalLegalBalls) * 6 : 0;
+  const bowlingEconomy = totalLegalBalls > 0 ? (totalRunsConceded / totalLegalBalls) * BALLS_PER_OVER : 0;
   const bowlingAverage = totalWickets > 0 ? totalRunsConceded / totalWickets : 0;
 
   const hasData = battingInnings > 0 || bowlingInnings > 0 || totalCatches > 0 || matchHistory.length > 0;
@@ -515,8 +516,8 @@ export function calculateMatchMVP(state?: MatchState): PlayerMVPScore[] {
       // Maidens
       bowlPts += bw.maidens * 20;
 
-      // Economy bonuses (min 1 completed over / 6 legal balls)
-      if (bw.legalBalls >= 6) {
+      // Economy bonuses (min 1 completed over / 5 legal balls)
+      if (bw.legalBalls >= BALLS_PER_OVER) {
         if (bw.economy <= 5.0) bowlPts += 15;
         else if (bw.economy <= 6.5) bowlPts += 10;
         else if (bw.economy >= 12.0) bowlPts -= 10;

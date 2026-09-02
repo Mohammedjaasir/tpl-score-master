@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, ShieldAlert } from "lucide-react";
 import { lookup } from "@/lib/repositories";
-import { oversText } from "@/lib/scoring/engine";
-import type { BowlerStat } from "@/types/cricket";
+import { oversText, validateBowlerEligibility } from "@/lib/scoring/engine";
+import { BALLS_PER_OVER, TPL_TOURNAMENT_RULES } from "@/types/cricket";
+import type { BowlerStat, InningsState } from "@/types/cricket";
 
 interface Props {
   bowlingXI: string[];
   bowlers: BowlerStat[];
+  innings?: InningsState;
   previousBowlerId?: string;
   currentBowlerId?: string;
   onSelect: (id: string) => void;
@@ -17,6 +19,7 @@ interface Props {
 export function BowlerModal({
   bowlingXI,
   bowlers,
+  innings,
   previousBowlerId,
   currentBowlerId,
   onSelect,
@@ -49,11 +52,9 @@ export function BowlerModal({
             <h2 className="font-display text-xl font-extrabold text-foreground uppercase tracking-wider">
               {isOverEnd ? "Select Bowler" : "Opening Bowler"}
             </h2>
-            {isOverEnd && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Over complete — choose next bowler
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isOverEnd ? "Over complete (5 legal balls) — choose next bowler" : "Select opening bowler"}
+            </p>
           </div>
           {onClose && (
             <button
@@ -66,13 +67,27 @@ export function BowlerModal({
           )}
         </div>
 
-        <div className="overflow-y-auto max-h-[60vh] px-6 py-4 flex flex-col gap-2">
+        {/* Info Banner */}
+        <div className="mx-6 mt-4 p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-foreground flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-primary shrink-0" />
+          <span>
+            <strong>Tournament Rule:</strong> Max 1 bowler can bowl 2 overs (10 balls). Other bowlers max 1 over (5 balls).
+          </span>
+        </div>
+
+        <div className="overflow-y-auto max-h-[55vh] px-6 py-4 flex flex-col gap-2">
           {bowlingXI.map((id) => {
             const player = lookup.player(id);
             const stat = statOf(id);
             const isCurrent = id === currentBowlerId;
-            // Prevent same bowler bowling consecutive overs
-            const isLocked = isOverEnd && id === previousBowlerId;
+            
+            // Comprehensive bowler eligibility check
+            const eligibility = validateBowlerEligibility(id, innings, isOverEnd ? previousBowlerId : undefined);
+            const isLocked = !eligibility.canBowl && !isCurrent;
+
+            const legalBalls = stat?.legalBalls ?? 0;
+            const completedOvers = Math.floor(legalBalls / BALLS_PER_OVER);
+            const quotaMax = eligibility.maxOversAllowed;
 
             return (
               <button
@@ -87,24 +102,39 @@ export function BowlerModal({
                       : "border-border bg-background hover:border-primary/30"
                 }`}
               >
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-secondary text-xs font-extrabold text-foreground">
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-xs font-extrabold ${
+                  isLocked ? "bg-muted text-muted-foreground" : "bg-secondary text-foreground"
+                }`}>
                   {player?.shortName?.charAt(0) ?? "?"}
                 </div>
                 <div className="min-w-0 flex-1 text-left">
                   <p className="truncate text-sm font-bold text-foreground">
                     {player?.name ?? id}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {player?.role}
-                    {isLocked ? " · Previous over" : ""}
-                  </p>
-                </div>
-                {stat && (
-                  <div className="shrink-0 text-right text-xs text-muted-foreground tabular-nums font-bold">
-                    <p>{oversText(stat.legalBalls)} ov</p>
-                    <p>{stat.runs}r {stat.wickets}w</p>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                    <span>{player?.role}</span>
+                    {isLocked && eligibility.reason && (
+                      <span className="text-red-500 font-bold">
+                        · {eligibility.reason}
+                      </span>
+                    )}
+                    {!isLocked && completedOvers === 1 && (
+                      <span className="text-amber-600 font-bold">
+                        · Eligible for 2nd over
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
+                <div className="shrink-0 text-right text-xs text-muted-foreground tabular-nums font-bold">
+                  <p className={completedOvers >= 2 ? "text-red-500 font-black" : ""}>
+                    {oversText(legalBalls)} / {quotaMax} ov
+                  </p>
+                  {stat && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {stat.runs}r {stat.wickets}w
+                    </p>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -114,7 +144,7 @@ export function BowlerModal({
           <button
             onClick={handleConfirm}
             disabled={!selected}
-            className="tap flex min-h-14 w-full items-center justify-center rounded-full bg-foreground text-sm font-extrabold uppercase tracking-widest text-background disabled:opacity-40"
+            className="tap flex min-h-14 w-full items-center justify-center rounded-full bg-foreground text-sm font-extrabold uppercase tracking-widest text-background disabled:opacity-40 shadow-md"
           >
             Confirm Bowler
           </button>

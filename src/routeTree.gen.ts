@@ -22,9 +22,11 @@ import { Route as ScorecardsRouteImport } from './routes/scorecards'
 import { Route as ScorerRouteImport } from './routes/scorer'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as MatchMatchIdRouteImport } from './routes/match/$matchId'
+import { Route as ObsIndexRouteImport } from './routes/obs/index'
 import { Route as PlayerPlayerIdRouteImport } from './routes/player/$playerId'
 import { Route as PlayersPlayerIdRouteImport } from './routes/players/$playerId'
 import { Route as ScorecardMatchIdRouteImport } from './routes/scorecard/$matchId'
+import { Route as ObsMatchMatchIdRouteImport } from './routes/obs/match/$matchId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -91,6 +93,11 @@ const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
   path: '/match/$matchId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ObsIndexRoute = ObsIndexRouteImport.update({
+  id: '/obs/',
+  path: '/obs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlayerPlayerIdRoute = PlayerPlayerIdRouteImport.update({
   id: '/player/$playerId',
   path: '/player/$playerId',
@@ -104,6 +111,11 @@ const PlayersPlayerIdRoute = PlayersPlayerIdRouteImport.update({
 const ScorecardMatchIdRoute = ScorecardMatchIdRouteImport.update({
   id: '/scorecard/$matchId',
   path: '/scorecard/$matchId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ObsMatchMatchIdRoute = ObsMatchMatchIdRouteImport.update({
+  id: '/obs/match/$matchId',
+  path: '/obs/match/$matchId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -124,6 +136,8 @@ export interface FileRoutesByFullPath {
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs/': typeof ObsIndexRoute
+  '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -142,6 +156,8 @@ export interface FileRoutesByTo {
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs': typeof ObsIndexRoute
+  '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -161,6 +177,8 @@ export interface FileRoutesById {
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs/': typeof ObsIndexRoute
+  '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -181,6 +199,8 @@ export interface FileRouteTypes {
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs/'
+    | '/obs/match/$matchId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -199,6 +219,8 @@ export interface FileRouteTypes {
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs'
+    | '/obs/match/$matchId'
   id:
     | '__root__'
     | '/'
@@ -217,6 +239,8 @@ export interface FileRouteTypes {
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs/'
+    | '/obs/match/$matchId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -236,6 +260,8 @@ export interface RootRouteChildren {
   PlayerPlayerIdRoute: typeof PlayerPlayerIdRoute
   PlayersPlayerIdRoute: typeof PlayersPlayerIdRoute
   ScorecardMatchIdRoute: typeof ScorecardMatchIdRoute
+  ObsIndexRoute: typeof ObsIndexRoute
+  ObsMatchMatchIdRoute: typeof ObsMatchMatchIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -331,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatchMatchIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/obs/': {
+      id: '/obs/'
+      path: '/obs'
+      fullPath: '/obs/'
+      preLoaderRoute: typeof ObsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/player/$playerId': {
       id: '/player/$playerId'
       path: '/player/$playerId'
@@ -350,6 +383,13 @@ declare module '@tanstack/react-router' {
       path: '/scorecard/$matchId'
       fullPath: '/scorecard/$matchId'
       preLoaderRoute: typeof ScorecardMatchIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/obs/match/$matchId': {
+      id: '/obs/match/$matchId'
+      path: '/obs/match/$matchId'
+      fullPath: '/obs/match/$matchId'
+      preLoaderRoute: typeof ObsMatchMatchIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -372,6 +412,8 @@ const rootRouteChildren: RootRouteChildren = {
   PlayerPlayerIdRoute: PlayerPlayerIdRoute,
   PlayersPlayerIdRoute: PlayersPlayerIdRoute,
   ScorecardMatchIdRoute: ScorecardMatchIdRoute,
+  ObsIndexRoute: ObsIndexRoute,
+  ObsMatchMatchIdRoute: ObsMatchMatchIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

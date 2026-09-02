@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerSupabaseAdmin } from "@/lib/server/supabase-admin";
 import type { SupabaseMatch } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 
 export interface FixtureInput {
   id?: string;
@@ -84,7 +85,7 @@ export const saveScheduleServerFn = createServerFn({ method: "POST" })
             start_time: fixture.scheduledAt,
             status: "scheduled",
             total_overs: fixture.overs || 5,
-            balls_per_over: 6,
+            balls_per_over: BALLS_PER_OVER,
           });
         }
       }
@@ -282,7 +283,7 @@ export const generateTournamentScheduleServerFn = createServerFn({ method: "POST
     }
 
     const overs = Math.max(1, Number(input.overs) || 5);
-    const ballsPerOver = Math.max(1, Number(input.ballsPerOver) || 6);
+    const ballsPerOver = Math.max(1, Number(input.ballsPerOver) || BALLS_PER_OVER);
     const intervalMinutes = Math.max(15, Number(input.intervalMinutes) || 45);
 
     // Parse base start datetime (safely handle 00:00 midnight)
@@ -371,7 +372,7 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
 
     // 4. Validate overs & balls per over
     const overs = Math.max(1, Math.min(50, Math.floor(Number(input.overs) || 5)));
-    const ballsPerOver = Math.max(1, Math.min(12, Math.floor(Number(input.ballsPerOver) || 6)));
+    const ballsPerOver = Math.max(1, Math.min(12, Math.floor(Number(input.ballsPerOver) || BALLS_PER_OVER)));
 
     const row: Omit<SupabaseMatch, "id" | "created_at" | "updated_at"> = {
       team_a_id: input.teamAId,
