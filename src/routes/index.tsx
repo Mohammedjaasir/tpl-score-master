@@ -419,71 +419,6 @@ function LandingScreen() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          COMMUNITY HERITAGE — THE HEART OF THUNDUWA
-          ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 lg:py-28 bg-[#111111] text-white overflow-hidden border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-            {/* Text Content */}
-            <div className="lg:col-span-7 space-y-6">
-              <div className="flex items-center gap-3">
-                <span className="h-0.5 w-6 bg-[#D9A928]" />
-                <span className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9A928]">
-                  COMMUNITY HERITAGE
-                </span>
-              </div>
-
-              <h2 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tight text-white leading-none">
-                The Heart of <br />
-                <span className="text-[#D9A928]">Thunduwa</span>
-              </h2>
-
-              <p className="text-sm sm:text-base text-white/70 leading-relaxed font-normal max-w-xl">
-                The Thunduwa Premier League is more than just a cricket tournament; it is a celebration of our community's enduring spirit, unity, and shared heritage.
-              </p>
-
-              <p className="text-sm sm:text-base text-white/70 leading-relaxed font-normal max-w-xl">
-                Rooted deeply in the values taught within the walls of our local school and echoed through the call to prayer at our central mosque, TPL brings generations together on the pitch. We play to honor our past and inspire our future.
-              </p>
-
-              <div className="pt-4 grid grid-cols-2 gap-8 max-w-md border-t border-white/10">
-                <div>
-                  <h4 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Unity</h4>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mt-1">ONE COMMUNITY</p>
-                </div>
-                <div>
-                  <h4 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Legacy</h4>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mt-1">GENERATIONS STRONG</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Overlapping Images Container */}
-            <div className="lg:col-span-5 relative flex flex-col items-center lg:items-end justify-center">
-              <div className="relative w-full max-w-[440px]">
-                {/* Mosque Image (Top Right) */}
-                <div className="relative z-0 ml-auto w-[85%] sm:w-[90%] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
-                  <img
-                    src="/thunduwa-mosque.jpg"
-                    alt="Central Mosque Thunduwa"
-                    className="w-full h-[240px] sm:h-[300px] object-cover"
-                  />
-                </div>
-
-                {/* School Image (Bottom Left Overlapping) */}
-                <div className="relative z-10 -mt-20 sm:-mt-28 w-[75%] sm:w-[80%] rounded-3xl overflow-hidden shadow-2xl border-4 border-[#111111]">
-                  <img
-                    src="/thunduwa-school.jpg"
-                    alt="SPL/EL/THUNDUWA MUSLIM MAHA VIDYALAYA"
-                    className="w-full h-[180px] sm:h-[220px] object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
           5. TOURNAMENT OVERVIEW
@@ -760,90 +695,67 @@ function LandingScreen() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          10. MATCH CENTRE OVERVIEW
+          10. COMMUNITY HERITAGE — THE HEART OF THUNDUWA
           ══════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="results"
-        className="relative pt-2 pb-12 md:py-20 lg:py-28 overflow-hidden"
-        style={{
-          backgroundImage: "url('/match-centre-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "center center",
-        }}
-      >
-        {/* Dark overlay */}
-        <div className="absolute inset-0 bg-[#0A0A0A]/85 pointer-events-none" />
-        <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="text-center mb-8 md:mb-14">
-            <SectionLabel>MATCH CENTRE</SectionLabel>
-            <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.9] tracking-tight text-white">
-              EVERYTHING<br />
-              <span style={{ background: "linear-gradient(135deg, #F4C542 0%, #D9A928 60%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                IN ONE PLACE
-              </span>
-            </h2>
-            <p className="mt-5 text-sm text-white/50 max-w-md mx-auto leading-relaxed">
-              From the first ball to the final result.
-            </p>
-          </div>
+      <section id="community-heritage" className="py-20 lg:py-28 bg-[#111111] text-white overflow-hidden border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+            {/* Text Content */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="flex items-center gap-3">
+                <span className="h-0.5 w-6 bg-[#D9A928]" />
+                <span className="text-[11px] font-black uppercase tracking-[0.25em] text-[#D9A928]">
+                  COMMUNITY HERITAGE
+                </span>
+              </div>
 
-          <div className="-mt-20 md:-mt-24 lg:-mt-28 mb-10 w-full flex justify-center">
-            <SocialCards
-              cards={[
-                {
-                  icon: (
-                    <svg viewBox="0 0 58 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", height: "100%" }}>
-                      <rect width="58" height="22" rx="11" fill="currentColor" fillOpacity="0.18"/>
-                      <circle cx="13" cy="11" r="7.5" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1"/>
-                      <polygon points="10.5,7.5 18,11 10.5,14.5" fill="currentColor"/>
-                      <text x="24" y="15" fontFamily="Arial, sans-serif" fontSize="8.5" fontWeight="900" fill="currentColor" letterSpacing="1.5">LIVE</text>
-                    </svg>
-                  ),
-                  wideIcon: true,
-                  spacer: true,
-                  title: "LIVE MATCHES",
-                  desc: "Real-time scorecards and match updates.",
-                  link: "/live",
-                  img: "/card-live.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <ClipboardCheck className="h-5 w-5" />,
-                  title: "RESULTS",
-                  desc: "Review completed matches and final scores.",
-                  link: "/scorecards",
-                  img: "/card-results.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <CalendarDays className="h-5 w-5" />,
-                  title: "FIXTURES",
-                  desc: "Explore upcoming games and tournament schedule.",
-                  link: "/matches",
-                  img: "/card-fixtures.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <UsersRound className="h-5 w-5" />,
-                  title: "TEAMS",
-                  desc: "Meet the squads competing for the TPL 2026 title.",
-                  link: "/matches",
-                  img: "/card-teams.jpg",
-                  bgSize: "cover",
-                },
-              ]}
-            />
-          </div>
+              <h2 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tight text-white leading-none">
+                The Heart of <br />
+                <span className="text-[#D9A928]">Thunduwa</span>
+              </h2>
 
-          <div className="text-center">
-            <Link
-              to="/matches"
-              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-xs uppercase tracking-widest transition-all shadow-[0_4px_32px_rgba(217,169,40,0.35)] active:scale-95"
-            >
-              ENTER MATCH CENTRE
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+              <p className="text-sm sm:text-base text-white/70 leading-relaxed font-normal max-w-xl">
+                The Thunduwa Premier League is more than just a cricket tournament; it is a celebration of our community's enduring spirit, unity, and shared heritage.
+              </p>
+
+              <p className="text-sm sm:text-base text-white/70 leading-relaxed font-normal max-w-xl">
+                Rooted deeply in the values taught within the walls of our local school and echoed through the call to prayer at our central mosque, TPL brings generations together on the pitch. We play to honor our past and inspire our future.
+              </p>
+
+              <div className="pt-4 grid grid-cols-2 gap-8 max-w-md border-t border-white/10">
+                <div>
+                  <h4 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Unity</h4>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mt-1">ONE COMMUNITY</p>
+                </div>
+                <div>
+                  <h4 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">Legacy</h4>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mt-1">GENERATIONS STRONG</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Overlapping Images Container */}
+            <div className="lg:col-span-5 relative flex flex-col items-center lg:items-end justify-center">
+              <div className="relative w-full max-w-[440px]">
+                {/* Mosque Image (Top Right) */}
+                <div className="relative z-0 ml-auto w-[85%] sm:w-[90%] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+                  <img
+                    src="/thunduwa-mosque.jpg"
+                    alt="Central Mosque Thunduwa"
+                    className="w-full h-[240px] sm:h-[300px] object-cover"
+                  />
+                </div>
+
+                {/* School Image (Bottom Left Overlapping) */}
+                <div className="relative z-10 -mt-20 sm:-mt-28 w-[75%] sm:w-[80%] rounded-3xl overflow-hidden shadow-2xl border-4 border-[#111111]">
+                  <img
+                    src="/thunduwa-school.jpg"
+                    alt="SPL/EL/THUNDUWA MUSLIM MAHA VIDYALAYA"
+                    className="w-full h-[180px] sm:h-[220px] object-cover"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
