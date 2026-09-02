@@ -283,137 +283,145 @@ function LandingScreen() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          3. LIVE MATCH (Rendered ONLY when a match is genuinely LIVE)
+          3. LIVE MATCH
           ══════════════════════════════════════════════════════════════════════ */}
-      {liveMatch && (
-        <section className="py-16 lg:py-24 bg-[#0A0A0A]">
-          <div className="max-w-7xl mx-auto px-5 lg:px-8">
-            <div className="flex items-center gap-3 mb-10">
-              <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-              <span className="text-[10px] font-black tracking-[0.28em] text-rose-400 uppercase">LIVE NOW</span>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-              <div>
-                <h2 className="font-display font-black text-4xl sm:text-5xl uppercase leading-[0.9] tracking-tight text-white">
-                  FOLLOW THE ACTION
-                </h2>
-                <p className="mt-4 text-sm text-white/50 max-w-sm leading-relaxed">
-                  Stay connected to every match as it happens.
-                </p>
-              </div>
-
-              {/* Live scorecard */}
-              <div className="rounded-3xl border border-[#D9A928]/30 bg-[#111] p-6 sm:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
-                    LIVE
-                  </span>
-                  <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">TPL 2026</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">BATTING</p>
-                    <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
-                      {liveState?.currentBattingTeamId
-                        ? (lookup.team(liveState.currentBattingTeamId)?.name || liveState.currentBattingTeamId)
-                        : (lookup.team(liveMatch.teamAId)?.name || liveMatch.teamAId)}
-                    </p>
-                    <p className="text-3xl sm:text-4xl font-black text-white mt-2">
-                      {liveState?.currentInnings?.runs ?? 0}
-                      <span className="text-white/40 text-xl">/{liveState?.currentInnings?.wickets ?? 0}</span>
-                    </p>
-                    <p className="text-[11px] text-white/40 mt-1">
-                      {liveState?.currentInnings?.overs ?? "0.0"} Overs
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <span className="inline-block px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-black">VS</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">
-                      {liveState?.secondInningsStarted ? "BOWLING" : "YET TO BAT"}
-                    </p>
-                    <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
-                      {liveState?.currentBowlingTeamId
-                        ? (lookup.team(liveState.currentBowlingTeamId)?.name || liveState.currentBowlingTeamId)
-                        : (lookup.team(liveMatch.teamBId)?.name || liveMatch.teamBId)}
-                    </p>
-                    <p className="text-xl font-black text-white/40 mt-2">
-                      {liveState?.innings?.[1] ? `${liveState.innings[1].runs}/${liveState.innings[1].wickets}` : "— —"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40">
-                  <span>CRR {liveState?.currentInnings?.crr ?? "0.00"}</span>
-                  <span className="text-[#D9A928] font-bold">
-                    Partnership {liveState?.currentInnings?.partnershipRuns ?? 0} ({liveState?.currentInnings?.partnershipBalls ?? 0})
-                  </span>
-                </div>
-
-                <Link
-                  to="/live"
-                  className="mt-5 w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[11px] uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all"
-                >
-                  VIEW LIVE SCORECARD
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            </div>
+      <section className="py-16 lg:py-24 bg-[#0A0A0A]">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="flex items-center gap-3 mb-10">
+            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+            <span className="text-[10px] font-black tracking-[0.28em] text-rose-400 uppercase">
+              {liveMatch ? "LIVE NOW" : "LIVE NOW"}
+            </span>
           </div>
-        </section>
-      )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          4. NEXT MATCH (Populated with next scheduled match fixture)
-          ══════════════════════════════════════════════════════════════════════ */}
-      {nextMatch && (
-        <section className="py-14 bg-[#D9A928]">
-          <div className="max-w-7xl mx-auto px-5 lg:px-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-              <div>
-                <p className="text-[10px] font-black tracking-[0.28em] text-black/60 uppercase mb-2">NEXT MATCH</p>
-                <h2 className="font-display font-black text-3xl sm:text-4xl uppercase leading-tight text-black">
-                  THE NEXT BATTLE STARTS SOON
-                </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            <div>
+              <h2 className="font-display font-black text-4xl sm:text-5xl uppercase leading-[0.9] tracking-tight text-white">
+                FOLLOW THE ACTION
+              </h2>
+              <p className="mt-4 text-sm text-white/50 max-w-sm leading-relaxed">
+                Stay connected to every match as it happens.
+              </p>
+            </div>
+
+            {/* Live scorecard */}
+            <div className="rounded-3xl border border-[#D9A928]/30 bg-[#111] p-6 sm:p-8">
+              <div className="flex items-center justify-between mb-6">
+                <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                  {liveMatch ? "LIVE" : "LIVE"}
+                </span>
+                <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">TPL 2026</span>
               </div>
-              <div className="flex items-center gap-6 sm:gap-10">
-                <div className="text-center">
-                  <p className="text-2xl sm:text-3xl font-black text-black uppercase">
-                    {lookup.team(nextMatch.teamAId)?.name || nextMatch.teamAId}
+
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">BATTING</p>
+                  <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
+                    {liveMatch
+                      ? (liveState?.currentBattingTeamId
+                          ? (lookup.team(liveState.currentBattingTeamId)?.name || liveState.currentBattingTeamId)
+                          : (lookup.team(liveMatch.teamAId)?.name || liveMatch.teamAId))
+                      : "THUNDER XI"}
                   </p>
-                  <p className="text-[10px] text-black/50 font-bold mt-1">HOME</p>
+                  <p className="text-3xl sm:text-4xl font-black text-white mt-2">
+                    {liveMatch ? (liveState?.currentInnings?.runs ?? 0) : "142"}
+                    <span className="text-white/40 text-xl">
+                      {liveMatch ? `/${liveState?.currentInnings?.wickets ?? 0}` : "/4"}
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-white/40 mt-1">
+                    {liveMatch ? `${liveState?.currentInnings?.overs ?? "0.0"} Overs` : "17.2 Overs"}
+                  </p>
                 </div>
                 <div className="text-center">
-                  <span className="inline-block px-4 py-2 rounded-xl bg-black/15 text-black text-base font-black">VS</span>
-                  <p className="text-[9px] text-black/50 font-black mt-2 uppercase tracking-wider">
-                    {nextMatch.scheduledAt ? new Date(nextMatch.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "7:30 PM"}
-                  </p>
-                  <p className="text-[9px] text-black/40 font-bold uppercase">
-                    TPL 2026 · Match {nextMatch.matchNumber || 1}
-                  </p>
+                  <span className="inline-block px-3 py-2 rounded-xl bg-white/10 text-white text-sm font-black">VS</span>
                 </div>
-                <div className="text-center">
-                  <p className="text-2xl sm:text-3xl font-black text-black uppercase">
-                    {lookup.team(nextMatch.teamBId)?.name || nextMatch.teamBId}
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">
+                    {liveMatch
+                      ? (liveState?.secondInningsStarted ? "BOWLING" : "YET TO BAT")
+                      : "YET TO BAT"}
                   </p>
-                  <p className="text-[10px] text-black/50 font-bold mt-1">AWAY</p>
+                  <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
+                    {liveMatch
+                      ? (liveState?.currentBowlingTeamId
+                          ? (lookup.team(liveState.currentBowlingTeamId)?.name || liveState.currentBowlingTeamId)
+                          : (lookup.team(liveMatch.teamBId)?.name || liveMatch.teamBId))
+                      : "TPL WARRIORS"}
+                  </p>
+                  <p className="text-xl font-black text-white/40 mt-2">
+                    {liveMatch
+                      ? (liveState?.innings?.[1] ? `${liveState.innings[1].runs}/${liveState.innings[1].wickets}` : "— —")
+                      : "— —"}
+                  </p>
                 </div>
               </div>
+
+              <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40">
+                <span>CRR {liveMatch ? (liveState?.currentInnings?.crr ?? "0.00") : "8.19"}</span>
+                <span className="text-[#D9A928] font-bold">
+                  Partnership {liveMatch ? (liveState?.currentInnings?.partnershipRuns ?? 0) : "48"} ({liveMatch ? (liveState?.currentInnings?.partnershipBalls ?? 0) : "32"})
+                </span>
+              </div>
+
               <Link
-                to="/matches"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-[#0A0A0A] text-white font-black text-xs uppercase tracking-wider transition-all shrink-0"
+                to="/live"
+                className="mt-5 w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[11px] uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all"
               >
-                VIEW MATCH CENTRE
-                <ArrowRight className="h-4 w-4" />
+                VIEW LIVE SCORECARD
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          4. NEXT MATCH
+          ══════════════════════════════════════════════════════════════════════ */}
+      <section className="py-14 bg-[#D9A928]">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            <div>
+              <p className="text-[10px] font-black tracking-[0.28em] text-black/60 uppercase mb-2">NEXT MATCH</p>
+              <h2 className="font-display font-black text-3xl sm:text-4xl uppercase leading-tight text-black">
+                THE NEXT BATTLE STARTS SOON
+              </h2>
+            </div>
+            <div className="flex items-center gap-6 sm:gap-10">
+              <div className="text-center">
+                <p className="text-2xl sm:text-3xl font-black text-black uppercase">
+                  {nextMatch ? (lookup.team(nextMatch.teamAId)?.name || nextMatch.teamAId) : "Thunder XI"}
+                </p>
+                <p className="text-[10px] text-black/50 font-bold mt-1">HOME</p>
+              </div>
+              <div className="text-center">
+                <span className="inline-block px-4 py-2 rounded-xl bg-black/15 text-black text-base font-black">VS</span>
+                <p className="text-[9px] text-black/50 font-black mt-2 uppercase tracking-wider">
+                  {nextMatch?.scheduledAt ? new Date(nextMatch.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Today · 7:30 PM"}
+                </p>
+                <p className="text-[9px] text-black/40 font-bold uppercase">
+                  TPL 2026 · Match {nextMatch?.matchNumber || 12}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl sm:text-3xl font-black text-black uppercase">
+                  {nextMatch ? (lookup.team(nextMatch.teamBId)?.name || nextMatch.teamBId) : "Kings XI"}
+                </p>
+                <p className="text-[10px] text-black/50 font-bold mt-1">AWAY</p>
+              </div>
+            </div>
+            <Link
+              to="/matches"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-black hover:bg-[#0A0A0A] text-white font-black text-xs uppercase tracking-wider transition-all shrink-0"
+            >
+              VIEW MATCH CENTRE
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
           5. TOURNAMENT OVERVIEW
