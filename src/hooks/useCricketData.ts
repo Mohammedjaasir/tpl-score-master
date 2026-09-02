@@ -119,7 +119,7 @@ function getEffectiveMatch(m: Match): Match {
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
-      if (doc.isStarted || m.status === "LIVE" || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId) {
+      if (doc.isStarted === true || m.status === "LIVE") {
         const computed = buildMatchState({
           match: m,
           setup: doc.setup || { playingXI: {} },

@@ -118,7 +118,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   // Derive unambiguous effective status
   const isDone = match.status === "COMPLETED" || state?.phase === "complete";
   const hasDeliveries = (state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0;
-  const isLive = !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
+  const isLive = !isDone && match.status === "LIVE";
   const effectiveStatus = isDone ? "COMPLETED" : isLive ? "LIVE" : match.status === "READY" ? "READY" : "UPCOMING";
   const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
 
