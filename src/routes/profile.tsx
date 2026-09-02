@@ -27,6 +27,11 @@ function ProfilePage() {
   const { isAdminAuthenticated, adminEmail } = useAdminAuth();
   const navigate = useNavigate();
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
@@ -73,7 +78,7 @@ function ProfilePage() {
           <div className="grid h-20 w-20 place-items-center rounded-3xl bg-[#121316] text-[#D9A928] border border-white/10 shadow-lg">
             <User className="h-10 w-10" />
           </div>
-          {isAuthenticated && (
+          {mounted && isAuthenticated && (
             <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-white">
               <CheckCircle2 className="h-4 w-4" />
             </div>

@@ -1,6 +1,5 @@
 import { Clock, MapPin, Layers, ArrowRight, Trophy, Sparkles, Radio } from "lucide-react";
 import type { Match } from "@/types/cricket";
-import { BALLS_PER_OVER } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 import { useMatchStore } from "@/lib/scoring/store";
 import { formatMatchTime, formatMatchDate } from "@/lib/utils";
@@ -119,7 +118,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   // Derive unambiguous effective status
   const isDone = match.status === "COMPLETED" || state?.phase === "complete";
   const hasDeliveries = (state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0;
-  const isLive = !isDone && match.status === "LIVE";
+  const isLive = !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
   const effectiveStatus = isDone ? "COMPLETED" : isLive ? "LIVE" : match.status === "READY" ? "READY" : "UPCOMING";
   const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
 
@@ -177,7 +176,7 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
     const secondInningsMaxOvers = state?.innings[1]?.maxOvers ?? effectiveMatchOvers;
     const targetRuns = inn1 ? (state?.innings[1]?.target ?? inn1.runs + 1) : 0;
     const runsNeeded = isSecondInnings && inn2 ? Math.max(0, targetRuns - inn2.runs) : 0;
-    const maxLegalBalls = secondInningsMaxOvers * BALLS_PER_OVER;
+    const maxLegalBalls = secondInningsMaxOvers * 6;
     const ballsRemaining = isSecondInnings && inn2 ? Math.max(0, maxLegalBalls - inn2.legalBalls) : 0;
 
     return (
