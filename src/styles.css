@@ -335,3 +335,77 @@
     transform: none !important;
   }
 }
+
+/* Card Fan Carousel layout styles */
+.fan-layout {
+  height: 22rem; /* mobile default */
+}
+@media (min-width: 480px) {
+  .fan-layout {
+    height: 26rem;
+  }
+}
+@media (min-width: 640px) {
+  .fan-layout {
+    height: 28rem;
+  }
+}
+@media (min-width: 768px) {
+  .fan-layout {
+    height: 34rem;
+  }
+}
+@media (min-width: 1024px) {
+  .fan-layout {
+    height: 38rem;
+  }
+}
+
+.fan-card {
+  position: absolute;
+  left: calc(50% - 5.5rem);
+  bottom: 0;
+  width: 11rem;
+  height: 18rem;
+  border-radius: 1.25rem;
+  transform-origin: bottom center;
+  box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.5);
+  background: var(--color-tpl-charcoal);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  transition: border-color 0.3s ease;
+}
+
+.fan-card:hover {
+  border-color: rgba(217, 169, 40, 0.4);
+}
+
+@media (min-width: 480px) {
+  .fan-card {
+    left: calc(50% - 6.5rem);
+    width: 13rem;
+    height: 21rem;
+  }
+}
+@media (min-width: 640px) {
+  .fan-card {
+    left: calc(50% - 7rem);
+    width: 14rem;
+    height: 23rem;
+  }
+}
+@media (min-width: 768px) {
+  .fan-card {
+    left: calc(50% - 8rem);
+    width: 16rem;
+    height: 26rem;
+  }
+}
+@media (min-width: 1024px) {
+  .fan-card {
+    left: calc(50% - 9rem);
+    width: 18rem;
+    height: 29rem;
+  }
+}
+
