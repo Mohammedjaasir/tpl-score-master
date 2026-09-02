@@ -283,14 +283,14 @@ function LandingScreen() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          3. LIVE MATCH
+          3. LIVE MATCH / NEXT MATCH
           ══════════════════════════════════════════════════════════════════════ */}
       <section className="py-16 lg:py-24 bg-[#0A0A0A]">
         <div className="max-w-7xl mx-auto px-5 lg:px-8">
           <div className="flex items-center gap-3 mb-10">
             <span className={`h-2 w-2 rounded-full ${liveMatch ? "bg-rose-500 animate-ping" : "bg-[#D9A928]"}`} />
             <span className={`text-[10px] font-black tracking-[0.28em] uppercase ${liveMatch ? "text-rose-400" : "text-[#D9A928]"}`}>
-              {liveMatch ? "LIVE NOW" : "MATCH CENTRE"}
+              {liveMatch ? "LIVE NOW" : "NEXT MATCH"}
             </span>
           </div>
 
