@@ -47,8 +47,11 @@ function LandingScreen() {
   const { data: teams = [] } = useTeams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Authoritative LIVE match check (status === "LIVE")
-  const liveMatch = allMatches.find((m) => (m.status || "").toUpperCase() === "LIVE");
+  // Authoritative LIVE match check (status === "LIVE" || "IN_PROGRESS")
+  const liveMatch = allMatches.find((m) => {
+    const s = (m.status || "").toUpperCase();
+    return s === "LIVE" || s === "IN_PROGRESS" || s === "IN-PROGRESS";
+  });
 
   // Compute live match state dynamically
   let liveState: ReturnType<typeof buildMatchState> | null = null;
