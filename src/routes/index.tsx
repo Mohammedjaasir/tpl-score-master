@@ -288,9 +288,9 @@ function LandingScreen() {
       <section className="py-16 lg:py-24 bg-[#0A0A0A]">
         <div className="max-w-7xl mx-auto px-5 lg:px-8">
           <div className="flex items-center gap-3 mb-10">
-            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-            <span className="text-[10px] font-black tracking-[0.28em] text-rose-400 uppercase">
-              {liveMatch ? "LIVE NOW" : "LIVE NOW"}
+            <span className={`h-2 w-2 rounded-full ${liveMatch ? "bg-rose-500 animate-ping" : "bg-[#D9A928]"}`} />
+            <span className={`text-[10px] font-black tracking-[0.28em] uppercase ${liveMatch ? "text-rose-400" : "text-[#D9A928]"}`}>
+              {liveMatch ? "LIVE NOW" : "MATCH CENTRE"}
             </span>
           </div>
 
@@ -307,31 +307,37 @@ function LandingScreen() {
             {/* Live scorecard */}
             <div className="rounded-3xl border border-[#D9A928]/30 bg-[#111] p-6 sm:p-8">
               <div className="flex items-center justify-between mb-6">
-                <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
-                  {liveMatch ? "LIVE" : "LIVE"}
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                  liveMatch
+                    ? "bg-rose-500/20 border border-rose-500/30 text-rose-400"
+                    : "bg-[#D9A928]/10 border border-[#D9A928]/30 text-[#D9A928]"
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${liveMatch ? "bg-rose-500 animate-ping" : "bg-[#D9A928]"}`} />
+                  {liveMatch ? "LIVE" : "UPCOMING"}
                 </span>
                 <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">TPL 2026</span>
               </div>
 
               <div className="grid grid-cols-3 gap-4 items-center">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">BATTING</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-1">
+                    {liveMatch ? "BATTING" : "HOME"}
+                  </p>
                   <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
                     {liveMatch
                       ? (liveState?.currentBattingTeamId
                           ? (lookup.team(liveState.currentBattingTeamId)?.name || liveState.currentBattingTeamId)
                           : (lookup.team(liveMatch.teamAId)?.name || liveMatch.teamAId))
-                      : "THUNDER XI"}
+                      : (nextMatch ? (lookup.team(nextMatch.teamAId)?.name || nextMatch.teamAId) : "Thunder XI")}
                   </p>
                   <p className="text-3xl sm:text-4xl font-black text-white mt-2">
-                    {liveMatch ? (liveState?.currentInnings?.runs ?? 0) : "142"}
+                    {liveMatch ? (liveState?.currentInnings?.runs ?? 0) : "—"}
                     <span className="text-white/40 text-xl">
-                      {liveMatch ? `/${liveState?.currentInnings?.wickets ?? 0}` : "/4"}
+                      {liveMatch ? `/${liveState?.currentInnings?.wickets ?? 0}` : " —"}
                     </span>
                   </p>
                   <p className="text-[11px] text-white/40 mt-1">
-                    {liveMatch ? `${liveState?.currentInnings?.overs ?? "0.0"} Overs` : "17.2 Overs"}
+                    {liveMatch ? `${liveState?.currentInnings?.overs ?? "0.0"} Overs` : "Scheduled"}
                   </p>
                 </div>
                 <div className="text-center">
@@ -341,14 +347,14 @@ function LandingScreen() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">
                     {liveMatch
                       ? (liveState?.secondInningsStarted ? "BOWLING" : "YET TO BAT")
-                      : "YET TO BAT"}
+                      : "AWAY"}
                   </p>
                   <p className="text-xl sm:text-2xl font-black text-white uppercase leading-tight">
                     {liveMatch
                       ? (liveState?.currentBowlingTeamId
                           ? (lookup.team(liveState.currentBowlingTeamId)?.name || liveState.currentBowlingTeamId)
                           : (lookup.team(liveMatch.teamBId)?.name || liveMatch.teamBId))
-                      : "TPL WARRIORS"}
+                      : (nextMatch ? (lookup.team(nextMatch.teamBId)?.name || nextMatch.teamBId) : "TPL Warriors")}
                   </p>
                   <p className="text-xl font-black text-white/40 mt-2">
                     {liveMatch
@@ -359,17 +365,25 @@ function LandingScreen() {
               </div>
 
               <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40">
-                <span>CRR {liveMatch ? (liveState?.currentInnings?.crr ?? "0.00") : "8.19"}</span>
-                <span className="text-[#D9A928] font-bold">
-                  Partnership {liveMatch ? (liveState?.currentInnings?.partnershipRuns ?? 0) : "48"} ({liveMatch ? (liveState?.currentInnings?.partnershipBalls ?? 0) : "32"})
-                </span>
+                {liveMatch ? (
+                  <>
+                    <span>CRR {liveState?.currentInnings?.crr ?? "0.00"}</span>
+                    <span className="text-[#D9A928] font-bold">
+                      Partnership {liveState?.currentInnings?.partnershipRuns ?? 0} ({liveState?.currentInnings?.partnershipBalls ?? 0})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[#D9A928] font-bold w-full text-center">
+                    No live match currently in progress. Follow TPL 2026 for next fixture.
+                  </span>
+                )}
               </div>
 
               <Link
-                to="/live"
+                to={liveMatch ? "/live" : "/matches"}
                 className="mt-5 w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-[11px] uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all"
               >
-                VIEW LIVE SCORECARD
+                {liveMatch ? "VIEW LIVE SCORECARD" : "VIEW MATCH FIXTURES"}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
