@@ -22,7 +22,7 @@ export function TplBottomDock() {
         left: "50%",
         transform: "translateX(-50%)",
         bottom: "max(14px, calc(env(safe-area-inset-bottom, 0px) + 8px))",
-        width: "min(370px, calc(100vw - 40px))",
+        width: "min(420px, calc(100vw - 28px))",
         height: "68px",
       }}
     >

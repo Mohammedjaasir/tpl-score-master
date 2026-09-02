@@ -70,6 +70,26 @@ export function runsPerOver(runs: number, legalBalls: number): number {
   return legalBalls > 0 ? (runs / legalBalls) * BALLS_PER_OVER : 0;
 }
 
+/**
+ * Calculates revised target under ARR (Average Run Rate) rule for rain-affected 2nd innings.
+ * Target = floor((Team A Runs / Team A Max Overs) * Team B Reduced Overs) + 1
+ */
+export function calculateTargetARR(
+  firstInningsRuns: number,
+  firstInningsMaxOvers: number,
+  secondInningsReducedOvers: number,
+): number {
+  const arr = firstInningsMaxOvers > 0 ? firstInningsRuns / firstInningsMaxOvers : 0;
+  return Math.floor(arr * secondInningsReducedOvers) + 1;
+}
+
+/**
+ * Calculates Required Run Rate (RRR) per 5-ball over.
+ */
+export function calculateRequiredRunRate(runsNeeded: number, ballsRemaining: number): number {
+  return ballsRemaining > 0 ? Number(((runsNeeded / ballsRemaining) * BALLS_PER_OVER).toFixed(2)) : 0;
+}
+
 export function ballLabel(d?: Delivery | null): { label: string; kind: BallSummary["kind"] } {
   if (!d) return { label: "", kind: "dot" };
   if (d.wicket) return { label: "W", kind: "wicket" };
