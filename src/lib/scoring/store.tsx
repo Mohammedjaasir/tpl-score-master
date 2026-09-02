@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Delivery, ExtraType, Match, MatchSetup, MatchState, WicketInfo } from "@/types/cricket";
+import {
+  BALLS_PER_OVER,
+  type Delivery,
+  type ExtraType,
+  type Match,
+  type MatchSetup,
+  type MatchState,
+  type WicketInfo,
+} from "@/types/cricket";
 import {
   buildMatchState,
   setPlayerNameResolver,
   setTeamNameResolver,
   setTeamPlayersResolver,
+  validateBowlerEligibility,
 } from "@/lib/scoring/engine";
 import { lookup, matchRepository, playerRepository, teamRepository } from "@/lib/repositories";
 import { supabase } from "@/lib/supabase";
@@ -150,14 +159,17 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const inningsDbIdsRef = useRef<[string | null, string | null]>([null, null]);
 
-  // ── Load initial local storage state ──────────────────────────────────────
+  // ── Load initial local storage state on mount or matchId change ───────────
   useEffect(() => {
+    setHydrated(false);
+    setMatchData(initialMatch ?? lookup.match(matchId));
+    inningsDbIdsRef.current = [null, null];
     const local = loadMatchDoc(matchId);
     setDoc(local);
     if (local.inningsDbIds) {
       inningsDbIdsRef.current = local.inningsDbIds;
     }
-  }, [matchId]);
+  }, [matchId, initialMatch]);
 
   // ── Preload match & team entities & rosters ───────────────────────────────
   useEffect(() => {
@@ -298,12 +310,37 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           if (payload.doc.inningsDbIds) {
             inningsDbIdsRef.current = payload.doc.inningsDbIds;
           }
+          if (payload.match) {
+            lookup.upsertMatch(payload.match);
+            setMatchData((prev) => prev || payload.match);
+          }
           try {
             window.localStorage.setItem(STORAGE_PREFIX + matchId, JSON.stringify(payload.doc));
           } catch {}
         }
       })
-      .subscribe();
+      .on("broadcast", { event: "request_sync" }, () => {
+        // Scorer responds to remote clients (e.g. OBS on different origin) with current doc & match
+        const localDoc = loadMatchDoc(matchId);
+        const currentMatch = matchData || lookup.match(matchId);
+        if (localDoc && currentMatch) {
+          channel.send({
+            type: "broadcast",
+            event: "score_update",
+            payload: { doc: localDoc, match: currentMatch },
+          });
+        }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          // If this client doesn't have deliveries yet (e.g. OBS client on another port), request sync
+          channel.send({
+            type: "broadcast",
+            event: "request_sync",
+            payload: { matchId },
+          });
+        }
+      });
 
     channelRef.current = channel;
 
@@ -346,7 +383,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         bcRef.current.close();
       }
     };
-  }, [matchId]);
+  }, [matchId, matchData]);
 
   // ── Broadcast doc helper (invoked on any scorer action) ────────────────────
   const broadcastDoc = useCallback(
@@ -368,12 +405,12 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
           channelRef.current.send({
             type: "broadcast",
             event: "score_update",
-            payload: { doc: newDoc },
+            payload: { doc: newDoc, match: matchData || lookup.match(matchId) },
           });
         } catch {}
       }
     },
-    [matchId],
+    [matchId, matchData],
   );
 
   const match = matchData ?? lookup.match(matchId);
@@ -395,7 +432,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   const pendingBatters = doc.pendingBatterIds?.[currentInningsIndex];
 
   const currentInningsDeliveries = doc.deliveries.filter((d) => d.inningsIndex === currentInningsIndex);
-  const isOverInProgress = innings ? innings.legalBalls % 6 !== 0 : false;
+  const isOverInProgress = innings ? innings.legalBalls % BALLS_PER_OVER !== 0 : false;
   const latestOverBowlerId =
     currentInningsDeliveries.length > 0 && isOverInProgress
       ? currentInningsDeliveries[currentInningsDeliveries.length - 1]?.bowlerId
@@ -471,9 +508,10 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       if (newOvers < 1) return;
 
       setDoc((d) => {
+        const isSecondInn = currentInningsIndex === 1 || d.secondInningsStarted;
         const nextSetup = {
           ...d.setup,
-          reducedOvers: newOvers,
+          reducedOvers: isSecondInn ? (d.setup.reducedOvers ?? match?.overs ?? 5) : newOvers,
           secondInningsReducedOvers: newOvers,
           targetRevisionReason: reason || undefined,
         };
@@ -490,7 +528,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         console.warn("[adjustMatchOvers] persist error:", err);
       }
     },
-    [matchId, broadcastDoc],
+    [matchId, currentInningsIndex, match?.overs, broadcastDoc],
   );
 
   const setBowler = useCallback(
@@ -620,7 +658,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       if (!inn || inn.isComplete) return;
 
       const currentInnDeliveries = doc.deliveries.filter((d) => d.inningsIndex === idx);
-      const innOverInProgress = inn.legalBalls % 6 !== 0;
+      const innOverInProgress = inn.legalBalls % BALLS_PER_OVER !== 0;
       const latestInnBowlerId =
         currentInnDeliveries.length > 0 && innOverInProgress
           ? currentInnDeliveries[currentInnDeliveries.length - 1]?.bowlerId
@@ -664,6 +702,13 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
         return;
       }
 
+      // Check bowler eligibility limits (1 over standard, max 1 bowler allowed 2 overs)
+      const bowlerEligibility = validateBowlerEligibility(bowlerId, inn);
+      if (!bowlerEligibility.canBowl && !innOverInProgress) {
+        console.error(`[useMatchStore.record] Blocked: ${bowlerEligibility.reason}`);
+        return;
+      }
+
       // STRICT MULTI-LEVEL VALIDATION: Fielder is mandatory for Caught, Run Out, Stumped
       if (
         input.wicket &&
@@ -691,7 +736,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       };
 
       const isLegalBall = input.extraType !== "wide" && input.extraType !== "noball";
-      const willCompleteOver = isLegalBall && (inn.legalBalls + 1) % 6 === 0;
+      const willCompleteOver = isLegalBall && (inn.legalBalls + 1) % BALLS_PER_OVER === 0;
 
       // When over completes, clear pendingBowlerId so next over forces bowler change
       const nextPending: [string | null, string | null] = [...doc.pendingBowlerIds] as [
@@ -734,8 +779,8 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
       broadcastDoc(nextDoc);
 
       // 2. Asynchronously persist delivery to Supabase DB
-      const overNumber = Math.floor(inn.legalBalls / 6) + 1;
-      const ballNumber = (inn.legalBalls % 6) + 1;
+      const overNumber = Math.floor(inn.legalBalls / BALLS_PER_OVER) + 1;
+      const ballNumber = (inn.legalBalls % BALLS_PER_OVER) + 1;
 
       const battingTeamId = inn.battingTeamId;
       const bowlingTeamId = inn.bowlingTeamId;
@@ -772,7 +817,7 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
             shotZone: delivery.shotZone,
             totalRuns: nextInn?.runs ?? 0,
             totalWickets: nextInn?.wickets ?? 0,
-            oversCompleted: nextInn?.legalBalls ? Number((nextInn.legalBalls / 6).toFixed(2)) : 0,
+            oversCompleted: nextInn?.legalBalls ? Number((nextInn.legalBalls / BALLS_PER_OVER).toFixed(2)) : 0,
             isInningsComplete: nextInn?.isComplete,
           });
 

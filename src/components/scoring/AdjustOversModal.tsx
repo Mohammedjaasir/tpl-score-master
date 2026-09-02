@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { CloudRain, X, Check, Plus, Minus, AlertTriangle, ShieldAlert } from "lucide-react";
+import { BALLS_PER_OVER } from "@/types/cricket";
 
 interface Props {
   isOpen: boolean;
@@ -36,8 +37,8 @@ export function AdjustOversModal({
 
   if (!isOpen) return null;
 
-  const currentCompletedOvers = Math.floor(completedLegalBalls / 6);
-  const isOverInProgress = completedLegalBalls % 6 !== 0;
+  const currentCompletedOvers = Math.floor(completedLegalBalls / BALLS_PER_OVER);
+  const isOverInProgress = completedLegalBalls % BALLS_PER_OVER !== 0;
 
   // Validate the entered input string
   const validateOvers = (val: string): { isValid: boolean; numVal: number; error: string | null } => {

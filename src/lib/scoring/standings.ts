@@ -1,4 +1,5 @@
 import type { Match, Team } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import { buildMatchState, runsPerOver, legalBallsToOvers, oversText } from "@/lib/scoring/engine";
 
 export interface TeamStanding {
@@ -111,13 +112,13 @@ export function calculateStandings(teams: Team[], matches: Match[]): TeamStandin
             const runs1 = inn1.runs;
             const balls1 = inn1.legalBalls;
             const isAllOut1 = inn1.isComplete && inn1.wickets >= Math.max(1, (inn1.batters?.length || 11) - 1);
-            // Official ICC NRR Rule: All out uses full overs quota (e.g. 5.0 ov = 30 balls)
-            const inn1NrrBalls = isAllOut1 ? maxOvers1 * 6 : Math.max(balls1, 1);
+            // Official Tournament NRR Rule: All out uses full overs quota (e.g. 5.0 ov = 25 balls)
+            const inn1NrrBalls = isAllOut1 ? maxOvers1 * BALLS_PER_OVER : Math.max(balls1, 1);
 
             const runs2 = inn2 ? inn2.runs : 0;
             const balls2 = inn2 ? inn2.legalBalls : 0;
             const isAllOut2 = inn2 ? (inn2.isComplete && inn2.wickets >= Math.max(1, (inn2.batters?.length || 11) - 1)) : false;
-            const inn2NrrBalls = inn2 ? (isAllOut2 ? maxOvers2 * 6 : Math.max(balls2, 1)) : 0;
+            const inn2NrrBalls = inn2 ? (isAllOut2 ? maxOvers2 * BALLS_PER_OVER : Math.max(balls2, 1)) : 0;
 
             if (inn1.battingTeamId === m.teamAId) {
               runsForA = runs1;

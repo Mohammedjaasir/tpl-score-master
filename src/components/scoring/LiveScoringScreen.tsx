@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { MatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import { ScoreHeader } from "@/components/scoring/ScoreHeader";
 import { BatterPanel } from "@/components/scoring/BatterPanel";
 import { BowlerPanel } from "@/components/scoring/BowlerPanel";
@@ -90,7 +91,7 @@ export function LiveScoringScreen({ store }: Props) {
   // If a batter is needed first (e.g. after a wicket), we prioritize batter selection then bowler selection,
   // but allow scorer to open either manually without deadlock.
   const isBowlerModalOpen = (needsBowlerModal && !needsBatter) || manualBowlerModal;
-  const isOverStart = innings.legalBalls % 6 === 0;
+  const isOverStart = innings.legalBalls % BALLS_PER_OVER === 0;
   const canChangeBowler = !innings.isComplete && isOverStart;
 
   // Derive a precise disabled reason for scoring buttons
@@ -166,6 +167,7 @@ export function LiveScoringScreen({ store }: Props) {
             <BowlerPanel
               bowlerId={activeBowlerId}
               bowlers={innings.bowlers}
+              innings={innings}
               canChangeBowler={canChangeBowler}
               onChangeBowler={() => setManualBowlerModal(true)}
             />
@@ -260,6 +262,7 @@ export function LiveScoringScreen({ store }: Props) {
         <BowlerModal
           bowlingXI={bowlingXI}
           bowlers={innings.bowlers}
+          innings={innings}
           previousBowlerId={innings.previousBowlerId}
           currentBowlerId={activeBowlerId ?? undefined}
           onSelect={(id) => {

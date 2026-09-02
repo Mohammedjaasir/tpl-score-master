@@ -3,12 +3,13 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMatches, useTeams, usePlayers } from "@/hooks/useCricketData";
 import { useAdminAuth } from "@/lib/auth";
-import { lookup, matchRepository, TOURNAMENT_NAME } from "@/lib/repositories";
+import { lookup, matchRepository, playerRepository, TOURNAMENT_NAME } from "@/lib/repositories";
 import { broadcastTournamentUpdate } from "@/lib/scoring/store";
 import { Logo } from "@/components/brand/Logo";
 import { TeamLogo } from "@/components/team/TeamLogo";
 import { formatMatchTime, parseTime12To24, parse24ToTime12 } from "@/lib/utils";
-import type { Match, Player, Team } from "@/types/cricket";
+import type { Match, Player, Team, PlayerRole } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import {
   LayoutDashboard,
   Users,
@@ -124,7 +125,7 @@ function AdminPortalPage() {
   const [singleMatchMinute, setSingleMatchMinute] = useState("30");
   const [singleMatchAmPm, setSingleMatchAmPm] = useState<"AM" | "PM">("PM");
   const [singleMatchOvers, setSingleMatchOvers] = useState(5);
-  const [singleMatchBallsPerOver, setSingleMatchBallsPerOver] = useState(6);
+  const [singleMatchBallsPerOver, setSingleMatchBallsPerOver] = useState(BALLS_PER_OVER);
   const [singleMatchVenue, setSingleMatchVenue] = useState("TPL Cricket Ground");
 
   // Schedule generator state (12-hour format)
@@ -135,8 +136,13 @@ function AdminPortalPage() {
   const [genStartMinute, setGenStartMinute] = useState("00");
   const [genStartAmPm, setGenStartAmPm] = useState<"AM" | "PM">("AM");
   const [genOvers, setGenOvers] = useState(5);
-  const [genBallsPerOver, setGenBallsPerOver] = useState(6);
+  const [genBallsPerOver, setGenBallsPerOver] = useState(BALLS_PER_OVER);
   const [genIntervalMinutes, setGenIntervalMinutes] = useState(45);
+
+  // Player role edit state
+  const [editingPlayerRole, setEditingPlayerRole] = useState<PlayerRole>("Batter");
+  const [roleUpdateSuccess, setRoleUpdateSuccess] = useState<string | null>(null);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   const [showKnockoutModal, setShowKnockoutModal] = useState(false);
   const [knockoutStage, setKnockoutStage] = useState<"Semi-Final 1" | "Semi-Final 2" | "Final">("Semi-Final 1");
@@ -1183,7 +1189,11 @@ function AdminPortalPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => setSelectedPlayerForView(p)}
+                              onClick={() => {
+                                setSelectedPlayerForView(p);
+                                setEditingPlayerRole((p.role as PlayerRole) || "Batter");
+                                setRoleUpdateSuccess(null);
+                              }}
                               className="tap inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#F3F4F6] hover:bg-[#D9A928] text-[#111827] hover:text-[#111111] font-black text-[10px] uppercase tracking-wider border border-[#E5E7EB] transition-all"
                             >
                               <Eye className="h-3 w-3" />
@@ -2572,6 +2582,62 @@ function AdminPortalPage() {
                 <p className="font-bold text-[#9A6A05] mt-0.5">
                   {selectedPlayerForView.soldPrice ? `${selectedPlayerForView.soldPrice} LKR` : "Standard"}
                 </p>
+              </div>
+            </div>
+
+            {/* Admin Role Edit Control */}
+            <div className="p-3.5 rounded-2xl bg-[#FFFBEB] border border-[#FDE68A] flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-[#92400E] tracking-wider">
+                  Admin Primary Role Assignment
+                </span>
+                {roleUpdateSuccess && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                    {roleUpdateSuccess}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={editingPlayerRole}
+                  onChange={(e) => setEditingPlayerRole(e.target.value as PlayerRole)}
+                  disabled={isUpdatingRole}
+                  className="flex-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2 text-xs font-bold text-[#111827] focus:outline-none min-h-[44px]"
+                >
+                  <option value="Batter">Batter</option>
+                  <option value="Bowler">Bowler</option>
+                  <option value="Wicketkeeper">Wicketkeeper</option>
+                  <option value="All-rounder">All-rounder</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedPlayerForView) return;
+                    setIsUpdatingRole(true);
+                    try {
+                      const updated = await playerRepository.updateRole(selectedPlayerForView.id, editingPlayerRole);
+                      setSelectedPlayerForView(updated);
+                      await refetchPlayers();
+                      broadcastTournamentUpdate();
+                      setRoleUpdateSuccess(`Updated to ${editingPlayerRole}`);
+                    } catch (err: any) {
+                      console.error("[handleUpdatePlayerRole] error:", err);
+                    } finally {
+                      setIsUpdatingRole(false);
+                    }
+                  }}
+                  disabled={isUpdatingRole || editingPlayerRole === selectedPlayerForView.role}
+                  className="px-4 py-2 bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase rounded-xl shadow-sm transition-colors min-h-[44px] flex items-center justify-center gap-1.5"
+                >
+                  {isUpdatingRole ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Role</span>
+                  )}
+                </button>
               </div>
             </div>
 

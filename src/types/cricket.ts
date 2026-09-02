@@ -1,10 +1,17 @@
 /**
- * Core cricket domain types.
- * These are intentionally source-agnostic: mock repositories today,
- * Supabase repositories later, with no change to the scoring engine or UI.
+ * Official TPL 2026 Tournament Rules Configuration
  */
+export const TPL_TOURNAMENT_RULES = {
+  BALLS_PER_OVER: 5,
+  DEFAULT_MATCH_OVERS: 5,
+  MAX_OVERS_PER_BOWLER: 2, // At most 1 bowler allowed 2 overs (10 legal balls)
+  SECOND_OVER_BOWLER_COUNT: 1, // Exactly 1 bowler can bowl 2 overs
+  STANDARD_BOWLER_MAX_OVERS: 1, // All other bowlers can bowl at most 1 over (5 legal balls)
+} as const;
 
-export type PlayerRole = "Batsman" | "Bowler" | "All-rounder" | "Wicketkeeper";
+export const BALLS_PER_OVER = TPL_TOURNAMENT_RULES.BALLS_PER_OVER;
+
+export type PlayerRole = "Batter" | "Bowler" | "All-rounder" | "Wicketkeeper" | "Batsman";
 
 export interface Player {
   id: string;

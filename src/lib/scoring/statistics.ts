@@ -7,6 +7,7 @@
  */
 
 import type { Match, MatchState, InningsState, BatterStat, BowlerStat, Delivery } from "@/types/cricket";
+import { BALLS_PER_OVER } from "@/types/cricket";
 import { lookup } from "@/lib/repositories";
 import { oversText, totalRunsOf, bowlerRunsOf, batterRunsOf, isLegal, buildMatchState } from "@/lib/scoring/engine";
 import { calculateMatchMVP, type PlayerMVPScore, formatMOTMPerformanceSummary } from "@/lib/scoring/playerPerformance";
@@ -17,7 +18,7 @@ export const STAT_THRESHOLDS = {
   MIN_BALLS_TOURNAMENT_STRIKER: 15,
   MIN_INNINGS_BATTING_AVG: 2,
   MIN_DISMISSALS_BATTING_AVG: 1,
-  MIN_OVERS_BOWLING_ECONOMY: 2, // 12 legal balls
+  MIN_OVERS_BOWLING_ECONOMY: 2, // 2 overs = 10 legal balls
   MIN_WICKETS_BOWLING_AVG: 2,
 };
 
@@ -658,10 +659,10 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
             acc.bestBowlingRuns = bw.runs;
           }
 
-          if (bw.wickets > 0 || bw.legalBalls >= 6) {
+          if (bw.wickets > 0 || bw.legalBalls >= BALLS_PER_OVER) {
             const p = lookup.player(bw.playerId);
             const t = lookup.team(p?.teamId);
-            const bowlEcon = bw.legalBalls > 0 ? (bw.runs / bw.legalBalls) * 6 : 0;
+            const bowlEcon = bw.legalBalls > 0 ? (bw.runs / bw.legalBalls) * BALLS_PER_OVER : 0;
             bestBowlingSpellsList.push({
               rank: 0,
               playerId: bw.playerId,
@@ -748,7 +749,7 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
     .map((a) => {
       const p = lookup.player(a.playerId);
       const t = lookup.team(p?.teamId);
-      const econ = a.legalBalls > 0 ? (a.runsConceded / a.legalBalls) * 6 : 0;
+      const econ = a.legalBalls > 0 ? (a.runsConceded / a.legalBalls) * BALLS_PER_OVER : 0;
       const avg = a.wickets > 0 ? a.runsConceded / a.wickets : 0;
       const bb = a.bestBowlingWickets > 0 ? `${a.bestBowlingWickets}/${a.bestBowlingRuns}` : "-";
 
@@ -850,7 +851,7 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
   const bestEconomies = purpleCap
-    .filter((item) => item.legalBalls >= STAT_THRESHOLDS.MIN_OVERS_BOWLING_ECONOMY * 6)
+    .filter((item) => item.legalBalls >= STAT_THRESHOLDS.MIN_OVERS_BOWLING_ECONOMY * BALLS_PER_OVER)
     .sort((a, b) => a.economy - b.economy || b.wickets - a.wickets)
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
@@ -862,7 +863,7 @@ export function calculateTournamentStats(matches: Match[]): TournamentStats {
       const t = lookup.team(p?.teamId);
       const dismissals = Math.max(0, a.battingInnings - a.notOuts);
       const bAvg = dismissals > 0 ? a.runs / dismissals : a.runs;
-      const bEcon = a.legalBalls > 0 ? (a.runsConceded / a.legalBalls) * 6 : 0;
+      const bEcon = a.legalBalls > 0 ? (a.runsConceded / a.legalBalls) * BALLS_PER_OVER : 0;
       
       // Normalized impact: (runs * 1) + (wickets * 25) + (catches * 10)
       const allRounderIndex = a.runs * 1 + a.wickets * 25 + (a.catches + a.runOuts + a.stumpings) * 10;
