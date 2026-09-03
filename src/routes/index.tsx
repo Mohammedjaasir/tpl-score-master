@@ -182,77 +182,7 @@ function HappeningNowSection({ matches }: { matches: Match[] }) {
 }
 
 
-// ─── Sticky bottom live score strip ──────────────────────────────────────────
-function StickyLiveTicker({ matches }: { matches: Array<{ id: string; homeTeamName?: string; awayTeamName?: string }> }) {
-  const firstLiveId = matches[0]?.id;
-  const state = useLiveMatchState(firstLiveId);
-  const matchMeta = firstLiveId ? lookup.match(firstLiveId) : null;
-  const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed || !state || !matchMeta) return null;
-
-  const inn = state.innings[state.currentInningsIndex] ?? state.innings[0];
-  if (!inn) return null;
-
-  const teamA = lookup.team(matchMeta.teamAId);
-  const teamB = lookup.team(matchMeta.teamBId);
-  const battingTeam = inn.battingTeamId === matchMeta.teamAId
-    ? (teamA?.name ?? teamA?.shortName ?? "HOME")
-    : (teamB?.name ?? teamB?.shortName ?? "AWAY");
-  const shortBat = battingTeam.slice(0, 10);
-
-  const overStr = inn.oversText;
-  const lastSummary = inn.recentBalls?.[inn.recentBalls.length - 1];
-  const lastDel2 = lastSummary?.delivery;
-  const lastBall = lastDel2
-    ? lastDel2.wicket ? "W" : lastDel2.extraType === "wide" ? "WD" : lastDel2.extraType === "noball" ? "NB" : String(lastDel2.batterRuns + lastDel2.extraRuns)
-    : null;
-
-  return (
-    <div className="fixed bottom-0 inset-x-0 z-[100] pointer-events-none">
-      <Link
-        to="/live"
-        className="pointer-events-auto flex items-center justify-between px-4 py-3 bg-[#0A0A0A]/95 backdrop-blur-xl border-t border-[#D9A928]/40 text-white shadow-[0_-8px_40px_rgba(0,0,0,0.5)] hover:bg-[#111] transition-colors"
-      >
-        {/* Left: Live pill + team + score */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-black text-red-400 tracking-widest uppercase hidden sm:block">LIVE</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-black text-[#D9A928] uppercase tracking-wider">{shortBat}</span>
-            <span className="text-base font-black text-white font-mono">{inn.runs}/{inn.wickets}</span>
-            <span className="text-[11px] text-white/40 font-semibold">{overStr} ov</span>
-          </div>
-          {lastBall && (
-            <span
-              className={`hidden sm:inline-flex text-[10px] font-black px-2 py-0.5 rounded-md ${
-                lastBall === "W" ? "bg-red-500/25 text-red-400" :
-                lastBall === "4" || lastBall === "6" ? "bg-[#D9A928]/20 text-[#D9A928]" :
-                "bg-white/10 text-white/50"
-              }`}
-            >
-              {lastBall === "W" ? "WICKET!" : lastBall === "WD" ? "WIDE" : lastBall === "NB" ? "NO BALL" : `${lastBall} RUN`}
-            </span>
-          )}
-        </div>
-
-        {/* Right: tap CTA + dismiss */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">TAP FOR LIVE</span>
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDismissed(true); }}
-            className="h-7 w-7 rounded-full bg-white/10 grid place-items-center hover:bg-white/20 transition-colors shrink-0"
-            aria-label="Dismiss"
-          >
-            <X className="h-3.5 w-3.5 text-white/60" />
-          </button>
-        </div>
-      </Link>
-    </div>
-  );
-}
 
 
 function LandingScreen() {
@@ -459,10 +389,6 @@ function LandingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       <HappeningNowSection matches={matches} />
 
-      {/* ── Sticky Live Bottom Ticker (only when a match is live) ─────────── */}
-      {liveMatches.length > 0 && (
-        <StickyLiveTicker matches={liveMatches} />
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           9. KEY TOURNAMENT PLAYERS & CONTENDERS
