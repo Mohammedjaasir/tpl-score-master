@@ -82,6 +82,12 @@ export function usePlayerSearch(query: string) {
 
 function getEffectiveMatch(m: Match): Match {
   if (typeof window === "undefined") return m;
+  
+  // If the server/authoritative match status is UPCOMING or READY, strictly respect it and do not resurrect stale local test scores
+  if (m.status === "UPCOMING" || m.status === "READY") {
+    return m;
+  }
+
   try {
     const raw = window.localStorage.getItem("tpl-scoring:" + m.id);
     if (raw) {
@@ -119,7 +125,7 @@ function getEffectiveMatch(m: Match): Match {
           manOfTheMatchId: doc.playerOfTheMatchId ?? m.manOfTheMatchId,
         };
       }
-      if (doc.isStarted || m.status === "LIVE" || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId) {
+      if (m.status === "LIVE" && (doc.isStarted || (doc.deliveries && doc.deliveries.length > 0) || doc.setup?.battingFirstId)) {
         const computed = buildMatchState({
           match: m,
           setup: doc.setup || { playingXI: {} },
@@ -162,6 +168,7 @@ function getEffectiveMatch(m: Match): Match {
 
   return m;
 }
+
 
 export function useMatches() {
   const queryClient = useQueryClient();
