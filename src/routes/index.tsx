@@ -14,6 +14,8 @@ import { Logo } from "@/components/brand/Logo";
 import { useMatches, usePlayers, useLiveMatchState } from "@/hooks/useCricketData";
 import { calculateTournamentStats } from "@/lib/scoring/statistics";
 import { lookup } from "@/lib/repositories";
+import { useMatchStore } from "@/lib/scoring/store";
+import type { Match } from "@/types/cricket";
 
 export const Route = createFileRoute("/")({
   component: LandingScreen,
@@ -30,97 +32,155 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Live Score Ticker Card ──────────────────────────────────────────────────
-function LiveScoreCard({ matchId }: { matchId: string }) {
-  const state = useLiveMatchState(matchId);
-  const matchMeta = lookup.match(matchId);
-  if (!state || !matchMeta) return null;
+// ─── Happening Now Live Match Card ───────────────────────────────────────────
+function HappeningNowCard({ match }: { match: Match }) {
+  const { state } = useMatchStore(match.id, match);
 
-  const inn = state.innings[state.currentInningsIndex] ?? state.innings[0];
-  if (!inn) return null;
+  const isDone = match.status === "COMPLETED" || state?.phase === "complete";
+  const hasDeliveries =
+    (state?.innings[0]?.legalBalls ?? 0) > 0 ||
+    (state?.innings[0]?.extras ?? 0) > 0 ||
+    (state?.innings[1]?.legalBalls ?? 0) > 0;
+  const isLive =
+    !isDone &&
+    (match.status === "LIVE" ||
+      (hasDeliveries &&
+        (state?.phase === "innings1" ||
+          state?.phase === "innings2" ||
+          state?.phase === "break")));
 
-  // Resolve batting team name via lookup cache
-  const teamA = lookup.team(matchMeta.teamAId);
-  const teamB = lookup.team(matchMeta.teamBId);
-  const battingTeam = inn.battingTeamId === matchMeta.teamAId
-    ? (teamA?.name ?? teamA?.shortName ?? "HOME")
-    : (teamB?.name ?? teamB?.shortName ?? "AWAY");
-  const battingShort = battingTeam.slice(0, 12);
+  const effectiveOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
 
-  const overStr = inn.oversText + " OV";
+  const inn1 = state?.innings[0];
+  const inn2 = state?.innings[1];
 
-  // Last ball from recentBalls
-  const lastSummary = inn.recentBalls?.[inn.recentBalls.length - 1];
-  const lastDel = lastSummary?.delivery;
-  const lastBallLabel = lastDel
-    ? lastDel.wicket
-      ? "W"
-      : lastDel.extraType === "wide"
-        ? "WD"
-        : lastDel.extraType === "noball"
-          ? "NB"
-          : String(lastDel.batterRuns + lastDel.extraRuns)
-    : null;
+  const battingFirstId =
+    state?.innings[0]?.battingTeamId ?? state?.setup?.battingFirstId;
+  const firstTeamId = battingFirstId || match.teamAId;
+  const secondTeamId =
+    firstTeamId === match.teamAId ? match.teamBId : match.teamAId;
 
-  const target = inn.target;
-  const needing = target ? target - inn.runs : null;
-  const rr = inn.crr.toFixed(1);
+  const team1 = lookup.team(firstTeamId);
+  const team2 = lookup.team(secondTeamId);
+
+  const getScoreDisplay = (
+    inn: typeof inn1 | undefined,
+    hasBatted: boolean
+  ) => {
+    if (!inn || !hasBatted) return "-";
+    const ov = inn.oversText.endsWith(".0")
+      ? inn.oversText.slice(0, -2)
+      : inn.oversText;
+    return `${inn.runs}/${inn.wickets} (${ov} Ov)`;
+  };
+
+  const team1Batted =
+    isLive || isDone || (inn1 && (inn1.legalBalls > 0 || inn1.runs > 0));
+  const team2Batted =
+    isDone ||
+    (inn2 && (inn2.legalBalls > 0 || inn2.runs > 0)) ||
+    state?.currentInningsIndex === 1;
+
+  const team1Score = getScoreDisplay(inn1, Boolean(team1Batted));
+  const team2Score = getScoreDisplay(inn2, Boolean(team2Batted));
 
   return (
     <Link
-      to="/live"
-      className="group block w-full max-w-sm"
+      to="/scorecard/$matchId"
+      params={{ matchId: match.id }}
+      className="group block min-w-[280px] sm:min-w-[320px] max-w-[380px] flex-1 shrink-0 rounded-2xl bg-[#111113] border border-white/[0.08] hover:border-[#D9A928]/50 p-4 sm:p-5 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5"
     >
-      <div className="relative rounded-2xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 hover:border-[#D9A928]/60 transition-all shadow-2xl">
-        {/* Live pulse header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-black tracking-[0.2em] text-red-400 uppercase">LIVE</span>
-          </div>
-          <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{overStr}</span>
-        </div>
+      {/* Top row: Status pill + Overs */}
+      <div className="flex items-center justify-between mb-3.5">
+        {isLive ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-[#E50914] text-white font-black text-[10px] tracking-wider uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+            LIVE
+          </span>
+        ) : isDone ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/10 text-emerald-400 border border-emerald-500/30 font-black text-[10px] tracking-wider uppercase">
+            COMPLETED
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded bg-white/10 text-white/50 font-black text-[10px] tracking-wider uppercase">
+            UPCOMING
+          </span>
+        )}
+        <span className="text-[10px] sm:text-[11px] font-bold text-white/40 tracking-wider uppercase">
+          {effectiveOvers} OV MATCH
+        </span>
+      </div>
 
-        {/* Score */}
-        <div className="px-4 py-3">
-          <p className="text-[11px] font-black text-[#D9A928] tracking-widest uppercase mb-0.5">{battingShort}</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white font-mono tracking-tight">
-              {inn.runs}/{inn.wickets}
-            </span>
-            {lastBallLabel && (
-              <span
-                className={`text-sm font-black px-2 py-0.5 rounded-md ${
-                  lastBallLabel === "W"
-                    ? "bg-red-500/20 text-red-400"
-                    : lastBallLabel === "WD" || lastBallLabel === "NB"
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : lastBallLabel === "4" || lastBallLabel === "6"
-                        ? "bg-[#D9A928]/20 text-[#D9A928]"
-                        : "bg-white/10 text-white/60"
-                }`}
-              >
-                {lastBallLabel === "W" ? "OUT!" : lastBallLabel}
-              </span>
-            )}
-          </div>
-          {needing !== null && needing > 0 && (
-            <p className="text-[11px] text-white/50 mt-0.5">Need {needing} · RR {rr}</p>
-          )}
-          {needing === null && (
-            <p className="text-[11px] text-white/50 mt-0.5">CRR {rr}</p>
-          )}
+      {/* Teams & Scores */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate max-w-[62%] group-hover:text-[#D9A928] transition-colors">
+            {team1?.name || "Team 1"}
+          </span>
+          <span className="text-xs sm:text-sm font-black text-white font-mono tracking-tight shrink-0">
+            {team1Score}
+          </span>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/10">
-          <span className="text-[10px] text-white/40 font-semibold uppercase tracking-wider">Ball by Ball Updates</span>
-          <ChevronRight className="h-3.5 w-3.5 text-[#D9A928] group-hover:translate-x-1 transition-transform" />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs sm:text-sm font-bold text-white/90 tracking-wide truncate max-w-[62%] group-hover:text-[#D9A928] transition-colors">
+            {team2?.name || "Team 2"}
+          </span>
+          <span className="text-xs sm:text-sm font-black text-white/90 font-mono tracking-tight shrink-0">
+            {team2Score}
+          </span>
         </div>
       </div>
     </Link>
   );
 }
+
+// ─── Happening Now Section ───────────────────────────────────────────────────
+function HappeningNowSection({ matches }: { matches: Match[] }) {
+  const displayMatches = useMemo(() => {
+    const live = matches.filter((m) => m.status === "LIVE");
+    const upcoming = matches.filter(
+      (m) => m.status === "READY" || m.status === "UPCOMING"
+    );
+    const completed = matches.filter((m) => m.status === "COMPLETED");
+    const combined = [...live, ...upcoming, ...completed];
+    return combined.slice(0, 6);
+  }, [matches]);
+
+  if (displayMatches.length === 0) return null;
+
+  return (
+    <section className="relative z-20 bg-[#0A0A0C] border-y border-white/[0.07] py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-5 lg:px-8">
+        <div className="flex items-center justify-between mb-4 sm:mb-5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <span className="inline-flex items-center justify-center text-red-500 font-bold text-sm sm:text-base">
+              ((•))
+            </span>
+            <h2 className="text-xs sm:text-sm font-black tracking-[0.2em] text-white uppercase">
+              HAPPENING NOW
+            </h2>
+          </div>
+          <Link
+            to="/matches"
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-black tracking-wider text-[#D9A928] hover:text-white transition-colors uppercase group"
+          >
+            <span>VIEW ALL</span>
+            <span className="text-sm leading-none transition-transform group-hover:translate-x-0.5">
+              ›
+            </span>
+          </Link>
+        </div>
+
+        <div className="flex items-stretch gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+          {displayMatches.map((m) => (
+            <HappeningNowCard key={m.id} match={m} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 
 // ─── Sticky bottom live score strip ──────────────────────────────────────────
 function StickyLiveTicker({ matches }: { matches: Array<{ id: string; homeTeamName?: string; awayTeamName?: string }> }) {
@@ -390,16 +450,14 @@ function LandingScreen() {
                 <span>VIEW LIVE SCORES</span>
               </Link>
             </div>
-
-            {/* Live Score Card — appears when a match is in progress */}
-            {firstLiveId && (
-              <div className="mt-8">
-                <LiveScoreCard matchId={firstLiveId} />
-              </div>
-            )}
           </div>
         </div>
       </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          3. HAPPENING NOW — Live & Real-Time Matches Strip
+          ══════════════════════════════════════════════════════════════════════ */}
+      <HappeningNowSection matches={matches} />
 
       {/* ── Sticky Live Bottom Ticker (only when a match is live) ─────────── */}
       {liveMatches.length > 0 && (
