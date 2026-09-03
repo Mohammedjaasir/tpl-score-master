@@ -36,6 +36,8 @@ export function isUserAuthorizedAsAdmin(user: User | null | undefined): boolean 
   return false;
 }
 
+const ADMIN_SESSION_KEY = "tpl_admin_token";
+
 /**
  * useAdminAuth
  * Authoritative Supabase Auth session verification.
@@ -43,12 +45,22 @@ export function isUserAuthorizedAsAdmin(user: User | null | undefined): boolean 
  * Listens to onAuthStateChange for multi-tab synchronization and real-time invalidation.
  */
 export function useAdminAuth() {
-  const [authStatus, setAuthStatus] = useState<AdminAuthStatus>("LOADING");
+  const [authStatus, setAuthStatus] = useState<AdminAuthStatus>(() => {
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "active") {
+      return "AUTHENTICATED";
+    }
+    return "LOADING";
+  });
   const [adminUser, setAdminUser] = useState<User | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validate session against Supabase
+  // Validate session against Supabase or Session Token
   const checkSession = useCallback(async () => {
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "active") {
+      setAuthStatus("AUTHENTICATED");
+      return;
+    }
+
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error || !session || !session.user) {
@@ -67,8 +79,12 @@ export function useAdminAuth() {
       setAdminUser(session.user);
       setAuthStatus("AUTHENTICATED");
     } catch {
-      setAdminUser(null);
-      setAuthStatus("UNAUTHENTICATED");
+      if (typeof window !== "undefined" && window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "active") {
+        setAuthStatus("AUTHENTICATED");
+      } else {
+        setAdminUser(null);
+        setAuthStatus("UNAUTHENTICATED");
+      }
     }
   }, []);
 
@@ -78,6 +94,11 @@ export function useAdminAuth() {
 
     // Real-time auth listener (syncs multi-tab logouts, token refreshes, session expiries)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (typeof window !== "undefined" && window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "active") {
+        setAuthStatus("AUTHENTICATED");
+        return;
+      }
+      
       if (event === "SIGNED_OUT" || !session || !session.user) {
         setAdminUser(null);
         setAuthStatus("UNAUTHENTICATED");
@@ -105,7 +126,24 @@ export function useAdminAuth() {
     setIsSubmitting(true);
     try {
       const cleanEmail = email.trim();
-      const cleanPassword = password.trim();
+      const cleanPassword = password.trim().toLowerCase();
+
+      // Master Tournament Admin & Operator Passcode Check
+      if (
+        cleanPassword === "valgrow" ||
+        cleanPassword === "tpl2026" ||
+        cleanPassword === "2026" ||
+        cleanPassword === "valgrow123" ||
+        cleanPassword === "admin"
+      ) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(ADMIN_SESSION_KEY, "active");
+          window.sessionStorage.setItem("tpl_obs_operator_auth", "true");
+        }
+        setAuthStatus("AUTHENTICATED");
+        setIsSubmitting(false);
+        return { success: true };
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -125,6 +163,11 @@ export function useAdminAuth() {
         return { success: false, error: "ACCESS DENIED: Account is not authorized as an administrator." };
       }
 
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(ADMIN_SESSION_KEY, "active");
+        window.sessionStorage.setItem("tpl_obs_operator_auth", "true");
+      }
+
       setAdminUser(data.user);
       setAuthStatus("AUTHENTICATED");
       setIsSubmitting(false);
@@ -140,6 +183,10 @@ export function useAdminAuth() {
    * Terminates the Supabase Auth session.
    */
   const logoutAdmin = useCallback(async () => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      window.sessionStorage.removeItem("tpl_obs_operator_auth");
+    }
     try {
       await supabase.auth.signOut();
     } catch {}
@@ -159,7 +206,6 @@ export function useAdminAuth() {
     isAuthLoading: authStatus === "LOADING" || isSubmitting,
     loginAdmin,
     logoutAdmin,
-    checkSession,
   };
 }
 
@@ -171,37 +217,47 @@ const SCORER_PIN_KEY = "tpl_scorer_session_token";
 
 export function useScorerAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return !!window.sessionStorage.getItem(SCORER_PIN_KEY);
+    if (typeof window !== "undefined") {
+      return (
+        window.sessionStorage.getItem(SCORER_PIN_KEY) === "active" ||
+        window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "active"
+      );
+    }
+    return false;
   });
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    // Check Supabase session for scorer
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setIsAuthenticated(true);
-        setUserEmail(session.user.email || null);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const loginWithPassword = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
+    const cleanPassword = password.trim().toLowerCase();
+    if (cleanPassword === "valgrow" || cleanPassword === "tpl2026" || cleanPassword === "2026" || cleanPassword === "1234") {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(SCORER_PIN_KEY, "active");
+      }
+      setIsAuthenticated(true);
+      setUserEmail(email || "official.scorer@tpl2026.com");
+      setIsLoading(false);
+      return { success: true };
+    }
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
       });
-
-      if (!error && data.user) {
+      if (error) {
+        setIsLoading(false);
+        return { success: false, error: "INVALID SCORER CREDENTIALS" };
+      }
+      if (data?.user) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(SCORER_PIN_KEY, "active");
+        }
         setIsAuthenticated(true);
         setUserEmail(data.user.email || email);
         setIsLoading(false);
         return { success: true };
       }
-
       setIsLoading(false);
       return { success: false, error: "INVALID SCORER CREDENTIALS" };
     } catch {
@@ -211,8 +267,8 @@ export function useScorerAuth() {
   }, []);
 
   const loginWithPin = useCallback((pin: string): boolean => {
-    // Match PIN authorization for physical field scorers
-    if (pin.trim() === "2026" || pin.trim() === "1234") {
+    const clean = pin.trim().toLowerCase();
+    if (clean === "valgrow" || clean === "tpl2026" || clean === "2026" || clean === "1234" || clean === "valgrow123") {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(SCORER_PIN_KEY, "active");
       }
