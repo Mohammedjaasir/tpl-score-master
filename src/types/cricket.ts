@@ -11,7 +11,7 @@ export const TPL_TOURNAMENT_RULES = {
 
 export const BALLS_PER_OVER = TPL_TOURNAMENT_RULES.BALLS_PER_OVER;
 
-export type PlayerRole = "Batter" | "Bowler" | "All-rounder" | "Wicketkeeper" | "Batsman";
+export type PlayerRole = "Batter" | "Bowler" | "All-rounder" | "Wicketkeeper" | "Unspecified" | "Batsman";
 
 export interface Player {
   id: string;
@@ -38,6 +38,35 @@ export interface Team {
   groupName?: string | undefined;
   purseBalance?: number | undefined;
   slug?: string | undefined;
+}
+
+/**
+ * Authoritative helper to determine a team's permanent tournament group.
+ * Group 1: "Group 1", "Group A", "1", "A" (or seed teams: DU, BMR, KL)
+ * Group 2: "Group 2", "Group B", "2", "B" (or seed teams: NGW, RK, TC)
+ */
+export function getTeamGroup(team: { id: string; name?: string | null; slug?: string | null; groupName?: string | null; group_name?: string | null }): "Group 1" | "Group 2" {
+  const g = (team.groupName || team.group_name || "").toUpperCase().trim();
+  if (g.includes("1") || g.includes("A")) return "Group 1";
+  if (g.includes("2") || g.includes("B")) return "Group 2";
+  const idOrSlug = `${team.id || ""} ${team.slug || ""} ${team.name || ""}`.toLowerCase();
+  if (
+    idOrSlug.includes("dainagoda") ||
+    idOrSlug.includes("bary") ||
+    idOrSlug.includes("kurundu") ||
+    ["team-du", "team-bmr", "team-kl", "53a3ea75-b3cf-4908-a19b-d3f3b693b3fd", "832b3866-046c-4beb-970a-4d79cc72ba37", "c1397164-6f86-4639-93e6-888e0091bb51"].includes(team.id)
+  ) {
+    return "Group 1";
+  }
+  if (
+    idOrSlug.includes("garden") ||
+    idOrSlug.includes("riverside") ||
+    idOrSlug.includes("thundu") ||
+    ["team-ngw", "team-rk", "team-tc", "f36ace20-1b45-43e4-be94-7a0f8a678fd9", "9d930c5d-c96b-43ef-8be7-fed8c71133df", "edcc603d-db13-4191-813c-44abb06c883c"].includes(team.id)
+  ) {
+    return "Group 2";
+  }
+  return "Group 1";
 }
 
 export interface SupabaseTeam {
@@ -151,6 +180,8 @@ export interface Match {
   overs: number;
   scheduledAt: string;
   status: MatchStatus;
+  scorerPin?: string | undefined;
+  winnerId?: string | undefined;
   resultText?: string | undefined;
   manOfTheMatchId?: string | undefined;
 }

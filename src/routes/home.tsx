@@ -29,10 +29,24 @@ function PublicHome() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Filter real matches purely by their actual database status
-  const liveMatches = allMatches.filter((m) => m.status === "LIVE");
+  // Filter real matches purely by their actual database status, combined with local state
+  const isMatchLocallyComplete = (m: any) => {
+    if (m.status === "COMPLETED") return true;
+    if (m.status === "LIVE" && typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("tpl-scoring:" + m.id);
+        if (raw) {
+          const doc = JSON.parse(raw);
+          return doc.state?.phase === "complete";
+        }
+      } catch (e) {}
+    }
+    return false;
+  };
+
+  const liveMatches = allMatches.filter((m) => m.status === "LIVE" && !isMatchLocallyComplete(m));
   const upcomingMatches = allMatches.filter((m) => m.status === "UPCOMING" || m.status === "READY");
-  const completedMatches = allMatches.filter((m) => m.status === "COMPLETED");
+  const completedMatches = allMatches.filter((m) => m.status === "COMPLETED" || isMatchLocallyComplete(m));
 
   // Loading state strictly terminates if query finishes OR 3.5s timer expires OR data is present
   const isLoading = queryLoading && !loadingTimedOut && allMatches.length === 0;
@@ -206,8 +220,8 @@ function PublicHome() {
           </span>
           <ArrowRight className="h-5 w-5 text-[#111111] transition-transform group-hover:translate-x-1.5" />
         </Link>
+
       </div>
     </AppShell>
   );
 }
-

@@ -10,6 +10,7 @@ import { RecentBalls } from "@/components/scoring/RecentBalls";
 import { OverSummary } from "@/components/scoring/OverSummary";
 import { PartnershipPanel } from "@/components/scoring/Partnership";
 import { FallOfWickets } from "@/components/scoring/FallOfWickets";
+import { BroadcastControls } from "@/components/scoring/BroadcastControls";
 import { UndoBar } from "@/components/scoring/UndoBar";
 import { BowlerModal } from "@/components/scoring/BowlerModal";
 import { NewBatterModal } from "@/components/scoring/NewBatterModal";
@@ -226,6 +227,11 @@ export function LiveScoringScreen({ store }: Props) {
 
             {/* Partnership */}
             <PartnershipPanel partnership={innings.partnership} innings={innings} />
+
+            {/* Broadcast Controls */}
+            <div className="bg-card border rounded-xl overflow-hidden shadow-sm mt-4">
+              <BroadcastControls matchId={match.id} />
+            </div>
 
             {/* This over */}
             <OverSummary overGroups={innings.overGroups} currentOverOnly={true} />

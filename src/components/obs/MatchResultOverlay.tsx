@@ -113,7 +113,7 @@ export function MatchResultOverlay({ stream }: MatchResultOverlayProps) {
   return (
     <div className="w-full h-full relative flex flex-col justify-between p-8 sm:p-14 select-none pointer-events-none font-['Barlow_Condensed',sans-serif]">
       {/* ── BROADCAST AMBIENT ACCENTS (Subtle, TV-Safe Depth) ─────────────── */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/60 pointer-events-none" />
+      {/* Removed heavy gradient to keep live stream clearly visible */ }
 
       {/* ── 1. TOP BROADCAST BANNER (TOURNAMENT HEADER) ────────────────────── */}
       <motion.div

@@ -1,5 +1,5 @@
 import type { Match, Team } from "@/types/cricket";
-import { BALLS_PER_OVER } from "@/types/cricket";
+import { BALLS_PER_OVER, getTeamGroup } from "@/types/cricket";
 import { buildMatchState, runsPerOver, legalBallsToOvers, oversText } from "@/lib/scoring/engine";
 
 export interface TeamStanding {
@@ -283,7 +283,7 @@ export function getGroupedTournamentStandings(
   teams: Team[],
   matches: Match[],
 ): GroupedTournamentStandings {
-  if (!matches || matches.length === 0) {
+  if (!teams || teams.length === 0) {
     return {
       groupA: [],
       groupB: [],
@@ -292,42 +292,14 @@ export function getGroupedTournamentStandings(
     };
   }
 
-  const all = calculateStandings(teams, matches);
-  if (all.length === 0) {
-    return {
-      groupA: [],
-      groupB: [],
-      hasStandings: false,
-      all: [],
-    };
-  }
+  const safeMatches = matches || [];
+  const all = calculateStandings(teams, safeMatches);
 
-  const g1Teams = teams.filter((t) => {
-    const g = (t.groupName || "").toUpperCase().trim();
-    if (g.includes("1") || g.includes("A")) return true;
-    if (g.includes("2") || g.includes("B")) return false;
-    return ["team-du", "team-bmr", "team-kl"].includes(t.id);
-  });
+  const g1Teams = teams.filter((t) => getTeamGroup(t) === "Group 1");
+  const g2Teams = teams.filter((t) => getTeamGroup(t) === "Group 2");
 
-  const g2Teams = teams.filter((t) => {
-    const g = (t.groupName || "").toUpperCase().trim();
-    if (g.includes("2") || g.includes("B")) return true;
-    if (g.includes("1") || g.includes("A")) return false;
-    return ["team-ngw", "team-rk", "team-tc"].includes(t.id);
-  });
-
-  // If any newly created team has not been explicitly assigned Group A/B, include them gracefully
-  const unassigned = teams.filter((t) => !g1Teams.includes(t) && !g2Teams.includes(t));
-  unassigned.forEach((t) => {
-    if (g1Teams.length <= g2Teams.length) {
-      g1Teams.push(t);
-    } else {
-      g2Teams.push(t);
-    }
-  });
-
-  const groupA = calculateStandings(g1Teams, matches);
-  const groupB = calculateStandings(g2Teams, matches);
+  const groupA = calculateStandings(g1Teams, safeMatches);
+  const groupB = calculateStandings(g2Teams, safeMatches);
 
   return {
     groupA,

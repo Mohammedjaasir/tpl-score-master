@@ -1,10 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useObsMatchStream } from "@/hooks/useObsMatchStream";
-import { useObsMatchEvents } from "@/hooks/useObsMatchEvents";
-import { ObsLayout } from "@/components/obs/ObsLayout";
-import { ScoreboardBar } from "@/components/obs/ScoreboardBar";
-import { EventAlertOverlay } from "@/components/obs/EventAlertOverlay";
-import { MatchResultOverlay } from "@/components/obs/MatchResultOverlay";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { GraphicRenderer } from "@/components/obs/GraphicRenderer";
+import { obsStreamRepository } from "@/lib/obsStreamRepository";
+import { obsHandlerService } from "@/lib/obsHandlerService";
+import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/obs/match/$matchId")({
   component: ObsMatchPage,
@@ -12,37 +10,49 @@ export const Route = createFileRoute("/obs/match/$matchId")({
 
 function ObsMatchPage() {
   const { matchId } = Route.useParams();
-  const stream = useObsMatchStream(matchId);
-  const events = useObsMatchEvents(stream);
+  const navigate = useNavigate();
+  const [currentMatchId, setCurrentMatchId] = useState<string>(() => {
+    return obsHandlerService.getActiveMatch() || matchId;
+  });
+  const [backgroundStreamUrl, setBackgroundStreamUrl] = useState<string | undefined>(undefined);
 
-  if (stream.loading) {
-    return (
-      <ObsLayout>
-        <div className="bg-[#111111]/90 text-white border-t-2 border-[#D9A928] px-6 py-3 rounded-xl max-w-md mx-auto shadow-2xl backdrop-blur-md text-center">
-          <div className="flex items-center justify-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#D9A928] animate-ping" />
-            <span className="text-xs font-black uppercase tracking-widest text-[#D9A928]">
-              CONNECTING TO TPL BROADCAST STREAM...
-            </span>
-          </div>
-        </div>
-      </ObsLayout>
-    );
-  }
+  // Listen for match switching ONLY via localStorage (not BroadcastChannel,
+  // to avoid stealing SET_GRAPHIC messages from useObsHandlerReceiver inside GraphicRenderer)
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "tpl-obs-active-match" && e.newValue && e.newValue !== currentMatchId) {
+        setCurrentMatchId(e.newValue);
+        navigate({ to: "/obs/match/$matchId", params: { matchId: e.newValue }, replace: true });
+      }
+    };
 
-  // When match is completed, transition to dedicated full-broadcast Match Result graphic
-  if (stream.isCompleted) {
-    return (
-      <ObsLayout>
-        <MatchResultOverlay stream={stream} />
-      </ObsLayout>
-    );
-  }
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+    }
 
-  return (
-    <ObsLayout>
-      <EventAlertOverlay event={events.currentEvent} />
-      <ScoreboardBar stream={stream} />
-    </ObsLayout>
-  );
+    // Poll localStorage as fallback for same-tab updates
+    const poll = setInterval(() => {
+      const current = obsHandlerService.getActiveMatch();
+      if (current && current !== currentMatchId) {
+        setCurrentMatchId(current);
+        navigate({ to: "/obs/match/$matchId", params: { matchId: current }, replace: true });
+      }
+    }, 500);
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorage);
+      }
+      clearInterval(poll);
+    };
+  }, [currentMatchId, navigate]);
+
+  useEffect(() => {
+    const url = obsStreamRepository.getStreamUrl(currentMatchId);
+    if (url) {
+      setBackgroundStreamUrl(url);
+    }
+  }, [currentMatchId]);
+
+  return <GraphicRenderer matchId={currentMatchId} backgroundStreamUrl={backgroundStreamUrl} />;
 }

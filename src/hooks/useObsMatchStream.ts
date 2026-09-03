@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
-import { usePlayers, useTeams } from "@/hooks/useCricketData";
+import { useMatches, usePlayers, useTeams } from "@/hooks/useCricketData";
 import type { BatterStat, BowlerStat, InningsState, Match, MatchState, Player, Team } from "@/types/cricket";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -34,6 +34,7 @@ export interface ObsMatchStreamResult {
  */
 export function useObsMatchStream(matchId: string): ObsMatchStreamResult {
   const store = useMatchStore(matchId);
+  const { data: matches = [] } = useMatches();
   const { data: teams = [] } = useTeams();
   const { data: players = [] } = usePlayers();
 
@@ -98,8 +99,8 @@ export function useObsMatchStream(matchId: string): ObsMatchStreamResult {
     };
   }, [matchId]);
 
-  // Strict match scoping: Ensure returned match belongs strictly to URL matchId
-  const match = store.match?.id === matchId ? store.match : undefined;
+  // Strict match scoping: Ensure returned match belongs strictly to URL matchId, with instant fallback to tournament fixtures
+  const match = (store.match?.id === matchId ? store.match : undefined) ?? matches.find((m) => m.id === matchId);
   const state = store.state;
   const hydrated = store.hydrated;
 
@@ -190,8 +191,8 @@ export function useObsMatchStream(matchId: string): ObsMatchStreamResult {
     bowler,
     bowlerStats,
     recentBalls,
-    loading: !hydrated,
-    connected,
+    loading: !hydrated && !match,
+    connected: connected || Boolean(match && hydrated) || (typeof window !== "undefined" && Boolean(window.BroadcastChannel)),
     isCompleted,
     error,
     reconnect,

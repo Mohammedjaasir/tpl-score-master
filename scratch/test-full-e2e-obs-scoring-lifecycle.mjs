@@ -143,18 +143,17 @@ assert.strictEqual(state.innings[0].strikerId, "p5");
 const incomingName = lookup.player("p5")?.name;
 console.log(`  ✓ NEW BATTER Event: NOW BATTING: ${incomingName} 0 (0)`);
 
-// ── 8. COMPLETE OVER 1 (Balls 5 & 6) ──────────────────────────────────────────
-console.log("\n[STEP 15 & 16: Complete Over 1 (6 Balls) -> OVER COMPLETE Event]");
+// ── 8. COMPLETE OVER 1 (Balls 5) ──────────────────────────────────────────
+console.log("\n[STEP 15 & 16: Complete Over 1 (5 Balls) -> OVER COMPLETE Event]");
 deliveries.push(
-  { id: "deliv-5", inningsIndex: 0, bowlerId: "p3", strikerId: "p5", nonStrikerId: "p1", batterRuns: 1, extraRuns: 0, extraType: null, timestamp: 5000 },
-  { id: "deliv-6", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 2, extraRuns: 0, extraType: null, timestamp: 6000 }
+  { id: "deliv-5", inningsIndex: 0, bowlerId: "p3", strikerId: "p5", nonStrikerId: "p1", batterRuns: 1, extraRuns: 0, extraType: null, timestamp: 5000 }
 );
 state = buildMatchState({ match, setup, deliveries });
-assert.strictEqual(state.innings[0].runs, 14);
+assert.strictEqual(state.innings[0].runs, 12);
 assert.strictEqual(state.innings[0].wickets, 1);
 assert.strictEqual(state.innings[0].oversText, "1.0");
-assert.strictEqual(state.innings[0].legalBalls, 6);
-console.log("  ✓ OVER COMPLETE Event: END OF OVER 1: 14/1 • CRR: 14.00");
+assert.strictEqual(state.innings[0].legalBalls, 5);
+console.log("  ✓ OVER COMPLETE Event: END OF OVER 1: 12/1 • CRR: 12.00");
 
 // Over 2 Ball 1: p5 hits 1 to rotate strike to p1
 deliveries.push({
@@ -169,13 +168,12 @@ deliveries.push({
   timestamp: 7500,
 });
 
-// Over 2: Balls 2, 3, 4, 5, 6
+// Over 2: Balls 2, 3, 4, 5
 deliveries.push(
   { id: "deliv-p1-s1", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 8000 },
   { id: "deliv-p1-s2", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 9000 },
   { id: "deliv-p1-s3", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 10000 },
-  { id: "deliv-p1-s4", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 11000 },
-  { id: "deliv-p1-s5", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 1, extraRuns: 0, extraType: null, timestamp: 12000 }
+  { id: "deliv-p1-s4", inningsIndex: 0, bowlerId: "p6", strikerId: "p1", nonStrikerId: "p5", batterRuns: 1, extraRuns: 0, extraType: null, timestamp: 11000 }
 );
 
 // Over 3 (p1 on strike after over break):
@@ -183,7 +181,8 @@ deliveries.push(
   { id: "deliv-p1-s6", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 13000 },
   { id: "deliv-p1-s7", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 14000 },
   { id: "deliv-p1-s8", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 15000 },
-  { id: "deliv-p1-s9", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 16000 }
+  { id: "deliv-p1-s9", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 16000 },
+  { id: "deliv-p1-s10", inningsIndex: 0, bowlerId: "p3", strikerId: "p1", nonStrikerId: "p5", batterRuns: 6, extraRuns: 0, extraType: null, timestamp: 17000 }
 );
 state = buildMatchState({ match, setup, deliveries });
 const p1Stats = state.innings[0].batters.find((b) => b.playerId === "p1");

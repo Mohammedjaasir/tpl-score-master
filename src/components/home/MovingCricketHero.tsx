@@ -64,12 +64,18 @@ export function MovingCricketHero({ liveCount }: MovingCricketHeroProps) {
           </span>
         </h1>
 
-        {/* Tagline */}
-        <p className="mt-4 text-base sm:text-lg font-medium text-white/80 tracking-wide flex items-center gap-2.5">
-          <span>Live Scoring</span>
-          <span className="text-white/40">•</span>
-          <span>Ball by Ball</span>
-        </p>
+        {/* Tagline — Powered by ValGrow Labs */}
+        <div className="mt-4 flex items-center gap-2.5">
+          <img
+            src="/valgrow-labs-logo.jpeg"
+            alt="ValGrow Labs"
+            className="h-6 w-6 rounded-md object-cover flex-shrink-0"
+          />
+          <p className="text-base sm:text-lg font-semibold text-white/80 tracking-wide flex items-center gap-1.5">
+            <span className="text-[#D9A928] font-black">Powered by</span>
+            <span>ValGrow Labs</span>
+          </p>
+        </div>
 
         {/* ── Clean Professional Action Buttons Bar ──────────────────────────── */}
         <div className="mt-8 flex flex-wrap items-center gap-3">

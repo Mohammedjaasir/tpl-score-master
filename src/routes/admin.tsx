@@ -9,7 +9,9 @@ import { Logo } from "@/components/brand/Logo";
 import { TeamLogo } from "@/components/team/TeamLogo";
 import { formatMatchTime, parseTime12To24, parse24ToTime12 } from "@/lib/utils";
 import type { Match, Player, Team, PlayerRole } from "@/types/cricket";
-import { BALLS_PER_OVER } from "@/types/cricket";
+import { BALLS_PER_OVER, getTeamGroup } from "@/types/cricket";
+import { parseYoutubeEmbedUrl } from "@/lib/youtube";
+import { obsStreamRepository } from "@/lib/obsStreamRepository";
 import {
   LayoutDashboard,
   Users,
@@ -57,6 +59,11 @@ import {
 export const Route = createFileRoute("/admin")({
   component: AdminPortalPage,
 });
+
+const MATCH_CIRCLES = ["⓪", "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩", "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"];
+function getMatchNumberSymbol(num: number): string {
+  return MATCH_CIRCLES[num] || `Match #${num}`;
+}
 
 type AdminSection =
   | "overview"
@@ -170,6 +177,33 @@ function AdminPortalPage() {
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffEmail, setNewStaffEmail] = useState("");
   const [newStaffRole, setNewStaffRole] = useState("Official Scorer");
+
+  // OBS Embed State
+  const [obsMatchId, setObsMatchId] = useState<string>("");
+  const [obsStreamUrl, setObsStreamUrl] = useState<string>("");
+  const [obsSaveStatus, setObsSaveStatus] = useState<string | null>(null);
+  const [obsPreviewUrl, setObsPreviewUrl] = useState<string | null>(null);
+
+  // WhatsApp Configuration State
+  const [waServerUrl, setWaServerUrl] = useState("");
+  const [waApiKey, setWaApiKey] = useState("");
+  const [waSessionId, setWaSessionId] = useState("");
+  const [waTargetChatId, setWaTargetChatId] = useState("");
+  const [waSaveStatus, setWaSaveStatus] = useState<string | null>(null);
+  const [waSendStatus, setWaSendStatus] = useState<Record<string, { loading: boolean; message: string | null; error: boolean }>>({});
+
+  // Fetch initial WhatsApp settings
+  useEffect(() => {
+    import("@/lib/whatsappService").then((mod) => {
+      const saved = mod.whatsappSettingsRepository.getSettings();
+      if (saved) {
+        setWaServerUrl(saved.serverUrl);
+        setWaApiKey(saved.apiKey);
+        setWaSessionId(saved.sessionId);
+        setWaTargetChatId(saved.targetChatId);
+      }
+    });
+  }, []);
 
   // Filtered players (Unconditional Hook Call)
   const filteredPlayers = useMemo(() => {
@@ -336,22 +370,28 @@ function AdminPortalPage() {
     return max + 1;
   }, [matches]);
 
-  // Team 2 available options for Single Match (excludes Team 1)
+  // Team 2 available options for Single Match (any other team)
   const availableTeam2Options = useMemo(() => {
+    if (!singleMatchTeam1) return teams;
     return teams.filter((t) => t.id !== singleMatchTeam1);
   }, [teams, singleMatchTeam1]);
 
   const handleTeam1Change = (newTeam1Id: string) => {
     setSingleMatchTeam1(newTeam1Id);
-    if (newTeam1Id === singleMatchTeam2) {
-      const nextAvailable = teams.find((t) => t.id !== newTeam1Id);
-      setSingleMatchTeam2(nextAvailable ? nextAvailable.id : "");
+    const oppositeTeams = teams.filter((t) => t.id !== newTeam1Id);
+    if (singleMatchTeam2 === newTeam1Id || !singleMatchTeam2) {
+      setSingleMatchTeam2(oppositeTeams[0]?.id || "");
     }
   };
 
   const handleOpenSingleMatchModal = () => {
     setScheduleActionError(null);
-    if (teams.length >= 2) {
+    const g1 = teams.filter((t) => getTeamGroup(t) === "Group 1");
+    const g2 = teams.filter((t) => getTeamGroup(t) === "Group 2");
+    if (g1.length > 0 && g2.length > 0) {
+      setSingleMatchTeam1(g1[0].id);
+      setSingleMatchTeam2(g2[0].id);
+    } else if (teams.length >= 2) {
       setSingleMatchTeam1(teams[0].id);
       setSingleMatchTeam2(teams[1].id);
     } else {
@@ -359,7 +399,7 @@ function AdminPortalPage() {
       setSingleMatchTeam2("");
     }
     setSingleMatchOvers(5);
-    setSingleMatchBallsPerOver(6);
+    setSingleMatchBallsPerOver(BALLS_PER_OVER);
     setSingleMatchVenue("TPL Cricket Ground");
     setShowSingleMatchModal(true);
   };
@@ -367,18 +407,8 @@ function AdminPortalPage() {
   const handleOpenScheduleGenerator = () => {
     setScheduleActionError(null);
     setResetSuccessMsg(null);
-    const g1 = teams.filter(
-      (t) =>
-        (t.groupName || "").includes("1") ||
-        (t.groupName || "").toUpperCase().includes("A") ||
-        ["team-du", "team-bmr", "team-kl"].includes(t.id),
-    );
-    const g2 = teams.filter(
-      (t) =>
-        (t.groupName || "").includes("2") ||
-        (t.groupName || "").toUpperCase().includes("B") ||
-        ["team-ngw", "team-rk", "team-tc"].includes(t.id),
-    );
+    const g1 = teams.filter((t) => getTeamGroup(t) === "Group 1");
+    const g2 = teams.filter((t) => getTeamGroup(t) === "Group 2");
     if (g1.length >= 3) {
       setGenGroup1Teams([g1[0].id, g1[1].id, g1[2].id]);
     } else if (teams.length >= 6) {
@@ -438,8 +468,10 @@ function AdminPortalPage() {
   }, [genGroup1Teams, genGroup2Teams]);
 
   // Returns all teams that are either the currently selected value for this slot OR not selected anywhere else
-  const getAvailableTeamsForSlot = (currentVal: string) => {
-    return teams.filter((t) => t.id === currentVal || !selectedTeamIds.includes(t.id));
+  const getAvailableTeamsForSlot = (currentVal: string, _expectedGroup?: "Group 1" | "Group 2") => {
+    return teams.filter((t) => {
+      return t.id === currentVal || !selectedTeamIds.includes(t.id);
+    });
   };
 
   // ── CREATE SINGLE MATCH HANDLER ──────────────────────────────────────────
@@ -450,6 +482,12 @@ function AdminPortalPage() {
     }
     if (singleMatchTeam1 === singleMatchTeam2) {
       setScheduleActionError("Team 1 and Team 2 cannot be the same team.");
+      return;
+    }
+    const t1 = teams.find((t) => t.id === singleMatchTeam1);
+    const t2 = teams.find((t) => t.id === singleMatchTeam2);
+    if (t1 && t2 && getTeamGroup(t1) === getTeamGroup(t2)) {
+      setScheduleActionError("Invalid fixture: teams must belong to different groups.");
       return;
     }
     if (!singleMatchDate) {
@@ -1258,18 +1296,19 @@ function AdminPortalPage() {
           </div>
         )}
 
-        {/* ── SECTION 4: TOURNAMENT CONTROL ──────────────────────────────── */}
+        {/* ── SECTION 4: TOURNAMENT CONTROL (MATCH SCHEDULING & MATCH LIST) ── */}
         {activeSection === "tournament" && (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-8">
+            {/* Feedback Notifications */}
             {resetSuccessMsg && (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between gap-3 text-xs font-bold shadow-sm">
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between shadow-xs animate-in fade-in">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                   <span>{resetSuccessMsg}</span>
                 </div>
                 <button
                   onClick={() => setResetSuccessMsg(null)}
-                  className="text-emerald-600 hover:text-emerald-900 text-[10px] uppercase font-black px-2 py-1 bg-white rounded-lg border border-emerald-200"
+                  className="text-emerald-700 hover:text-emerald-900 text-[10px] uppercase font-black px-2 py-1 bg-white rounded-lg border border-emerald-200"
                 >
                   Dismiss
                 </button>
@@ -1277,9 +1316,9 @@ function AdminPortalPage() {
             )}
 
             {scheduleActionError && (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-between gap-3 text-xs font-bold shadow-sm">
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold flex items-center justify-between shadow-xs animate-in fade-in">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
                   <span>{scheduleActionError}</span>
                 </div>
                 <button
@@ -1291,59 +1330,64 @@ function AdminPortalPage() {
               </div>
             )}
 
-            {/* Control Actions Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm">
+            {/* ════════════════════════════════════════════════════════════════ */}
+            {/* 1. TOURNAMENT FIXTURE CONTROL (MATCHING USER REFERENCE)          */}
+            {/* ════════════════════════════════════════════════════════════════ */}
+            <div className="p-6 rounded-3xl bg-white border border-[#E5E7EB] shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-6">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-[#111827]">Tournament Fixture Control</h3>
-                <p className="text-xs text-[#6B7280] font-medium mt-0.5">
+                <h2 className="text-sm font-black uppercase tracking-widest text-[#111827]">
+                  TOURNAMENT FIXTURE CONTROL
+                </h2>
+                <p className="text-xs text-[#6B7280] font-medium mt-1">
                   Create and manage tournament fixtures.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={handleOpenSingleMatchModal}
+                  type="button"
+                  onClick={() => setShowSingleMatchModal(true)}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] disabled:opacity-50 text-[#111111] font-black text-xs uppercase tracking-wider shadow-sm transition-all min-h-[48px]"
+                  className="tap px-4 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] text-[10px] font-black uppercase tracking-wider shadow-sm transition-colors flex items-center gap-1.5"
                 >
-                  <Plus className="h-4 w-4 stroke-[3]" />
+                  <Plus className="h-3.5 w-3.5" />
                   <span>Create Single Match</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleOpenScheduleGenerator}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-sm transition-all min-h-[48px]"
+                  className="tap px-4 py-2.5 rounded-xl bg-[#111827] hover:bg-black text-white text-[10px] font-black uppercase tracking-wider shadow-sm transition-colors flex items-center gap-1.5"
                 >
                   <Calendar className="h-3.5 w-3.5" />
                   <span>Generate Schedule (9 Matches)</span>
                 </button>
 
                 <button
-                  onClick={() => {
-                    setScheduleActionError(null);
-                    setShowKnockoutModal(true);
-                  }}
+                  type="button"
+                  onClick={() => setShowKnockoutModal(true)}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] disabled:opacity-50 text-[#111827] font-black text-xs uppercase tracking-wider border border-[#E5E7EB] transition-all min-h-[48px]"
+                  className="tap px-4 py-2.5 rounded-xl bg-[#F9FAFB] hover:bg-[#F3F4F6] border border-[#E5E7EB] text-[#111827] text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Schedule Knockout</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     const pendingCount = matches.filter((m) => m.status === "UPCOMING" || m.status === "READY").length;
                     if (pendingCount === 0) {
                       setScheduleActionError(null);
-                      setResetSuccessMsg("NO PENDING FIXTURES TO RESET. Completed matches and tournament standings are safely preserved.");
+                      setResetSuccessMsg("NO PENDING FIXTURES TO RESET.");
                       return;
                     }
                     setScheduleActionError(null);
                     setShowResetConfirm(true);
                   }}
                   disabled={isScheduleActionLoading}
-                  className="tap inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-300 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 text-xs font-black uppercase tracking-wider transition-all shadow-xs min-h-[48px]"
+                  className="tap px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Reset Pending Fixtures</span>
@@ -1351,72 +1395,191 @@ function AdminPortalPage() {
               </div>
             </div>
 
-            {/* Fixtures List */}
-            <div className="flex flex-col gap-3">
-              <h3 className="text-xs font-black uppercase tracking-widest text-[#6B7280] px-1">
-                All Matches ({matches.length})
-              </h3>
+            {/* ════════════════════════════════════════════════════════════════ */}
+            {/* 2. MATCH LIST (3-COLUMN RESPONSIVE GRID MATCHING REFERENCE)       */}
+            {/* ════════════════════════════════════════════════════════════════ */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm sm:text-base font-black uppercase tracking-widest text-[#111827]">
+                  MATCH LIST
+                </h2>
+                <span className="text-xs font-mono font-bold text-[#6B7280]">
+                  {matches.length} {matches.length === 1 ? "Match" : "Matches"}
+                </span>
+              </div>
 
               {matches.length === 0 ? (
-                <div className="p-10 rounded-2xl bg-white border border-[#E5E7EB] text-center shadow-sm flex flex-col items-center justify-center gap-3">
-                  <div className="p-3 bg-[#F9FAFB] rounded-full border border-[#E5E7EB]">
+                <div className="p-12 rounded-3xl bg-white border border-[#E5E7EB] text-center shadow-sm flex flex-col items-center justify-center gap-3">
+                  <div className="p-3.5 bg-[#F9FAFB] rounded-2xl border border-[#E5E7EB]">
                     <Calendar className="h-6 w-6 text-[#9CA3AF]" />
                   </div>
                   <div>
                     <p className="text-sm font-black uppercase tracking-wider text-[#111827]">No Matches Scheduled Yet</p>
                     <p className="text-xs text-[#6B7280] font-medium mt-1 max-w-sm mx-auto">
-                      Click <span className="font-bold text-[#9A6A05]">"Auto-Generate Schedule"</span> above to generate the tournament fixtures from registered teams.
+                      Select Team 1 and Team 2 above and click <span className="font-bold text-[#9A6A05]">[ SCHEDULE MATCH ]</span> or <span className="font-bold text-[#111827]">Generate Schedule</span>.
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                   {matches.map((m) => {
                     const teamA = lookup.team(m.teamAId);
                     const teamB = lookup.team(m.teamBId);
                     const time = formatMatchTime(m.scheduledAt);
+                    const numSymbol = getMatchNumberSymbol(m.matchNumber);
 
                     return (
                       <div
                         key={m.id}
-                        className="p-5 rounded-2xl bg-white border border-[#E5E7EB] flex flex-col justify-between gap-4 shadow-sm"
+                        className="p-5 rounded-2xl bg-white border border-[#E5E7EB] flex flex-col gap-4 shadow-sm"
                       >
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2.5">
-                            <span className="text-[10px] font-black uppercase text-[#9A6A05] bg-[#D9A928]/10 border border-[#D9A928]/20 px-2.5 py-1 rounded-md">
-                              Match #{String(m.matchNumber).padStart(2, "0")}
-                            </span>
-                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md ${
+                        {/* Header: Match # and Status */}
+                        <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-3">
+                          <span className="text-sm font-black text-[#111827] uppercase tracking-wider">MATCH {numSymbol}</span>
+                          <span
+                            className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-sm ${
                               m.status === "LIVE"
-                                ? "bg-red-50 text-red-600 border border-red-200"
+                                ? "bg-[#111111] text-white animate-pulse"
                                 : m.status === "COMPLETED"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-[#F3F4F6] text-[#4B5563]"
-                            }`}>
-                              {m.status}
-                            </span>
-                          </div>
+                                ? "bg-[#111111] text-white"
+                                : "bg-[#F3F4F6] text-[#4B5563] border border-[#E5E7EB]"
+                            }`}
+                          >
+                            {m.status === "LIVE" ? "LIVE ●" : m.status === "UPCOMING" ? "UPCOMING" : m.status}
+                          </span>
+                        </div>
 
-                          <div className="flex items-center justify-between gap-3 py-1">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <TeamLogo logoUrl={teamA?.logoUrl} name={teamA?.name} shortName={teamA?.shortName} size="xs" />
-                              <span className="text-xs font-bold text-[#111827] uppercase truncate">{teamA?.name}</span>
-                            </div>
-                            <span className="text-[10px] font-black text-[#9A6A05]">VS</span>
-                            <div className="flex items-center gap-2.5 min-w-0 justify-end">
-                              <span className="text-xs font-bold text-[#111827] uppercase truncate text-right">{teamB?.name}</span>
-                              <TeamLogo logoUrl={teamB?.logoUrl} name={teamB?.name} shortName={teamB?.shortName} size="xs" />
-                            </div>
+                        {/* Teams */}
+                        <div className="flex flex-col gap-2 pt-1">
+                          <div className="flex items-center gap-2">
+                            <TeamLogo logoUrl={teamA?.logoUrl} name={teamA?.name} shortName={teamA?.shortName} size="xs" />
+                            <span className="text-sm font-black uppercase tracking-wide text-[#111827] truncate">{teamA?.name || "Team A"}</span>
                           </div>
-
-                          <div className="flex items-center justify-between text-xs text-[#6B7280] pt-1 border-t border-[#F3F4F6]">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5 text-[#9A6A05]" />
-                              {time}
-                            </span>
-                            <span>{m.overs} Overs Match</span>
+                          <span className="text-[10px] font-black text-[#9A6A05] tracking-widest pl-9">VS</span>
+                          <div className="flex items-center gap-2">
+                            <TeamLogo logoUrl={teamB?.logoUrl} name={teamB?.name} shortName={teamB?.shortName} size="xs" />
+                            <span className="text-sm font-black uppercase tracking-wide text-[#111827] truncate">{teamB?.name || "Team B"}</span>
                           </div>
                         </div>
+
+                        {/* Time and Overs */}
+                        <div className="flex items-center justify-between border-b border-[#F3F4F6] pb-4">
+                          <span className="text-xs font-bold text-[#6B7280]">{time}</span>
+                          <span className="text-xs font-bold text-[#6B7280]">{m.overs} {m.overs === 1 ? 'Over' : 'Overs'} Match</span>
+                        </div>
+
+                        {/* Scorer PIN and Actions */}
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">SCORER PIN</p>
+                            <p className="text-xl font-black font-mono tracking-widest text-[#111827]">{m.scorerPin || "----"}</p>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <Link
+                              to={`/match/${m.id}`}
+                              className="tap py-2 rounded-lg bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] font-black text-[10px] uppercase tracking-wider text-center transition-colors"
+                            >
+                              OPEN SCORER
+                            </Link>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(new URL(`/match/${m.id}`, window.location.origin).toString());
+                              }}
+                              className="tap py-2 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] hover:bg-[#E5E7EB] text-[#111827] font-black text-[10px] uppercase tracking-wider text-center transition-colors"
+                            >
+                              COPY SCORER URL
+                            </button>
+                            <Link
+                              to={`/obs/match/${m.id}`}
+                              target="_blank"
+                              className="tap py-2 rounded-lg bg-[#111111] hover:bg-[#222222] text-white font-black text-[10px] uppercase tracking-wider text-center transition-colors"
+                            >
+                              OPEN OBS
+                            </Link>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(new URL(`/obs/match/${m.id}`, window.location.origin).toString());
+                              }}
+                              className="tap py-2 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] hover:bg-[#E5E7EB] text-[#111827] font-black text-[10px] uppercase tracking-wider text-center transition-colors"
+                            >
+                              COPY OBS URL
+                            </button>
+                          </div>
+
+                          <div className="mt-1 flex flex-col gap-1">
+                            <button
+                              onClick={async () => {
+                                const waStatus = waSendStatus[m.id];
+                                if (waStatus?.loading) return;
+
+                                setWaSendStatus(prev => ({ ...prev, [m.id]: { loading: true, message: "Sending...", error: false } }));
+
+                                try {
+                                  const mod = await import("@/lib/whatsappService");
+                                  const teamAName = teamA?.name || "Team A";
+                                  const teamBName = teamB?.name || "Team B";
+                                  
+                                  const eventId = `match-${m.id}-${m.status}`;
+                                  let message = "";
+                                  const origin = window.location.origin;
+
+                                  if (m.status === "UPCOMING" || m.status === "READY") {
+                                    message = `TPL 2026 — Match Scheduled\n\nMatch ${numSymbol}\n${teamAName} vs ${teamBName}\n\nDate: ${time}\nVenue: ${m.venue || 'TPL Cricket Ground'}\nOvers: ${m.overs}\n\nScorer PIN: ${m.scorerPin || '----'}\n\nScorer:\n${origin}/match/${m.id}\n\nOBS:\n${origin}/obs/match/${m.id}`;
+                                  } else if (m.status === "LIVE") {
+                                    message = `🔴 TPL 2026 LIVE\n\nMatch ${numSymbol}\n${teamAName} vs ${teamBName}\n\nMatch is now LIVE.\n\nLive Score:\n${origin}/match/${m.id}\n\nOBS Broadcast:\n${origin}/obs/match/${m.id}`;
+                                  } else if (m.status === "COMPLETED") {
+                                    // Construct completed message
+                                    let winnerLine = m.resultText || "MATCH COMPLETED";
+                                    let potmText = "";
+                                    if (m.manOfTheMatchId) {
+                                      const potm = players.find(p => p.id === m.manOfTheMatchId);
+                                      if (potm) {
+                                        const slug = potm.slug || potm.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                                        potmText = `Player of the Match:\n${potm.name}\n${origin}/player/${slug}\n\n`;
+                                      }
+                                    }
+                                    
+                                    message = `🏆 TPL 2026 — MATCH RESULT\n\nMatch ${numSymbol}\n\n${teamAName}\nvs\n${teamBName}\n\n🏆 WINNER\n${winnerLine}\n\n${potmText}Scorecard:\n${origin}/match/${m.id}\n\nOBS:\n${origin}/obs/match/${m.id}`;
+                                  } else {
+                                    message = `TPL 2026 Match ${numSymbol}: ${teamAName} vs ${teamBName}`;
+                                  }
+
+                                  await mod.sendWhatsAppNotification(eventId, message);
+                                  
+                                  setWaSendStatus(prev => ({ ...prev, [m.id]: { loading: false, message: "✓ WhatsApp notification sent", error: false } }));
+                                  setTimeout(() => {
+                                    setWaSendStatus(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[m.id];
+                                      return copy;
+                                    });
+                                  }, 3000);
+                                } catch (err: any) {
+                                  setWaSendStatus(prev => ({ ...prev, [m.id]: { loading: false, message: `WhatsApp notification failed: ${err.message}`, error: true } }));
+                                  setTimeout(() => {
+                                    setWaSendStatus(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[m.id];
+                                      return copy;
+                                    });
+                                  }, 5000);
+                                }
+                              }}
+                              disabled={waSendStatus[m.id]?.loading}
+                              className="w-full tap py-2 rounded-lg bg-[#25D366] hover:bg-[#1DA851] text-white font-black text-[10px] uppercase tracking-wider text-center transition-colors shadow-sm disabled:opacity-75"
+                            >
+                              SEND WHATSAPP
+                            </button>
+                            {waSendStatus[m.id] && (
+                              <div className={`text-[10px] font-bold mt-1 text-center ${waSendStatus[m.id].error ? 'text-red-500' : 'text-[#25D366]'}`}>
+                                {waSendStatus[m.id].message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+
                       </div>
                     );
                   })}
@@ -1480,6 +1643,114 @@ function AdminPortalPage() {
                 <span className="text-[10px] font-black text-[#6B7280] uppercase">Average Purse Left</span>
                 <p className="text-2xl font-black text-[#111827] my-1">100,000 LKR</p>
                 <span className="text-[10px] text-[#6B7280]">Per Franchise</span>
+              </div>
+            </div>
+
+            {/* OBS LIVE STREAM EMBED CONFIGURATION */}
+            <div className="mt-8 p-6 rounded-3xl bg-white border border-[#E5E7EB] shadow-sm">
+              <h3 className="text-sm font-black uppercase text-[#111827] mb-4">OBS Live Stream Embed</h3>
+              <p className="text-xs text-[#6B7280] mb-6">
+                Configure the background live stream for the OBS overlay. The selected stream will automatically be applied as the background layer for the specified match.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-3">
+                  <label className="text-[10px] font-black text-[#111827] uppercase tracking-wider">Select Match</label>
+                  <select
+                    className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#D9A928]/50"
+                    value={obsMatchId}
+                    onChange={(e) => {
+                      const mId = e.target.value;
+                      setObsMatchId(mId);
+                      setObsSaveStatus(null);
+                      setObsPreviewUrl(null);
+                      if (mId) {
+                        setObsStreamUrl(obsStreamRepository.getStreamUrl(mId) || "");
+                      } else {
+                        setObsStreamUrl("");
+                      }
+                    }}
+                  >
+                    <option value="">-- Select Match --</option>
+                    {matches.filter(m => m.status !== "COMPLETED").map(m => (
+                      <option key={m.id} value={m.id}>
+                        Match #{m.matchNumber}: {lookup.team(m.teamAId)?.name} vs {lookup.team(m.teamBId)?.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="text-[10px] font-black text-[#111827] uppercase tracking-wider mt-2">Live Stream URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#D9A928]/50"
+                    value={obsStreamUrl}
+                    onChange={(e) => setObsStreamUrl(e.target.value)}
+                    disabled={!obsMatchId}
+                  />
+                  <p className="text-[10px] text-[#6B7280]">
+                    Example: https://www.youtube.com/embed/LIVE_ID?autoplay=1&mute=1<br/>
+                    (Standard YouTube links will automatically be converted to embed URLs)
+                  </p>
+
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={() => {
+                        if (!obsMatchId) return;
+                        const parsed = parseYoutubeEmbedUrl(obsStreamUrl);
+                        if (parsed) {
+                          obsStreamRepository.saveStreamUrl(obsMatchId, parsed);
+                          setObsStreamUrl(parsed);
+                          setObsSaveStatus("Stream saved successfully!");
+                          setTimeout(() => setObsSaveStatus(null), 3000);
+                        } else {
+                          obsStreamRepository.removeStreamUrl(obsMatchId);
+                          setObsStreamUrl("");
+                          setObsSaveStatus("Stream removed.");
+                          setTimeout(() => setObsSaveStatus(null), 3000);
+                        }
+                      }}
+                      disabled={!obsMatchId}
+                      className="tap bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider disabled:opacity-50 transition-all"
+                    >
+                      Save URL
+                    </button>
+                    <button
+                      onClick={() => {
+                        const parsed = parseYoutubeEmbedUrl(obsStreamUrl);
+                        if (parsed) setObsPreviewUrl(parsed);
+                      }}
+                      disabled={!obsStreamUrl}
+                      className="tap bg-[#F9FAFB] hover:bg-[#E5E7EB] text-[#111827] border border-[#E5E7EB] px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider disabled:opacity-50 transition-all"
+                    >
+                      Preview Stream
+                    </button>
+                  </div>
+
+                  {obsSaveStatus && (
+                    <div className="text-emerald-600 text-xs font-bold mt-2 flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {obsSaveStatus}
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview Window */}
+                <div className="bg-[#111111] rounded-2xl overflow-hidden relative border border-[#E5E7EB] flex items-center justify-center min-h-[250px]">
+                  {obsPreviewUrl ? (
+                    <iframe
+                      src={obsPreviewUrl}
+                      className="absolute inset-0 w-full h-full"
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <div className="text-[#6B7280] text-xs font-black uppercase text-center flex flex-col items-center gap-2">
+                      <Play className="h-8 w-8 opacity-20" />
+                      <span>No Stream Preview<br/>Enter URL and click preview</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1615,6 +1886,84 @@ function AdminPortalPage() {
                   disabled
                   className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E5E5] rounded-xl px-4 py-2.5 text-[#111827] font-bold"
                 />
+              </div>
+            </div>
+
+            <h3 className="text-sm font-black uppercase text-[#111827] border-b border-[#E5E7EB] pb-3 pt-4 mt-2">
+              WHATSAPP BOT CONFIGURATION
+            </h3>
+            <p className="text-xs text-[#6B7280] -mt-2">
+              These settings control the TPL player attendance WhatsApp bot and match notifications.
+            </p>
+
+            <div className="flex flex-col gap-4 text-xs">
+              <div>
+                <label className="text-[10px] font-black text-[#6B7280] uppercase">OpenWA Server URL</label>
+                <input
+                  type="url"
+                  placeholder="http://localhost:3000"
+                  value={waServerUrl}
+                  onChange={(e) => setWaServerUrl(e.target.value)}
+                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-2.5 text-[#111827] font-bold focus:ring-2 focus:ring-[#D9A928]/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-[#6B7280] uppercase">API Key (X-Api-Key)</label>
+                <input
+                  type="password"
+                  placeholder="Enter API Key"
+                  value={waApiKey}
+                  onChange={(e) => setWaApiKey(e.target.value)}
+                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-2.5 text-[#111827] font-bold focus:ring-2 focus:ring-[#D9A928]/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-[#6B7280] uppercase">Session ID / Name</label>
+                <input
+                  type="text"
+                  placeholder="default"
+                  value={waSessionId}
+                  onChange={(e) => setWaSessionId(e.target.value)}
+                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-2.5 text-[#111827] font-bold focus:ring-2 focus:ring-[#D9A928]/50"
+                />
+              </div>
+              
+              <div>
+                <label className="text-[10px] font-black text-[#6B7280] uppercase">Target Chat ID (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1234567890@c.us or 1234567890@g.us"
+                  value={waTargetChatId}
+                  onChange={(e) => setWaTargetChatId(e.target.value)}
+                  className="w-full mt-1 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-2.5 text-[#111827] font-bold focus:ring-2 focus:ring-[#D9A928]/50"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    const mod = await import("@/lib/whatsappService");
+                    mod.whatsappSettingsRepository.saveSettings({
+                      serverUrl: waServerUrl,
+                      apiKey: waApiKey,
+                      sessionId: waSessionId,
+                      targetChatId: waTargetChatId,
+                    });
+                    setWaSaveStatus("Settings saved successfully!");
+                    setTimeout(() => setWaSaveStatus(null), 3000);
+                  }}
+                  className="tap bg-[#D9A928] hover:bg-[#F4C542] text-[#111111] px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all"
+                >
+                  Save WhatsApp Settings
+                </button>
+                {waSaveStatus && (
+                  <span className="text-emerald-600 font-bold flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    {waSaveStatus}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1847,7 +2196,7 @@ function AdminPortalPage() {
                     <option value="" disabled>-- Select Team 1 --</option>
                     {teams.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name}
+                        {t.name} ({t.shortName}) — [{getTeamGroup(t)}]
                       </option>
                     ))}
                   </select>
@@ -1866,7 +2215,7 @@ function AdminPortalPage() {
                     <option value="" disabled>-- Select Team 2 --</option>
                     {availableTeam2Options.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name}
+                        {t.name} ({t.shortName}) — [{getTeamGroup(t)}]
                       </option>
                     ))}
                   </select>
@@ -2079,12 +2428,12 @@ function AdminPortalPage() {
                   </div>
                   {[0, 1, 2].map((idx) => {
                     const currentVal = genGroup1Teams[idx] || "";
-                    const availableTeams = getAvailableTeamsForSlot(currentVal);
+                    const availableTeams = getAvailableTeamsForSlot(currentVal, "Group 1");
 
                     return (
                       <div key={`g1-${idx}`}>
                         <label className="text-[10px] font-bold text-[#6B7280] uppercase">
-                          Team {idx + 1}
+                          Team {idx + 1} (Group 1)
                         </label>
                         <select
                           value={currentVal}
@@ -2095,10 +2444,10 @@ function AdminPortalPage() {
                           }}
                           className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 sm:py-3 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[44px]"
                         >
-                          <option value="">-- Select Team {idx + 1} --</option>
+                          <option value="">-- Select Group 1 Team {idx + 1} --</option>
                           {availableTeams.map((t) => (
                             <option key={t.id} value={t.id}>
-                              {t.name}
+                              {t.name} ({t.shortName})
                             </option>
                           ))}
                         </select>
@@ -2115,12 +2464,12 @@ function AdminPortalPage() {
                   </div>
                   {[0, 1, 2].map((idx) => {
                     const currentVal = genGroup2Teams[idx] || "";
-                    const availableTeams = getAvailableTeamsForSlot(currentVal);
+                    const availableTeams = getAvailableTeamsForSlot(currentVal, "Group 2");
 
                     return (
                       <div key={`g2-${idx}`}>
                         <label className="text-[10px] font-bold text-[#6B7280] uppercase">
-                          Team {idx + 4}
+                          Team {idx + 4} (Group 2)
                         </label>
                         <select
                           value={currentVal}
@@ -2131,10 +2480,10 @@ function AdminPortalPage() {
                           }}
                           className="w-full mt-1 bg-white border border-[#D1D5DB] rounded-xl px-3 py-2.5 sm:py-3 text-xs font-bold text-[#111827] focus:outline-none focus:border-[#D9A928] min-h-[44px]"
                         >
-                          <option value="">-- Select Team {idx + 4} --</option>
+                          <option value="">-- Select Group 2 Team {idx + 1} --</option>
                           {availableTeams.map((t) => (
                             <option key={t.id} value={t.id}>
-                              {t.name}
+                              {t.name} ({t.shortName})
                             </option>
                           ))}
                         </select>
@@ -2340,6 +2689,13 @@ function AdminPortalPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {scheduleActionError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <p>{scheduleActionError}</p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-3 text-xs">
               <div>

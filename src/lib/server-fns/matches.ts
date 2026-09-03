@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerSupabaseAdmin } from "@/lib/server/supabase-admin";
 import type { SupabaseMatch } from "@/types/cricket";
-import { BALLS_PER_OVER } from "@/types/cricket";
+import { BALLS_PER_OVER, getTeamGroup } from "@/types/cricket";
+import { teamRepository } from "@/lib/repositories";
 
 export interface FixtureInput {
   id?: string;
@@ -45,6 +46,11 @@ export const saveScheduleServerFn = createServerFn({ method: "POST" })
     const updatesToPerform: Array<{ id: string; patch: Partial<SupabaseMatch> }> = [];
     const rowsToInsert: Array<Omit<SupabaseMatch, "id" | "created_at" | "updated_at">> = [];
 
+    // 1b. Collect existing match PINs to guarantee uniqueness
+    const activePins = new Set<string>(
+      allMatches.map((m) => m.scorer_pin).filter(Boolean) as string[]
+    );
+
     // 2. Reconcile each generated fixture against database
     for (const fixture of fixtures) {
       const exactMatch = scheduledRows.find(
@@ -79,6 +85,7 @@ export const saveScheduleServerFn = createServerFn({ method: "POST" })
           });
         } else {
           // NEW FIXTURE: Genuinely new row to insert
+          const pin = generate4DigitPin(activePins);
           rowsToInsert.push({
             team_a_id: fixture.teamAId,
             team_b_id: fixture.teamBId,
@@ -86,6 +93,7 @@ export const saveScheduleServerFn = createServerFn({ method: "POST" })
             status: "scheduled",
             total_overs: fixture.overs || 5,
             balls_per_over: BALLS_PER_OVER,
+            scorer_pin: pin,
           });
         }
       }
@@ -179,7 +187,7 @@ export const resetScheduleServerFn = createServerFn({ method: "POST" }).handler(
         .from("matches")
         .delete()
         .in("id", deletableIds)
-        .in("status", ["scheduled", "ready", "upcoming", "pending"]);
+        .eq("status", "scheduled");
 
       if (deleteError) {
         throw new Error(`Failed to reset pending fixtures: ${deleteError.message}`);
@@ -234,7 +242,7 @@ export const resetAllTournamentMatchesServerFn = createServerFn({ method: "POST"
         .from("matches")
         .delete()
         .in("id", deletableIds)
-        .in("status", ["scheduled", "ready", "upcoming", "pending"]);
+        .eq("status", "scheduled");
 
       if (deleteError) {
         throw new Error(`Failed to reset pending fixtures: ${deleteError.message}`);
@@ -262,6 +270,21 @@ export interface GenerateScheduleInput {
 }
 
 /**
+ * Generates a secure, cryptographically random 4-digit numeric PIN (1000 - 9999).
+ * Guarantees uniqueness against active and scheduled matches.
+ */
+export function generate4DigitPin(existingPins: Set<string> = new Set()): string {
+  for (let attempt = 0; attempt < 10000; attempt++) {
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    if (!existingPins.has(pin)) {
+      existingPins.add(pin);
+      return pin;
+    }
+  }
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+/**
  * Server Function: Generates 9 cross-group tournament matches between Group 1 and Group 2.
  */
 export const generateTournamentScheduleServerFn = createServerFn({ method: "POST" })
@@ -281,6 +304,35 @@ export const generateTournamentScheduleServerFn = createServerFn({ method: "POST
     if (uniqueTeams.size !== 6) {
       throw new Error("All 6 selected tournament teams must be distinct.");
     }
+
+    // Verify team group assignments from database
+    const { data: dbTeams, error: teamsFetchError } = await supabaseAdmin
+      .from("teams")
+      .select("id, name, slug")
+      .in("id", allTeams);
+
+    if (!teamsFetchError && dbTeams && dbTeams.length > 0) {
+      for (const tId of input.group1TeamIds) {
+        const t = dbTeams.find((item) => item.id === tId);
+        if (t && getTeamGroup(t) !== "Group 1") {
+          throw new Error(`Invalid schedule: Team "${t.name}" belongs to Group 2 and cannot be assigned to Group 1.`);
+        }
+      }
+      for (const tId of input.group2TeamIds) {
+        const t = dbTeams.find((item) => item.id === tId);
+        if (t && getTeamGroup(t) !== "Group 2") {
+          throw new Error(`Invalid schedule: Team "${t.name}" belongs to Group 1 and cannot be assigned to Group 2.`);
+        }
+      }
+    }
+
+    // Collect existing match PINs to guarantee uniqueness
+    const { data: existingMatchRows } = await supabaseAdmin
+      .from("matches")
+      .select("scorer_pin");
+    const activePins = new Set<string>(
+      (existingMatchRows || []).map((m) => m.scorer_pin).filter(Boolean) as string[],
+    );
 
     const overs = Math.max(1, Number(input.overs) || 5);
     const ballsPerOver = Math.max(1, Number(input.ballsPerOver) || BALLS_PER_OVER);
@@ -302,6 +354,7 @@ export const generateTournamentScheduleServerFn = createServerFn({ method: "POST
     for (let i = 0; i < input.group1TeamIds.length; i++) {
       for (let j = 0; j < input.group2TeamIds.length; j++) {
         const scheduledTime = new Date(baseDate.getTime() + (matchCount - 1) * intervalMinutes * 60 * 1000);
+        const pin = generate4DigitPin(activePins);
         fixturesToInsert.push({
           team_a_id: input.group1TeamIds[i],
           team_b_id: input.group2TeamIds[j],
@@ -309,6 +362,7 @@ export const generateTournamentScheduleServerFn = createServerFn({ method: "POST
           status: "scheduled",
           total_overs: overs,
           balls_per_over: ballsPerOver,
+          scorer_pin: pin,
         });
         matchCount++;
       }
@@ -336,6 +390,7 @@ export interface CreateSingleMatchInput {
   ballsPerOver?: number;
   venue?: string;
   matchNumber?: number;
+  scorerPin?: string;
 }
 
 /**
@@ -354,13 +409,12 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
       throw new Error("Team 1 and Team 2 cannot be the same team.");
     }
 
-    // 2. Validate official teams existence
-    const { data: teamRows, error: teamQueryError } = await supabaseAdmin
-      .from("teams")
-      .select("id, name")
-      .in("id", [input.teamAId, input.teamBId]);
+    // 2. Validate official teams existence & cross-group requirement
+    const teams = await teamRepository.list();
+    const teamA = teams.find((t) => t.id === input.teamAId);
+    const teamB = teams.find((t) => t.id === input.teamBId);
 
-    if (teamQueryError || !teamRows || teamRows.length !== 2) {
+    if (!teamA || !teamB) {
       throw new Error("Selected teams must be valid official tournament teams.");
     }
 
@@ -374,6 +428,15 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
     const overs = Math.max(1, Math.min(50, Math.floor(Number(input.overs) || 5)));
     const ballsPerOver = Math.max(1, Math.min(12, Math.floor(Number(input.ballsPerOver) || BALLS_PER_OVER)));
 
+    // 5. Generate secure 4-digit PIN if not provided
+    const { data: existingMatchRows } = await supabaseAdmin
+      .from("matches")
+      .select("scorer_pin");
+    const activePins = new Set<string>(
+      (existingMatchRows || []).map((m) => m.scorer_pin).filter(Boolean) as string[],
+    );
+    const assignedPin = input.scorerPin?.trim() || generate4DigitPin(activePins);
+
     const row: Omit<SupabaseMatch, "id" | "created_at" | "updated_at"> = {
       team_a_id: input.teamAId,
       team_b_id: input.teamBId,
@@ -381,6 +444,7 @@ export const createSingleMatchServerFn = createServerFn({ method: "POST" })
       status: "scheduled",
       total_overs: overs,
       balls_per_over: ballsPerOver,
+      scorer_pin: assignedPin,
     };
 
     const { data, error } = await supabaseAdmin

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMatchStore } from "@/lib/scoring/store";
 import { lookup } from "@/lib/repositories";
-import { useScorerAuth } from "@/lib/auth";
+import { useScorerAuth, isMatchScorerAuthorized } from "@/lib/auth";
 import { ScorerPinGate } from "@/components/auth/ScorerPinGate";
 import { Logo } from "@/components/brand/Logo";
 import { PreMatchScreen } from "@/components/match/PreMatchScreen";
@@ -47,11 +47,14 @@ function MatchPage() {
 
   const teamA = lookup.team(match.teamAId);
   const teamB = lookup.team(match.teamBId);
+  const isAuthorized = isAuthenticated || isMatchScorerAuthorized(match.id, match.scorerPin);
 
   // ── Scorer Protection Gate ───────────────────────────────────────────────
-  if (!isAuthenticated) {
+  if (!isAuthorized) {
     return (
       <ScorerPinGate
+        matchId={match.id}
+        expectedPin={match.scorerPin}
         matchTitle={`Match #${match.matchNumber} (${teamA?.shortName ?? "Team A"} vs ${teamB?.shortName ?? "Team B"})`}
       />
     );

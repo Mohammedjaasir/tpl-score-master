@@ -56,7 +56,7 @@ export function ScoreboardBar({ stream, sponsor }: ScoreboardBarProps) {
 
   const runs = currentInnings?.runs ?? 0;
   const wickets = currentInnings?.wickets ?? 0;
-  const oversText = currentInnings?.oversText ?? "0.0";
+  const currentOversText = currentInnings?.oversText ?? "0.0";
   const maxOvers = currentInnings?.maxOvers ?? match.overs ?? 5;
   const crr = currentInnings?.crr ?? 0;
   const target = currentInnings?.target;
@@ -108,10 +108,17 @@ export function ScoreboardBar({ stream, sponsor }: ScoreboardBarProps) {
               </span>
             )}
           </div>
-          <div className="flex items-center justify-between gap-2 mt-1">
-            <span className="text-[10px] font-bold text-white/50 truncate uppercase">
-              {match.venue || "TPL Ground"}
-            </span>
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <img
+                src="/valgrow-labs-logo.jpeg"
+                alt="ValGrow Labs"
+                className="h-4.5 w-4.5 rounded object-cover flex-shrink-0 shadow-sm"
+              />
+              <span className="text-[10px] font-black text-white/90 truncate uppercase tracking-wider">
+                <span className="text-[#D9A928]">POWERED BY</span> VALGROW LABS
+              </span>
+            </div>
             <SponsorSlot sponsor={sponsor} />
           </div>
         </div>
@@ -134,7 +141,7 @@ export function ScoreboardBar({ stream, sponsor }: ScoreboardBarProps) {
               <span>{wickets}</span>
             </div>
             <div className="text-xs font-black text-white/80 font-mono tracking-wide mt-1">
-              {oversText} <span className="text-white/50 text-[10px] uppercase">/ {maxOvers}.0 OV</span>
+              {currentOversText} <span className="text-white/50 text-[10px] uppercase">/ {maxOvers}.0 OV</span>
             </div>
           </div>
         </div>

@@ -1,42 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-ragul
-import { useState } from "react";
 import {
   ArrowRight,
   Radio,
-  ClipboardCheck,
   Trophy,
-  Zap,
-  BarChart2,
-  Calendar,
-  CalendarDays,
-  UsersRound,
-  Star,
+  User,
   AlignJustify,
   X,
+  Wifi,
+  ChevronRight,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import SocialCards from "@/components/ui/card-fan-carousel";
-
-import { AppShell } from "@/components/layout/AppShell";
-import { MatchCard } from "@/components/match/MatchCard";
-import { MovingCricketHero } from "@/components/home/MovingCricketHero";
-import { SponsorsSection } from "@/components/home/SponsorsSection";
-import { useMatches, useTeams, usePrefetchCricketData } from "@/hooks/useCricketData";
-import { Radio, Calendar, ArrowRight, AlertCircle, RefreshCw, Trophy } from "lucide-react";
-main
+import { useMatches, usePlayers, useLiveMatchState } from "@/hooks/useCricketData";
+import { calculateTournamentStats } from "@/lib/scoring/statistics";
+import { lookup } from "@/lib/repositories";
 
 export const Route = createFileRoute("/")({
-  component: PublicHome,
+  component: LandingScreen,
 });
 
-function PublicHome() {
-  usePrefetchCricketData();
-  const { data: allMatches = [], isLoading: queryLoading, isError: queryError, error, refetch } = useMatches();
-  useTeams();
-
-ragul
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -48,14 +30,193 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── Live Score Ticker Card ──────────────────────────────────────────────────
+function LiveScoreCard({ matchId }: { matchId: string }) {
+  const state = useLiveMatchState(matchId);
+  const matchMeta = lookup.match(matchId);
+  if (!state || !matchMeta) return null;
+
+  const inn = state.innings[state.currentInningsIndex] ?? state.innings[0];
+  if (!inn) return null;
+
+  // Resolve batting team name via lookup cache
+  const teamA = lookup.team(matchMeta.teamAId);
+  const teamB = lookup.team(matchMeta.teamBId);
+  const battingTeam = inn.battingTeamId === matchMeta.teamAId
+    ? (teamA?.name ?? teamA?.shortName ?? "HOME")
+    : (teamB?.name ?? teamB?.shortName ?? "AWAY");
+  const battingShort = battingTeam.slice(0, 12);
+
+  const overStr = inn.oversText + " OV";
+
+  // Last ball from recentBalls
+  const lastSummary = inn.recentBalls?.[inn.recentBalls.length - 1];
+  const lastDel = lastSummary?.delivery;
+  const lastBallLabel = lastDel
+    ? lastDel.wicket
+      ? "W"
+      : lastDel.extraType === "wide"
+        ? "WD"
+        : lastDel.extraType === "noball"
+          ? "NB"
+          : String(lastDel.batterRuns + lastDel.extraRuns)
+    : null;
+
+  const target = inn.target;
+  const needing = target ? target - inn.runs : null;
+  const rr = inn.crr.toFixed(1);
+
+  return (
+    <Link
+      to="/live"
+      className="group block w-full max-w-sm"
+    >
+      <div className="relative rounded-2xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 hover:border-[#D9A928]/60 transition-all shadow-2xl">
+        {/* Live pulse header */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-black tracking-[0.2em] text-red-400 uppercase">LIVE</span>
+          </div>
+          <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{overStr}</span>
+        </div>
+
+        {/* Score */}
+        <div className="px-4 py-3">
+          <p className="text-[11px] font-black text-[#D9A928] tracking-widest uppercase mb-0.5">{battingShort}</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-white font-mono tracking-tight">
+              {inn.runs}/{inn.wickets}
+            </span>
+            {lastBallLabel && (
+              <span
+                className={`text-sm font-black px-2 py-0.5 rounded-md ${
+                  lastBallLabel === "W"
+                    ? "bg-red-500/20 text-red-400"
+                    : lastBallLabel === "WD" || lastBallLabel === "NB"
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : lastBallLabel === "4" || lastBallLabel === "6"
+                        ? "bg-[#D9A928]/20 text-[#D9A928]"
+                        : "bg-white/10 text-white/60"
+                }`}
+              >
+                {lastBallLabel === "W" ? "OUT!" : lastBallLabel}
+              </span>
+            )}
+          </div>
+          {needing !== null && needing > 0 && (
+            <p className="text-[11px] text-white/50 mt-0.5">Need {needing} · RR {rr}</p>
+          )}
+          {needing === null && (
+            <p className="text-[11px] text-white/50 mt-0.5">CRR {rr}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-2 border-t border-white/10">
+          <span className="text-[10px] text-white/40 font-semibold uppercase tracking-wider">Ball by Ball Updates</span>
+          <ChevronRight className="h-3.5 w-3.5 text-[#D9A928] group-hover:translate-x-1 transition-transform" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ─── Sticky bottom live score strip ──────────────────────────────────────────
+function StickyLiveTicker({ matches }: { matches: Array<{ id: string; homeTeamName?: string; awayTeamName?: string }> }) {
+  const firstLiveId = matches[0]?.id;
+  const state = useLiveMatchState(firstLiveId);
+  const matchMeta = firstLiveId ? lookup.match(firstLiveId) : null;
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed || !state || !matchMeta) return null;
+
+  const inn = state.innings[state.currentInningsIndex] ?? state.innings[0];
+  if (!inn) return null;
+
+  const teamA = lookup.team(matchMeta.teamAId);
+  const teamB = lookup.team(matchMeta.teamBId);
+  const battingTeam = inn.battingTeamId === matchMeta.teamAId
+    ? (teamA?.name ?? teamA?.shortName ?? "HOME")
+    : (teamB?.name ?? teamB?.shortName ?? "AWAY");
+  const shortBat = battingTeam.slice(0, 10);
+
+  const overStr = inn.oversText;
+  const lastSummary = inn.recentBalls?.[inn.recentBalls.length - 1];
+  const lastDel2 = lastSummary?.delivery;
+  const lastBall = lastDel2
+    ? lastDel2.wicket ? "W" : lastDel2.extraType === "wide" ? "WD" : lastDel2.extraType === "noball" ? "NB" : String(lastDel2.batterRuns + lastDel2.extraRuns)
+    : null;
+
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-[100] pointer-events-none">
+      <Link
+        to="/live"
+        className="pointer-events-auto flex items-center justify-between px-4 py-3 bg-[#0A0A0A]/95 backdrop-blur-xl border-t border-[#D9A928]/40 text-white shadow-[0_-8px_40px_rgba(0,0,0,0.5)] hover:bg-[#111] transition-colors"
+      >
+        {/* Left: Live pill + team + score */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-black text-red-400 tracking-widest uppercase hidden sm:block">LIVE</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black text-[#D9A928] uppercase tracking-wider">{shortBat}</span>
+            <span className="text-base font-black text-white font-mono">{inn.runs}/{inn.wickets}</span>
+            <span className="text-[11px] text-white/40 font-semibold">{overStr} ov</span>
+          </div>
+          {lastBall && (
+            <span
+              className={`hidden sm:inline-flex text-[10px] font-black px-2 py-0.5 rounded-md ${
+                lastBall === "W" ? "bg-red-500/25 text-red-400" :
+                lastBall === "4" || lastBall === "6" ? "bg-[#D9A928]/20 text-[#D9A928]" :
+                "bg-white/10 text-white/50"
+              }`}
+            >
+              {lastBall === "W" ? "WICKET!" : lastBall === "WD" ? "WIDE" : lastBall === "NB" ? "NO BALL" : `${lastBall} RUN`}
+            </span>
+          )}
+        </div>
+
+        {/* Right: tap CTA + dismiss */}
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">TAP FOR LIVE</span>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDismissed(true); }}
+            className="h-7 w-7 rounded-full bg-white/10 grid place-items-center hover:bg-white/20 transition-colors shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5 text-white/60" />
+          </button>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+
 function LandingScreen() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: matches = [] } = useMatches();
+  const { data: players = [] } = usePlayers();
+  const stats = useMemo(() => calculateTournamentStats(matches), [matches]);
+
+  const liveMatches = matches.filter((m) => m.status === "LIVE");
+  const firstLiveId = liveMatches[0]?.id;
+
+  const topScorer = stats.orangeCap[0];
+  const topBowler = stats.purpleCap[0];
+  const topMvp = stats.mvpLeaderboard[0];
+
+  const scorerPlayer = topScorer ? players.find((p) => p.id === topScorer.playerId) : undefined;
+  const bowlerPlayer = topBowler ? players.find((p) => p.id === topBowler.playerId) : undefined;
+  const mvpPlayer = topMvp ? players.find((p) => p.id === topMvp.playerId) : undefined;
 
   const navLinks = [
-    { label: "FIXTURES", href: "#fixtures" },
-    { label: "STANDINGS", href: "#standings" },
-    { label: "RESULTS", href: "#results" },
-    { label: "TEAMS", href: "#teams" },
+    { label: "HERITAGE", href: "#heritage" },
+    { label: "STARS", href: "#fixtures" },
+    { label: "FIXTURES", href: "/matches" },
+    { label: "STANDINGS", href: "/pointables" },
   ];
   return (
     <div className="min-h-screen w-full bg-white text-[#0A0A0A] font-sans selection:bg-[#D9A928] selection:text-black overflow-x-hidden">
@@ -229,338 +390,254 @@ function LandingScreen() {
                 <span>VIEW LIVE SCORES</span>
               </Link>
             </div>
-          </div>
-        </div>
 
-  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
-
-  useEffect(() => {
-    // Strict 3.5s maximum on initial loading state to avoid indefinite spinners
-    const timer = setTimeout(() => {
-      setLoadingTimedOut(true);
-    }, 3500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Filter real matches purely by their actual database status
-  const liveMatches = allMatches.filter((m) => m.status === "LIVE");
-  const upcomingMatches = allMatches.filter((m) => m.status === "UPCOMING" || m.status === "READY");
-  const completedMatches = allMatches.filter((m) => m.status === "COMPLETED");
-main
-
-  // Loading state strictly terminates if query finishes OR 3.5s timer expires OR data is present
-  const isLoading = queryLoading && !loadingTimedOut && allMatches.length === 0;
-  const isError = (queryError || (loadingTimedOut && allMatches.length === 0)) && allMatches.length === 0;
-
-  const handleRetry = () => {
-    setLoadingTimedOut(false);
-    refetch();
-  };
-
-  return (
-    <AppShell title="Dashboard" fullBleedTop={true}>
-      {/* Full-Bleed Moving Cricket Hero Banner with Dynamic Live Count */}
-      <MovingCricketHero liveCount={liveMatches.length} />
-
-      {/* Main Public Sections Container */}
-      <div className="mx-auto max-w-6xl px-4 pt-8 pb-16 flex flex-col gap-8">
-
-        {/* ── SECTION 1: LIVE MATCH ACTION (REAL MATCHES ONLY) ──────── */}
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Radio className={`h-4 w-4 ${liveMatches.length > 0 ? "text-red-500 animate-pulse" : "text-[#5F6368]"}`} />
-              <h2 className="text-sm md:text-base font-black uppercase tracking-wider text-[#111111]">
-                LIVE MATCH ACTION
-              </h2>
-            </div>
-            {liveMatches.length > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-[10px] font-black text-red-600 uppercase tracking-widest animate-pulse">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                {liveMatches.length} Live
-              </span>
+            {/* Live Score Card — appears when a match is in progress */}
+            {firstLiveId && (
+              <div className="mt-8">
+                <LiveScoreCard matchId={firstLiveId} />
+              </div>
             )}
           </div>
+        </div>
+      </section>
 
-          {/* Loading State with Safe Timeout */}
-          {isLoading && (
-            <div className="card-surface p-10 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
-              <RefreshCw className="h-6 w-6 text-[#D9A928] animate-spin" />
-              <p className="text-xs font-bold text-[#5F6368]">Loading live matches...</p>
-            </div>
-          )}
+      {/* ── Sticky Live Bottom Ticker (only when a match is live) ─────────── */}
+      {liveMatches.length > 0 && (
+        <StickyLiveTicker matches={liveMatches} />
+      )}
 
-          {/* Error / Timeout State with Retry */}
-          {isError && !isLoading && (
-            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-3 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
-              <AlertCircle className="h-8 w-8 text-[#D9A928]" />
-              <h3 className="text-sm sm:text-base font-black text-[#111111] uppercase tracking-wide">
-                UNABLE TO LOAD LIVE MATCHES
-              </h3>
-              <p className="text-xs text-[#5F6368] max-w-sm">
-                Unable to retrieve live tournament data right now.
-              </p>
-              <button
-                onClick={handleRetry}
-                className="tap mt-2 inline-flex items-center gap-2 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] px-6 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-md transition-all"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                <span>RETRY</span>
-              </button>
-            </div>
-          )}
-
-          {/* Real Live Match Cards */}
-          {!isLoading && !isError && liveMatches.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {liveMatches.map((m) => (
-                <MatchCard key={m.id} match={m} scorerMode={false} />
-              ))}
-            </div>
-          )}
-
-          {/* Clean Empty State when 0 matches are live */}
-          {!isLoading && !isError && liveMatches.length === 0 && (
-            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-2 border border-[#E5E5E5] bg-white rounded-3xl shadow-xs">
-              <Radio className="h-6 w-6 text-[#5F6368]/40 mb-1" />
-              <h3 className="text-xs font-black text-[#5F6368] uppercase tracking-wider">
-                NO LIVE MATCHES RIGHT NOW
-              </h3>
-              <p className="text-[11px] text-[#5F6368]/70">
-                There are no live matches currently in progress.
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* ── SECTION 2: UPCOMING MATCHES ───────────────────────────── */}
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-[#D9A928]" />
-              <h2 className="text-sm md:text-base font-black uppercase tracking-wider text-[#111111]">
-                UPCOMING FIXTURES
+      {/* ══════════════════════════════════════════════════════════════════════
+          9. KEY TOURNAMENT PLAYERS & CONTENDERS
+          ══════════════════════════════════════════════════════════════════════ */}
+      <section id="fixtures" className="relative py-20 bg-[#F7F7F5]">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+            <div>
+              <SectionLabel>KEY CONTENDERS</SectionLabel>
+              <h2 className="font-display font-black text-4xl sm:text-5xl uppercase tracking-tight text-[#0A0A0A]">
+                TOURNAMENT STARS
               </h2>
             </div>
             <Link
-              to="/scorecards"
-              className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
+              to="/pointables"
+              className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#D9A928] hover:text-black transition-colors"
             >
-              View All <ArrowRight className="h-3.5 w-3.5" />
+              VIEW FULL LEADERBOARD <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
-          {!isLoading && !isError && upcomingMatches.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {upcomingMatches.slice(0, 4).map((m) => (
-                <MatchCard key={m.id} match={m} scorerMode={false} />
-              ))}
-            </div>
-          ) : !isLoading && !isError ? (
-            <div className="card-surface p-8 flex flex-col items-center justify-center text-center gap-2 border border-[#E5E5E5] bg-white rounded-3xl">
-              <Calendar className="h-6 w-6 text-[#5F6368]/40 mb-1" />
-              <p className="text-xs font-black text-[#5F6368] uppercase tracking-wider">
-                NO UPCOMING MATCHES SCHEDULED
-              </p>
-              <p className="text-[11px] text-[#5F6368]/70">
-                All tournament group matches have concluded or are being scheduled.
-              </p>
-            </div>
-<<<<<<ragul
-            <Link to="/scorecards" className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-[#D9A928] hover:text-black transition-colors">
-              VIEW ALL PLAYERS <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {[
               {
                 rank: "01",
                 category: "TOP RUN SCORER",
-                stat: "286 Runs",
-                icon: (
-                  <>
-                    <svg width="0" height="0" className="absolute pointer-events-none" style={{ position: "absolute" }}>
-                      <defs>
-                        <filter id="erode-bat">
-                          <feMorphology operator="erode" radius="0.08" in="SourceGraphic" />
-                        </filter>
-                      </defs>
-                    </svg>
-                    <img
-                      src="/cricket-bat-icon.png"
-                      alt="Bat Icon"
-                      className="h-5 w-5 object-contain"
-                      style={{
-                        mixBlendMode: "multiply",
-                        filter: "url(#erode-bat)"
-                      }}
-                    />
-                  </>
-                ),
-                color: "#D9A928"
+                name: topScorer?.playerName || scorerPlayer?.name || "LEADER TBA",
+                team: topScorer?.teamShortName || topScorer?.teamName || "TPL 2026",
+                stat: topScorer && topScorer.runs > 0 ? `${topScorer.runs} RUNS` : "0 RUNS",
+                substat:
+                  topScorer && topScorer.runs > 0
+                    ? `${topScorer.innings} Innings · SR ${Math.round(topScorer.strikeRate || 0)}`
+                    : "Awaiting completed matches",
+                avatar: scorerPlayer?.avatar,
+                playerId: topScorer?.playerId,
+                bgImage: "/hero-batsman-top-scorer.png",
               },
               {
                 rank: "02",
                 category: "TOP WICKET TAKER",
-                stat: "14 Wickets",
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 3c-2.5 4.5-2.5 13.5 0 18" strokeDasharray="2.5 2" />
-                  </svg>
-                ),
-                color: "#D9A928"
+                name: topBowler?.playerName || bowlerPlayer?.name || "LEADER TBA",
+                team: topBowler?.teamShortName || topBowler?.teamName || "TPL 2026",
+                stat: topBowler && topBowler.wickets > 0 ? `${topBowler.wickets} WICKETS` : "0 WICKETS",
+                substat:
+                  topBowler && topBowler.wickets > 0
+                    ? `Econ ${(topBowler.economy || 0).toFixed(1)} · BB ${topBowler.bestBowling || "—"}`
+                    : "Awaiting completed matches",
+                avatar: bowlerPlayer?.avatar,
+                playerId: topBowler?.playerId,
+                bgImage: "/hero-bowler-top-wicket-clean.png",
               },
-              { rank: "03", category: "PLAYER OF TOURNAMENT", stat: "Leading Performer", icon: <Star className="h-5 w-5" />, color: "#D9A928" },
-            ].map((p) => (
-              <div key={p.rank} className="relative overflow-hidden rounded-3xl border border-black/[0.08] bg-white p-6 hover:border-[#D9A928]/40 hover:-translate-y-1 transition-all">
-                {p.rank === "01" && (
-                  <>
-                    <div
-                      className="absolute inset-0 pointer-events-none z-0"
-                      style={{
-                        backgroundImage: "url('/hero-batsman-top-scorer.png')",
-                        backgroundSize: "contain",
-                        backgroundPosition: "right bottom",
-                        backgroundRepeat: "no-repeat",
-                        opacity: 0.9,
-                        mixBlendMode: "multiply",
-                      }}
-                    />
-                    <div className="absolute inset-0 pointer-events-none z-0 bg-white/20" />
-                  </>
-                )}
-                {p.rank === "02" && (
+              {
+                rank: "03",
+                category: "PLAYER OF TOURNAMENT",
+                name: topMvp?.playerName || mvpPlayer?.name || "LEADER TBA",
+                team: topMvp?.teamShortName || topMvp?.teamName || "TPL 2026",
+                stat: topMvp && topMvp.mvpPoints > 0 ? `${(topMvp.mvpPoints || 0).toFixed(1)} MVP PTS` : "0.0 MVP PTS",
+                substat:
+                  topMvp && topMvp.mvpPoints > 0
+                    ? `${topMvp.runs || 0}R · ${topMvp.wickets || 0}W · ${topMvp.catches || 0}C`
+                    : "Awaiting completed matches",
+                avatar: mvpPlayer?.avatar,
+                playerId: topMvp?.playerId,
+                bgImage: "/hero-helmet-player-of-tournament-clean.png",
+              },
+            ].map((p) => {
+              const CardContent = (
+                <div className="relative overflow-hidden rounded-3xl border border-black/[0.08] bg-white p-5 sm:p-6 hover:border-[#D9A928]/60 hover:shadow-xl hover:-translate-y-1 transition-all min-h-[175px] sm:min-h-[185px] flex flex-col justify-between group">
+                  {/* Background Action Graphic positioned cleanly on the right */}
                   <div
-                    className="absolute inset-0 pointer-events-none z-0"
+                    className="absolute inset-y-0 right-0 w-[45%] pointer-events-none z-0 opacity-80 group-hover:opacity-100 transition-opacity"
                     style={{
-                      backgroundImage: "url('/hero-bowler-top-wicket-clean.png')",
+                      backgroundImage: `url('${p.bgImage}')`,
                       backgroundSize: "contain",
-                      backgroundPosition: "right bottom",
+                      backgroundPosition: "right center",
                       backgroundRepeat: "no-repeat",
-                      opacity: 1.0,
                     }}
                   />
-                )}
-                {p.rank === "03" && (
-                  <div
-                    className="absolute inset-0 pointer-events-none z-0"
-                    style={{
-                      backgroundImage: "url('/hero-helmet-player-of-tournament-clean.png')",
-                      backgroundSize: "contain",
-                      backgroundPosition: "right bottom",
-                      backgroundRepeat: "no-repeat",
-                      opacity: 1.0,
-                    }}
-                  />
-                )}
-                <div className="relative z-10 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-5">
-                    <div
-                      className="h-10 w-10 rounded-xl grid place-items-center text-black"
-                      style={{ background: p.color === "#D9A928" ? "linear-gradient(135deg, #F4C542, #D9A928)" : "#0A0A0A" }}
-                    >
-                      <span style={{ color: p.color === "#D9A928" ? "#000" : "#D9A928" }}>{p.icon}</span>
+                  <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-r from-white via-white/80 to-transparent" />
+
+                  {/* Header Row: Profile Photo / Empty Symbol + Category + Rank */}
+                  <div className="relative z-10 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {p.avatar ? (
+                        <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full overflow-hidden border-2 border-[#D9A928] bg-black/5 shrink-0 shadow-sm">
+                          <img
+                            src={p.avatar}
+                            alt={p.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full overflow-hidden border border-[#D9A928]/40 bg-[#F7F7F5] shrink-0 shadow-sm">
+                          <img
+                            src="/default-player-avatar.png"
+                            alt="Player"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-[10px] font-black tracking-widest text-[#9A6A05] uppercase block leading-none">
+                          {p.category}
+                        </span>
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#5F6368] block mt-0.5">
+                          {p.team}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-2xl font-black text-black/10">{p.rank}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-black/15 font-mono tracking-tight">
+                      {p.rank}
+                    </span>
                   </div>
-                  <p className="text-[9px] font-black tracking-widest text-[#D9A928] uppercase mb-2">{p.category}</p>
-                  <p className="font-display font-black text-2xl uppercase text-[#0A0A0A] leading-none">PLAYER NAME</p>
-                  <p className="mt-2 text-base font-black text-[#0A0A0A]/60">{p.stat}</p>
+
+                  {/* Player Name & Primary Real Stats */}
+                  <div className="relative z-10 mt-3 pt-2">
+                    <h3 className="font-display font-black text-xl sm:text-2xl uppercase text-[#0A0A0A] leading-tight line-clamp-1 group-hover:text-[#9A6A05] transition-colors max-w-[70%]">
+                      {p.name}
+                    </h3>
+                    
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-xl sm:text-2xl font-black text-[#0A0A0A] font-mono tracking-tight">
+                        {p.stat}
+                      </span>
+                      <span className="text-[11px] font-bold text-[#5F6368] truncate max-w-[55%]">
+                        · {p.substat}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+
+              return p.playerId ? (
+                <Link
+                  key={p.rank}
+                  to="/player/$playerId"
+                  params={{ playerId: p.playerId }}
+                  className="block h-full cursor-pointer"
+                >
+                  {CardContent}
+                </Link>
+              ) : (
+                <Link
+                  key={p.rank}
+                  to="/pointables"
+                  className="block h-full cursor-pointer"
+                >
+                  {CardContent}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          10. MATCH CENTRE OVERVIEW
+          10. COMMUNITY HERITAGE - THE HEART OF THUNDUWA
           ══════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="results"
-        className="relative pt-2 pb-12 md:py-20 lg:py-28 overflow-hidden"
-        style={{
-          backgroundImage: "url('/match-centre-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "center center",
-        }}
-      >
-        {/* Dark overlay */}
-        <div className="absolute inset-0 bg-[#0A0A0A]/85 pointer-events-none" />
-        <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8">
-          <div className="text-center mb-8 md:mb-14">
-            <SectionLabel>MATCH CENTRE</SectionLabel>
-            <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.9] tracking-tight text-white">
-              EVERYTHING<br />
-              <span style={{ background: "linear-gradient(135deg, #F4C542 0%, #D9A928 60%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                IN ONE PLACE
-              </span>
-            </h2>
-            <p className="mt-5 text-sm text-white/50 max-w-md mx-auto leading-relaxed">
-              From the first ball to the final result.
-            </p>
-          </div>
+      <section id="heritage" className="relative py-20 lg:py-32 bg-[#0A0A0A] overflow-hidden text-white border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+            
+            {/* Left Column: Text & Pillars */}
+            <div className="lg:col-span-6 flex flex-col justify-center">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="h-0.5 w-8 bg-[#D9A928]" />
+                <span className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-[#D9A928]">
+                  COMMUNITY HERITAGE
+                </span>
+              </div>
 
-          <div className="-mt-20 md:-mt-24 lg:-mt-28 mb-10 w-full flex justify-center">
-            <SocialCards
-              cards={[
-                {
-                  icon: (
-                    <svg viewBox="0 0 58 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", height: "100%" }}>
-                      <rect width="58" height="22" rx="11" fill="currentColor" fillOpacity="0.18"/>
-                      <circle cx="13" cy="11" r="7.5" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1"/>
-                      <polygon points="10.5,7.5 18,11 10.5,14.5" fill="currentColor"/>
-                      <text x="24" y="15" fontFamily="Arial, sans-serif" fontSize="8.5" fontWeight="900" fill="currentColor" letterSpacing="1.5">LIVE</text>
-                    </svg>
-                  ),
-                  wideIcon: true,
-                  spacer: true,
-                  title: "LIVE MATCHES",
-                  desc: "Real-time scorecards and match updates.",
-                  link: "/live",
-                  img: "/card-live.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <ClipboardCheck className="h-5 w-5" />,
-                  title: "RESULTS",
-                  desc: "Review completed matches and final scores.",
-                  link: "/scorecards",
-                  img: "/card-results.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <CalendarDays className="h-5 w-5" />,
-                  title: "FIXTURES",
-                  desc: "Explore upcoming games and tournament schedule.",
-                  link: "/matches",
-                  img: "/card-fixtures.jpg",
-                  bgSize: "cover",
-                },
-                {
-                  icon: <UsersRound className="h-5 w-5" />,
-                  title: "TEAMS",
-                  desc: "Meet the squads competing for the TPL 2026 title.",
-                  link: "/matches",
-                  img: "/card-teams.jpg",
-                  bgSize: "cover",
-                },
-              ]}
-            />
-          </div>
+              <h2 className="font-display font-black text-5xl sm:text-6xl lg:text-7xl uppercase leading-[0.95] tracking-tight text-white mb-7">
+                The Heart of<br />
+                <span className="text-[#D9A928]">Thunduwa</span>
+              </h2>
 
-          <div className="text-center">
-            <Link
-              to="/matches"
-              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-xs uppercase tracking-widest transition-all shadow-[0_4px_32px_rgba(217,169,40,0.35)] active:scale-95"
-            >
-              ENTER MATCH CENTRE
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+              <p className="text-white/70 text-sm sm:text-base leading-relaxed mb-5">
+                The Thunduwa Premier League is more than just a cricket tournament; it is a celebration of our community's enduring spirit, unity, and shared heritage.
+              </p>
+
+              <p className="text-white/70 text-sm sm:text-base leading-relaxed mb-10">
+                Rooted deeply in the values taught within the walls of our local school and echoed through the call to prayer at our central mosque, TPL brings generations together on the pitch. We play to honor our past and inspire our future.
+              </p>
+
+              {/* Unity & Legacy Pillars */}
+              <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8">
+                <div>
+                  <h3 className="font-display font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">
+                    Unity
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 uppercase mt-1">
+                    ONE COMMUNITY
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-display font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">
+                    Legacy
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 uppercase mt-1">
+                    GENERATIONS STRONG
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Overlapping Photos (Mosque & School) */}
+            <div className="lg:col-span-6 relative flex items-center justify-center pt-4 pb-8 sm:pb-12">
+              <div className="relative w-full max-w-[540px]">
+                
+                {/* Top/Back Photo: Central Mosque */}
+                <div className="relative rounded-3xl sm:rounded-[2.5rem] overflow-hidden shadow-2xl ml-auto w-[82%] aspect-[4/3] bg-transparent">
+                  <img
+                    src="/image-copy.png"
+                    alt="Central Mosque of Thunduwa"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Bottom/Front Overlapping Photo: School */}
+                <div className="absolute -bottom-6 -left-2 sm:-bottom-8 sm:-left-4 w-[66%] aspect-[4/3] rounded-3xl sm:rounded-[2.2rem] overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.7)] z-20 bg-transparent">
+                  <img
+                    src="/image.png"
+                    alt="Thunduwa Muslim Maha Vidyalaya"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Subtle gold decorative accent ring */}
+                <div className="absolute -top-4 -right-4 w-28 h-28 bg-[#D9A928]/10 rounded-full blur-2xl pointer-events-none" />
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
@@ -602,52 +679,20 @@ main
                 <p className="font-extrabold text-sm uppercase tracking-wider text-white">THUNDUWA PREMIER LEAGUE · TPL 2026</p>
                 <p className="text-[11px] text-white/35 uppercase">Official Tournament Platform</p>
               </div>
-=======
-          ) : null}
-        </section>
-
-        {/* ── SECTION 3: RECENT COMPLETED RESULTS ───────────────────── */}
-        {completedMatches.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-[#D9A928]" />
-                <h2 className="text-sm md:text-base font-black uppercase tracking-wider text-[#111111]">
-                  RECENT RESULTS
-                </h2>
-              </div>
-              <Link
-                to="/scorecards"
-                className="flex items-center gap-1.5 text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider"
-              >
-                All Results <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
->>>>>>main
             </div>
-
-            <div className="flex flex-col gap-4">
-              {completedMatches.slice(0, 2).map((m) => (
-                <MatchCard key={m.id} match={m} scorerMode={false} />
-              ))}
+            <div className="flex items-center gap-6 text-xs text-white/50">
+              <Link to="/home" className="hover:text-white transition-colors">DASHBOARD</Link>
+              <Link to="/matches" className="hover:text-white transition-colors">FIXTURES</Link>
+              <Link to="/pointables" className="hover:text-white transition-colors">STANDINGS</Link>
+              <Link to="/scorecards" className="hover:text-white transition-colors">RESULTS</Link>
             </div>
-          </section>
-        )}
-
-        {/* ── SECTION 4: SPONSORS & OFFICIAL TOURNAMENT PARTNERS ───────── */}
-        <SponsorsSection />
-
-        {/* Full Fixtures CTA Banner */}
-        <Link
-          to="/matches"
-          className="tap flex items-center justify-between px-6 py-4 rounded-2xl bg-white border border-[#E5E5E5] text-xs font-black uppercase tracking-widest text-[#111111] hover:bg-[#F7F7F5] shadow-sm transition-all group"
-        >
-          <span className="flex items-center gap-3">
-            <Calendar className="h-4 w-4 text-[#D9A928]" />
-            VIEW ALL FIXTURES & RESULTS
-          </span>
-          <ArrowRight className="h-4 w-4 text-[#111111] transition-transform group-hover:translate-x-1" />
-        </Link>
-      </div>
-    </AppShell>
+          </div>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-white/40">
+            <p>© 2026 Thunduwa Premier League. All rights reserved.</p>
+            <p className="text-[#D9A928] font-semibold">TPL 2026 OFFICIAL LIVE SCORING</p>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

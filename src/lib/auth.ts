@@ -243,3 +243,63 @@ export function useScorerAuth() {
     logout,
   };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. MATCH-SCOPED SCORER PIN AUTHORIZATION (STRICT ISOLATION PER MATCH)
+// ═════════════════════════════════════════════════════════════════════════════
+
+const MATCH_PIN_PREFIX = "tpl_scorer_match_pin_";
+
+/**
+ * Checks if the current browser session has authorized scorer access for a specific match.
+ * Scoped strictly per match ID.
+ */
+export function isMatchScorerAuthorized(matchId: string, matchExpectedPin?: string | null): boolean {
+  if (typeof window === "undefined" || !matchId) return false;
+
+  // Check if authorized globally via authenticated Scorer or Admin session
+  const globalToken = window.sessionStorage.getItem(SCORER_PIN_KEY);
+  if (globalToken === "active" || globalToken === "admin") return true;
+
+  // Match-specific PIN token
+  const storedPin = window.sessionStorage.getItem(`${MATCH_PIN_PREFIX}${matchId}`);
+  if (!storedPin) return false;
+
+  const expected = (matchExpectedPin || "").trim();
+  if (!expected) return true;
+
+  return storedPin === expected;
+}
+
+/**
+ * Authorizes scorer access strictly for a single match ID using that match's unique 4-digit PIN.
+ */
+export function authorizeMatchScorer(matchId: string, submittedPin: string, expectedPin?: string | null): boolean {
+  if (typeof window === "undefined" || !matchId) return false;
+
+  const cleanInput = submittedPin.trim();
+  const cleanExpected = (expectedPin || "").trim();
+
+  // Validate exact 4-digit match PIN match
+  if (cleanExpected && cleanInput === cleanExpected) {
+    window.sessionStorage.setItem(`${MATCH_PIN_PREFIX}${matchId}`, cleanInput);
+    return true;
+  }
+
+  // If match has no PIN configured yet, any valid 4-digit pin grants entry
+  if (!cleanExpected && cleanInput.length >= 4) {
+    window.sessionStorage.setItem(`${MATCH_PIN_PREFIX}${matchId}`, cleanInput);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Revokes scorer authorization for a specific match.
+ */
+export function revokeMatchScorer(matchId: string): void {
+  if (typeof window !== "undefined" && matchId) {
+    window.sessionStorage.removeItem(`${MATCH_PIN_PREFIX}${matchId}`);
+  }
+}

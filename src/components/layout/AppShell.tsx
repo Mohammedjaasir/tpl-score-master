@@ -79,7 +79,7 @@ export function AppShell({
             })}
           </nav>
 
-          {/* Right Action Buttons */}
+          {/* Right Action Area */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {title && (
               <span className="md:hidden shrink-0 rounded-full bg-[#F7F7F5] border border-[#E5E5E5] px-2.5 py-1 text-[10px] font-extrabold tracking-wider text-[#5F6368] uppercase flex items-center gap-1 max-w-[120px]">
@@ -87,34 +87,6 @@ export function AppShell({
                 <span className="truncate">{title}</span>
               </span>
             )}
-
-            {/* Scorer Mode Shortcut */}
-            <Link
-              to="/scorer"
-              className="tap hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#D9A928]/15 hover:bg-[#D9A928]/25 text-[#9A6A05] border border-[#D9A928]/30 text-xs font-black uppercase tracking-wider transition-colors"
-            >
-              <Radio className="h-3 w-3 animate-pulse text-[#D9A928]" />
-              <span>Scorer</span>
-            </Link>
-
-            {/* Admin Shortcut */}
-            <Link
-              to="/admin"
-              className="tap hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#374151] border border-[#E5E7EB] text-xs font-bold uppercase tracking-wider transition-colors"
-            >
-              <Shield className="h-3 w-3 text-[#6B7280]" />
-              <span>Admin</span>
-            </Link>
-
-            {/* Profile Avatar Button (Desktop only) */}
-            <Link
-              to="/profile"
-              className="tap hidden md:inline-flex p-2 rounded-xl bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#111111] border border-[#E5E7EB] transition-colors"
-              aria-label="Player Profile"
-              title="Player Profile & Credentials"
-            >
-              <User className="h-4 w-4" />
-            </Link>
           </div>
 
         </div>
@@ -137,6 +109,30 @@ export function AppShell({
           <TplBottomDock />
         </div>
       )}
+
+      {/* ── POWERED BY VALGROW LABS — Site-Wide Footer ───────────────── */}
+      <footer className="w-full bg-[#0A0A0A] border-t border-[#1F1F1F] mt-auto hidden md:block">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+          {/* Left: Logo + Name */}
+          <div className="flex items-center gap-3">
+            <img
+              src="/valgrow-labs-logo.jpeg"
+              alt="ValGrow Labs"
+              className="h-8 w-8 rounded-lg object-cover flex-shrink-0"
+            />
+            <div className="leading-none">
+              <p className="text-[9px] font-bold text-[#D9A928]/60 uppercase tracking-[0.2em]">Powered by</p>
+              <p className="text-sm font-black text-white tracking-wide leading-tight">ValGrow Labs</p>
+              <p className="text-[9px] font-bold text-[#D9A928] uppercase tracking-widest">AI & Technology Lab</p>
+            </div>
+          </div>
+          {/* Right: copyright */}
+          <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">
+            © 2026 ValGrow Labs · All rights reserved
+          </p>
+        </div>
+      </footer>
+
     </div>
   );
 }

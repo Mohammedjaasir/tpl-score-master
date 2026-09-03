@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as MatchesRouteImport } from './routes/matches'
+import { Route as ObsHandlerRouteImport } from './routes/obs-handler'
 import { Route as PointablesRouteImport } from './routes/pointables'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecordsRouteImport } from './routes/records'
@@ -22,7 +23,12 @@ import { Route as ScorecardsRouteImport } from './routes/scorecards'
 import { Route as ScorerRouteImport } from './routes/scorer'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as MatchMatchIdRouteImport } from './routes/match/$matchId'
+import { Route as ObsHandlerIndexRouteImport } from './routes/obs-handler/index'
+import { Route as ObsHandlerBetweenMatchesRouteImport } from './routes/obs-handler/between-matches'
+import { Route as ObsHandlerSettingsRouteImport } from './routes/obs-handler/settings'
+import { Route as ObsHandlerSquadsRouteImport } from './routes/obs-handler/squads'
 import { Route as ObsIndexRouteImport } from './routes/obs/index'
+import { Route as ObsLiveRouteImport } from './routes/obs/live'
 import { Route as PlayerPlayerIdRouteImport } from './routes/player/$playerId'
 import { Route as PlayersPlayerIdRouteImport } from './routes/players/$playerId'
 import { Route as ScorecardMatchIdRouteImport } from './routes/scorecard/$matchId'
@@ -51,6 +57,11 @@ const LiveRoute = LiveRouteImport.update({
 const MatchesRoute = MatchesRouteImport.update({
   id: '/matches',
   path: '/matches',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ObsHandlerRoute = ObsHandlerRouteImport.update({
+  id: '/obs-handler',
+  path: '/obs-handler',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PointablesRoute = PointablesRouteImport.update({
@@ -93,9 +104,35 @@ const MatchMatchIdRoute = MatchMatchIdRouteImport.update({
   path: '/match/$matchId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ObsHandlerIndexRoute = ObsHandlerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ObsHandlerRoute,
+} as any)
+const ObsHandlerBetweenMatchesRoute =
+  ObsHandlerBetweenMatchesRouteImport.update({
+    id: '/between-matches',
+    path: '/between-matches',
+    getParentRoute: () => ObsHandlerRoute,
+  } as any)
+const ObsHandlerSettingsRoute = ObsHandlerSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ObsHandlerRoute,
+} as any)
+const ObsHandlerSquadsRoute = ObsHandlerSquadsRouteImport.update({
+  id: '/squads',
+  path: '/squads',
+  getParentRoute: () => ObsHandlerRoute,
+} as any)
 const ObsIndexRoute = ObsIndexRouteImport.update({
   id: '/obs/',
   path: '/obs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ObsLiveRoute = ObsLiveRouteImport.update({
+  id: '/obs/live',
+  path: '/obs/live',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlayerPlayerIdRoute = PlayerPlayerIdRouteImport.update({
@@ -125,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/home': typeof HomeRoute
   '/live': typeof LiveRoute
   '/matches': typeof MatchesRoute
+  '/obs-handler': typeof ObsHandlerRouteWithChildren
   '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
   '/records': typeof RecordsRoute
@@ -133,9 +171,14 @@ export interface FileRoutesByFullPath {
   '/scorer': typeof ScorerRoute
   '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
+  '/obs-handler/between-matches': typeof ObsHandlerBetweenMatchesRoute
+  '/obs-handler/settings': typeof ObsHandlerSettingsRoute
+  '/obs-handler/squads': typeof ObsHandlerSquadsRoute
+  '/obs/live': typeof ObsLiveRoute
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs-handler/': typeof ObsHandlerIndexRoute
   '/obs/': typeof ObsIndexRoute
   '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
@@ -153,9 +196,14 @@ export interface FileRoutesByTo {
   '/scorer': typeof ScorerRoute
   '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
+  '/obs-handler/between-matches': typeof ObsHandlerBetweenMatchesRoute
+  '/obs-handler/settings': typeof ObsHandlerSettingsRoute
+  '/obs-handler/squads': typeof ObsHandlerSquadsRoute
+  '/obs/live': typeof ObsLiveRoute
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs-handler': typeof ObsHandlerIndexRoute
   '/obs': typeof ObsIndexRoute
   '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
@@ -166,6 +214,7 @@ export interface FileRoutesById {
   '/home': typeof HomeRoute
   '/live': typeof LiveRoute
   '/matches': typeof MatchesRoute
+  '/obs-handler': typeof ObsHandlerRouteWithChildren
   '/pointables': typeof PointablesRoute
   '/profile': typeof ProfileRoute
   '/records': typeof RecordsRoute
@@ -174,9 +223,14 @@ export interface FileRoutesById {
   '/scorer': typeof ScorerRoute
   '/stats': typeof StatsRoute
   '/match/$matchId': typeof MatchMatchIdRoute
+  '/obs-handler/between-matches': typeof ObsHandlerBetweenMatchesRoute
+  '/obs-handler/settings': typeof ObsHandlerSettingsRoute
+  '/obs-handler/squads': typeof ObsHandlerSquadsRoute
+  '/obs/live': typeof ObsLiveRoute
   '/player/$playerId': typeof PlayerPlayerIdRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/scorecard/$matchId': typeof ScorecardMatchIdRoute
+  '/obs-handler/': typeof ObsHandlerIndexRoute
   '/obs/': typeof ObsIndexRoute
   '/obs/match/$matchId': typeof ObsMatchMatchIdRoute
 }
@@ -188,6 +242,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/live'
     | '/matches'
+    | '/obs-handler'
     | '/pointables'
     | '/profile'
     | '/records'
@@ -196,9 +251,14 @@ export interface FileRouteTypes {
     | '/scorer'
     | '/stats'
     | '/match/$matchId'
+    | '/obs-handler/between-matches'
+    | '/obs-handler/settings'
+    | '/obs-handler/squads'
+    | '/obs/live'
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs-handler/'
     | '/obs/'
     | '/obs/match/$matchId'
   fileRoutesByTo: FileRoutesByTo
@@ -216,9 +276,14 @@ export interface FileRouteTypes {
     | '/scorer'
     | '/stats'
     | '/match/$matchId'
+    | '/obs-handler/between-matches'
+    | '/obs-handler/settings'
+    | '/obs-handler/squads'
+    | '/obs/live'
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs-handler'
     | '/obs'
     | '/obs/match/$matchId'
   id:
@@ -228,6 +293,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/live'
     | '/matches'
+    | '/obs-handler'
     | '/pointables'
     | '/profile'
     | '/records'
@@ -236,9 +302,14 @@ export interface FileRouteTypes {
     | '/scorer'
     | '/stats'
     | '/match/$matchId'
+    | '/obs-handler/between-matches'
+    | '/obs-handler/settings'
+    | '/obs-handler/squads'
+    | '/obs/live'
     | '/player/$playerId'
     | '/players/$playerId'
     | '/scorecard/$matchId'
+    | '/obs-handler/'
     | '/obs/'
     | '/obs/match/$matchId'
   fileRoutesById: FileRoutesById
@@ -249,6 +320,7 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   LiveRoute: typeof LiveRoute
   MatchesRoute: typeof MatchesRoute
+  ObsHandlerRoute: typeof ObsHandlerRouteWithChildren
   PointablesRoute: typeof PointablesRoute
   ProfileRoute: typeof ProfileRoute
   RecordsRoute: typeof RecordsRoute
@@ -257,6 +329,7 @@ export interface RootRouteChildren {
   ScorerRoute: typeof ScorerRoute
   StatsRoute: typeof StatsRoute
   MatchMatchIdRoute: typeof MatchMatchIdRoute
+  ObsLiveRoute: typeof ObsLiveRoute
   PlayerPlayerIdRoute: typeof PlayerPlayerIdRoute
   PlayersPlayerIdRoute: typeof PlayersPlayerIdRoute
   ScorecardMatchIdRoute: typeof ScorecardMatchIdRoute
@@ -299,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/matches'
       fullPath: '/matches'
       preLoaderRoute: typeof MatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/obs-handler': {
+      id: '/obs-handler'
+      path: '/obs-handler'
+      fullPath: '/obs-handler'
+      preLoaderRoute: typeof ObsHandlerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pointables': {
@@ -357,11 +437,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatchMatchIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/obs-handler/': {
+      id: '/obs-handler/'
+      path: '/'
+      fullPath: '/obs-handler/'
+      preLoaderRoute: typeof ObsHandlerIndexRouteImport
+      parentRoute: typeof ObsHandlerRoute
+    }
+    '/obs-handler/between-matches': {
+      id: '/obs-handler/between-matches'
+      path: '/between-matches'
+      fullPath: '/obs-handler/between-matches'
+      preLoaderRoute: typeof ObsHandlerBetweenMatchesRouteImport
+      parentRoute: typeof ObsHandlerRoute
+    }
+    '/obs-handler/settings': {
+      id: '/obs-handler/settings'
+      path: '/settings'
+      fullPath: '/obs-handler/settings'
+      preLoaderRoute: typeof ObsHandlerSettingsRouteImport
+      parentRoute: typeof ObsHandlerRoute
+    }
+    '/obs-handler/squads': {
+      id: '/obs-handler/squads'
+      path: '/squads'
+      fullPath: '/obs-handler/squads'
+      preLoaderRoute: typeof ObsHandlerSquadsRouteImport
+      parentRoute: typeof ObsHandlerRoute
+    }
     '/obs/': {
       id: '/obs/'
       path: '/obs'
       fullPath: '/obs/'
       preLoaderRoute: typeof ObsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/obs/live': {
+      id: '/obs/live'
+      path: '/obs/live'
+      fullPath: '/obs/live'
+      preLoaderRoute: typeof ObsLiveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/player/$playerId': {
@@ -395,12 +510,31 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ObsHandlerRouteChildren {
+  ObsHandlerBetweenMatchesRoute: typeof ObsHandlerBetweenMatchesRoute
+  ObsHandlerSettingsRoute: typeof ObsHandlerSettingsRoute
+  ObsHandlerSquadsRoute: typeof ObsHandlerSquadsRoute
+  ObsHandlerIndexRoute: typeof ObsHandlerIndexRoute
+}
+
+const ObsHandlerRouteChildren: ObsHandlerRouteChildren = {
+  ObsHandlerBetweenMatchesRoute: ObsHandlerBetweenMatchesRoute,
+  ObsHandlerSettingsRoute: ObsHandlerSettingsRoute,
+  ObsHandlerSquadsRoute: ObsHandlerSquadsRoute,
+  ObsHandlerIndexRoute: ObsHandlerIndexRoute,
+}
+
+const ObsHandlerRouteWithChildren = ObsHandlerRoute._addFileChildren(
+  ObsHandlerRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   HomeRoute: HomeRoute,
   LiveRoute: LiveRoute,
   MatchesRoute: MatchesRoute,
+  ObsHandlerRoute: ObsHandlerRouteWithChildren,
   PointablesRoute: PointablesRoute,
   ProfileRoute: ProfileRoute,
   RecordsRoute: RecordsRoute,
@@ -409,6 +543,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScorerRoute: ScorerRoute,
   StatsRoute: StatsRoute,
   MatchMatchIdRoute: MatchMatchIdRoute,
+  ObsLiveRoute: ObsLiveRoute,
   PlayerPlayerIdRoute: PlayerPlayerIdRoute,
   PlayersPlayerIdRoute: PlayersPlayerIdRoute,
   ScorecardMatchIdRoute: ScorecardMatchIdRoute,

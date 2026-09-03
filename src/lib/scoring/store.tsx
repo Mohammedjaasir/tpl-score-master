@@ -288,8 +288,14 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
     syncFromDb();
 
+    // Safety fallback: if DB sync takes too long or fails silently, unblock UI after 3s
+    const fallbackTimer = setTimeout(() => {
+      if (!isCancelled) setHydrated(true);
+    }, 3000);
+
     return () => {
       isCancelled = true;
+      clearTimeout(fallbackTimer);
     };
   }, [matchId]);
 

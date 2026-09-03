@@ -5,9 +5,16 @@ import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { nitro } from "nitro/vite";
 
+const nitroPreset =
+  process.env["NITRO_PRESET"] ||
+  (process.env["VERCEL"] ? "vercel" : undefined);
+
 export default defineConfig({
   server: {
     port: 8080,
+    hmr: {
+      overlay: false,
+    },
   },
   plugins: [
     tanstackStart({
@@ -16,8 +23,8 @@ export default defineConfig({
     viteReact(),
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
-    nitro({
-      preset: process.env.NITRO_PRESET || (process.env.VERCEL ? "vercel" : undefined),
-    }),
+    ...(nitroPreset
+      ? [nitro({ preset: nitroPreset })]
+      : [nitro()]),
   ],
 });

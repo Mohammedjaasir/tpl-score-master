@@ -46,10 +46,46 @@ function ObsIndexPage() {
           </div>
         </div>
 
+        {/* Master Live Overlay Card */}
+        <div className="bg-gradient-to-r from-[#1A1A1A] to-[#141414] border-2 border-[#D9A928] rounded-2xl p-6 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-widest text-[#D9A928]">
+                Recommended for Streamers & OBS Operators
+              </span>
+            </div>
+            <h2 className="text-xl font-black uppercase tracking-wider text-white">
+              Master Live Auto-Follow Overlay
+            </h2>
+            <p className="text-xs text-white/70 mt-1 max-w-xl">
+              Add this single URL into OBS Studio. It automatically detects and switches to whichever match is currently active or selected in the OBS Handler without ever needing to update the OBS Browser Source!
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => copyUrl("live")}
+              className="tap px-5 py-3 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg transition-all"
+            >
+              <Copy className="h-4 w-4" />
+              {copiedId === "live" ? "COPIED URL!" : "COPY LIVE URL"}
+            </button>
+            <Link
+              to="/obs/live"
+              target="_blank"
+              className="tap px-4 py-3 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all"
+            >
+              <ExternalLink className="h-4 w-4" />
+              OPEN
+            </Link>
+          </div>
+        </div>
+
         {/* Matches List */}
         <div className="flex flex-col gap-4">
           <h2 className="text-sm font-black uppercase tracking-widest text-[#D9A928]">
-            Available Tournament Fixtures
+            Direct Match Overlays (Specific Match Pin)
           </h2>
 
           {isLoading ? (

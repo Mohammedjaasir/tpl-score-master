@@ -226,8 +226,15 @@ export function useObsMatchEvents(stream: ObsMatchStreamResult) {
     }
 
     const { matchState, currentInnings } = stream;
-    const deliveries = currentInnings?.recentBalls?.map((b) => b.delivery) || [];
-    const allDeliveries = matchState.innings.flatMap((inn) => inn.overGroups.flatMap((og) => og.balls.map((b) => b.delivery)));
+    const innDeliveries = (matchState.innings || []).flatMap((inn) => (inn.overGroups || []).flatMap((og) => (og.balls || []).map((b) => b.delivery))).filter(Boolean);
+    const recentDeliveries = (currentInnings?.recentBalls || []).map((b) => b.delivery).filter(Boolean);
+
+    // Deduplicate all active deliveries by id
+    const deliveryMap = new Map<string, typeof innDeliveries[0]>();
+    [...innDeliveries, ...recentDeliveries].forEach((d) => {
+      if (d?.id) deliveryMap.set(d.id, d);
+    });
+    const allDeliveries = Array.from(deliveryMap.values());
 
     // ── INITIAL MOUNT HYDRATION (Do NOT play historical animations on refresh) ──
     if (!isInitializedRef.current) {
@@ -296,11 +303,13 @@ export function useObsMatchEvents(stream: ObsMatchStreamResult) {
     newDeliveries.forEach((deliv) => {
       processedDeliveryIdsRef.current.add(deliv.id);
 
-      const batter = getPlayerName(deliv.strikerId);
+      const batterId = deliv.strikerId || currentInnings?.strikerId;
+      const batter = getPlayerName(batterId) || "BATTER";
       const bowler = getPlayerName(deliv.bowlerId);
-      const batterStats = currentInnings?.batters?.find((b) => b.playerId === deliv.strikerId);
-      const runs = batterStats?.runs ?? deliv.batterRuns;
+      const batterStats = currentInnings?.batters?.find((b) => b.playerId === batterId);
+      const runs = batterStats?.runs ?? Number(deliv.batterRuns ?? 0);
       const balls = batterStats?.balls ?? 1;
+      const bRuns = Number(deliv.batterRuns ?? 0);
 
       // WICKET Takes Top Delivery Priority
       if (deliv.wicket) {
@@ -324,7 +333,7 @@ export function useObsMatchEvents(stream: ObsMatchStreamResult) {
           id: `wicket-${deliv.id}`,
           type: "WICKET",
           priority: EVENT_PRIORITIES.WICKET,
-          durationMs: 3500,
+          durationMs: 4000,
           batterName: outPlayerName,
           dismissalType: deliv.wicket.type,
           dismissalText,
@@ -333,22 +342,22 @@ export function useObsMatchEvents(stream: ObsMatchStreamResult) {
           runs,
           balls,
         });
-      } else if (deliv.batterRuns === 6) {
+      } else if (bRuns === 6) {
         enqueueEvent({
           id: `six-${deliv.id}`,
           type: "SIX",
           priority: EVENT_PRIORITIES.SIX,
-          durationMs: 2200,
+          durationMs: 3800,
           batterName: batter,
           runs,
           balls,
         });
-      } else if (deliv.batterRuns === 4) {
+      } else if (bRuns === 4) {
         enqueueEvent({
           id: `four-${deliv.id}`,
           type: "FOUR",
           priority: EVENT_PRIORITIES.FOUR,
-          durationMs: 2000,
+          durationMs: 3500,
           batterName: batter,
           runs,
           balls,

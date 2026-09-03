@@ -1,22 +1,42 @@
 import { useState } from "react";
 import { Lock, ShieldCheck, ArrowRight, AlertCircle } from "lucide-react";
-import { useScorerAuth } from "@/lib/auth";
+import { useScorerAuth, authorizeMatchScorer } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 import { Logo } from "@/components/brand/Logo";
 
 interface ScorerPinGateProps {
+  matchId?: string;
+  expectedPin?: string | null;
   matchTitle?: string;
   onSuccess?: () => void;
 }
 
-export function ScorerPinGate({ matchTitle = "Scorer Console", onSuccess }: ScorerPinGateProps) {
-  const { login } = useScorerAuth();
+export function ScorerPinGate({
+  matchId,
+  expectedPin,
+  matchTitle = "Scorer Console",
+  onSuccess,
+}: ScorerPinGateProps) {
+  const { loginWithPin } = useScorerAuth();
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(pin)) {
+    const cleanPin = pin.trim();
+    if (!cleanPin) return;
+
+    if (matchId) {
+      const authorized = authorizeMatchScorer(matchId, cleanPin, expectedPin);
+      if (authorized) {
+        setError(false);
+        onSuccess?.();
+        return;
+      }
+    }
+
+    // Global fallback check for field officials
+    if (loginWithPin(cleanPin)) {
       setError(false);
       onSuccess?.();
     } else {

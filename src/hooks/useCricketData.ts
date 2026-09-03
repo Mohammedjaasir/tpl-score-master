@@ -8,7 +8,7 @@ import {
 } from "@/lib/repositories";
 import type { Match, Player, Team } from "@/types/cricket";
 import { buildMatchState } from "@/lib/scoring/engine";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export function usePrefetchCricketData() {
@@ -218,10 +218,66 @@ export function useMatches() {
       const cached = lookup.matches();
       return (cached.length > 0 || lookup.isHydrated()) ? cached.map(getEffectiveMatch) : undefined;
     },
-    staleTime: 1000 * 5, // 5 seconds for live matches
+    staleTime: 0,            // always consider stale
+    refetchInterval: 3000,   // poll every 3 s — instant for viewers
+    refetchIntervalInBackground: true,
     retry: 1,
     retryDelay: 1000,
   });
+}
+
+/**
+ * useLiveMatchState – reads live scoring state directly from localStorage
+ * and re-syncs every second so the landing page ticker is instantaneous.
+ */
+export function useLiveMatchState(matchId: string | undefined) {
+  const [state, setState] = useState<ReturnType<typeof buildMatchState> | null>(null);
+
+  useEffect(() => {
+    if (!matchId) return;
+
+    function read() {
+      try {
+        const raw = typeof window !== "undefined" && window.localStorage.getItem(`tpl-scoring:${matchId}`);
+        if (!raw) { setState(null); return; }
+        const doc = JSON.parse(raw);
+        const matchMeta = lookup.match(matchId!);
+        if (!matchMeta) { setState(null); return; }
+        const ms = buildMatchState({
+          match: matchMeta,
+          setup: doc.setup || { playingXI: {} },
+          deliveries: doc.deliveries || [],
+          secondInningsStarted: doc.secondInningsStarted || false,
+          secondInningsOpeners: doc.secondInningsOpeners,
+        });
+        setState(ms);
+      } catch {
+        setState(null);
+      }
+    }
+
+    read();
+    const id = window.setInterval(read, 1000); // re-read every 1 s
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === `tpl-scoring:${matchId}`) read();
+    };
+    window.addEventListener("storage", handleStorage);
+
+    let bc: BroadcastChannel | null = null;
+    if ("BroadcastChannel" in window) {
+      bc = new BroadcastChannel("tpl-global-tournament");
+      bc.onmessage = read;
+    }
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("storage", handleStorage);
+      bc?.close();
+    };
+  }, [matchId]);
+
+  return state;
 }
 
 export function useLiveMatches() {

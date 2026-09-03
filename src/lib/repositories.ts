@@ -99,11 +99,10 @@ export function toPlayer(row: SupabaseRegistration): Player {
 
   const rawRole = (row.player_role || "").toLowerCase();
   let role: PlayerRole = customRole || "Batter";
+  
   if (!customRole) {
-    if (rawRole.includes("all") || rawRole.includes("round")) role = "All-rounder";
-    else if (rawRole.includes("bowl")) role = "Bowler";
+    if (rawRole.includes("bowl")) role = "Bowler";
     else if (rawRole.includes("keep")) role = "Wicketkeeper";
-    else if (rawRole.includes("bat")) role = "Batter";
     else role = "Batter"; // Strict default: NEVER automatic All-rounder
   }
 
@@ -152,6 +151,7 @@ export function toMatch(row: SupabaseMatch, matchNumber = 1): Match {
     overs: row.total_overs || 5,
     scheduledAt: row.start_time,
     status,
+    scorerPin: row.scorer_pin ?? undefined,
     winnerId: row.winner_id ?? undefined,
     resultText: undefined,
     manOfTheMatchId: row.man_of_the_match_id ?? undefined,
