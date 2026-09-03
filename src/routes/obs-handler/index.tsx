@@ -186,62 +186,61 @@ function ObsHandlerIndex() {
           </div>
         </div>
 
-
-        {/* Live Stream / Video Feed Configuration */}
-        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
+        {/* OBS Virtual Camera & Transparent Overlay Mode Guide */}
+        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-5 shadow-xl flex flex-col gap-3.5">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Video className="w-4 h-4 text-[#D9A928]" />
               <h3 className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">
-                Stream Video Feed URL
+                OBS Virtual Camera & Overlay Setup
               </h3>
             </div>
-            {inputStreamUrl ? (
-              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                STREAM ACTIVE
-              </span>
-            ) : (
-              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-white/10 text-white/50 border-white/20">
-                TRANSPARENT OVERLAY
-              </span>
-            )}
+            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              100% TRANSPARENT ALPHA
+            </span>
           </div>
 
-          <p className="text-[10px] text-[#888888] mb-3 leading-relaxed">
-            Paste your YouTube Live link (e.g. <span className="text-[#D9A928]">https://www.youtube.com/live/...</span>) to play video in the background behind the live cricket scorecard.
-          </p>
-
-          <div className="flex flex-col gap-2.5">
-            <input
-              type="text"
-              placeholder="Paste YouTube Live or Stream URL..."
-              value={inputStreamUrl}
-              onChange={(e) => setInputStreamUrl(e.target.value)}
-              className="w-full bg-[#1A1A1A] border border-[#333333] text-white rounded-xl px-3.5 py-2.5 text-xs font-bold placeholder-[#555555] focus:outline-none focus:border-[#D9A928] transition-colors"
-            />
-
-            <div className="flex items-center gap-2">
+          <div className="p-3.5 rounded-xl bg-black/60 border border-white/10 flex flex-col gap-2 text-xs">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-white/60">OBS Browser Source URL:</span>
               <button
-                onClick={handleApplyStreamUrl}
-                className="tap flex-1 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#F4C542] text-black text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md transition-all font-sans"
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/obs/live`;
+                  navigator.clipboard.writeText(url);
+                  setIsStreamSaved(true);
+                  setTimeout(() => setIsStreamSaved(false), 2000);
+                }}
+                className="text-[10px] font-black text-[#D9A928] hover:underline flex items-center gap-1 cursor-pointer"
               >
-                {isStreamSaved ? <Check className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                {isStreamSaved ? "STREAM UPDATED!" : "START STREAM IN OVERLAY"}
+                <span>{isStreamSaved ? "✓ COPIED" : "COPY LIVE URL"}</span>
               </button>
-
-              {inputStreamUrl && (
-                <button
-                  onClick={handleClearStreamUrl}
-                  title="Remove stream and return to transparent background"
-                  className="tap px-3 py-2.5 rounded-xl bg-[#222222] hover:bg-red-950/40 hover:text-red-400 border border-[#333333] text-[#888888] text-xs font-bold transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+            </div>
+            <div className="p-2.5 rounded-lg bg-[#161616] border border-white/5 font-mono text-[11px] text-[#D9A928] break-all select-all">
+              {typeof window !== "undefined" ? `${window.location.origin}/obs/live` : "/obs/live"}
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] text-white/50 text-center">
+              <div className="p-1.5 rounded-lg bg-white/5">
+                <span className="block font-black text-white">1920 × 1080</span>
+                <span>Canvas Size</span>
+              </div>
+              <div className="p-1.5 rounded-lg bg-white/5">
+                <span className="block font-black text-white">60 FPS</span>
+                <span>Framerate</span>
+              </div>
+              <div className="p-1.5 rounded-lg bg-white/5">
+                <span className="block font-black text-emerald-400">0ms Latency</span>
+                <span>Virtual Cam</span>
+              </div>
             </div>
           </div>
+
+          <p className="text-[10px] text-white/50 leading-relaxed">
+            💡 <strong>OBS Virtual Camera Workflow:</strong> Add the URL above as an <strong>OBS Browser Source</strong> over your live camera feed in OBS Studio, then click <strong>"Start Virtual Camera"</strong>. 100% transparent alpha background with continuous real-time score updates.
+          </p>
         </div>
+
 
         {/* Live Score Control */}
         <div className="bg-[#111111] border border-[#222222] rounded-2xl p-5 shadow-xl">
