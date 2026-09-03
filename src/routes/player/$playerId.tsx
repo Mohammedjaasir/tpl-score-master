@@ -1,10 +1,31 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { usePlayer, useMatches, useTeam } from "@/hooks/useCricketData";
 import { AppShell } from "@/components/layout/AppShell";
 import { PublicPlayerProfile } from "@/components/player/PublicPlayerProfile";
+import { lookup } from "@/lib/repositories";
 import { RefreshCw, UserX } from "lucide-react";
 
 export const Route = createFileRoute("/player/$playerId")({
+  head: ({ params }) => {
+    const p = lookup.player(params.playerId);
+    const playerName = p ? p.name : "Player Profile";
+    const team = p?.teamId ? lookup.team(p.teamId)?.name : "TPL 2026";
+    return {
+      meta: [
+        { title: `${playerName} · TPL 2026 Player Profile` },
+        {
+          name: "description",
+          content: `${playerName} - ${p?.role || "Player"} for ${team} in TPL 2026 Cricket Tournament. Live batting and bowling performance stats and wagon wheel.`,
+        },
+        { property: "og:title", content: `${playerName} · TPL 2026 Cricket Profile` },
+        {
+          property: "og:description",
+          content: `${playerName} (${p?.role || "Player"}) statistics, performance history and wagon wheel.`,
+        },
+      ],
+    };
+  },
   component: PlayerPerformancePage,
 });
 
@@ -13,6 +34,27 @@ function PlayerPerformancePage() {
   const { data: player, isLoading: loadingPlayer } = usePlayer(playerId);
   const { data: allMatches = [], isLoading: loadingMatches } = useMatches();
   const { data: team } = useTeam(player?.teamId);
+
+  // Synchronize document title and clean human-readable URL slug
+  useEffect(() => {
+    if (player && typeof window !== "undefined") {
+      document.title = `${player.name} · TPL 2026 Player Profile`;
+
+      const cleanSlug =
+        player.slug ||
+        player.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+      // If URL has raw UUID instead of player name slug, update browser history cleanly
+      if (cleanSlug && playerId !== cleanSlug && window.location.pathname.includes(playerId)) {
+        try {
+          window.history.replaceState(null, `${player.name} · TPL 2026`, `/player/${cleanSlug}`);
+        } catch {}
+      }
+    }
+  }, [player, playerId]);
 
   if (loadingPlayer || loadingMatches) {
     return (
@@ -49,3 +91,4 @@ function PlayerPerformancePage() {
     </AppShell>
   );
 }
+

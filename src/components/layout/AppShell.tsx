@@ -1,5 +1,5 @@
+import { useEffect, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { TplBottomDock } from "@/components/layout/TplDock";
 import { Radio, Shield, User, Sparkles } from "lucide-react";
@@ -29,6 +29,15 @@ export function AppShell({
 }: AppShellProps) {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.title = title
+        ? `${title} · TPL 2026`
+        : "TPL 2026 · Cricket Live Scoring";
+    }
+  }, [title]);
+
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-[#111111] flex flex-col font-sans selection:bg-[#D9A928]/30 selection:text-black">
