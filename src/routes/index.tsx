@@ -550,71 +550,213 @@ function LandingScreen() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          9. DIRECTORY — PARTICIPATING FRANCHISES
+          9. DIRECTORY — PARTICIPATING FRANCHISES (PREMIUM HERO SHOWCASE)
           ══════════════════════════════════════════════════════════════════════ */}
-      <section id="franchises" className="py-20 lg:py-28 bg-[#0D0D0D] text-white border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+      <section id="franchises" className="relative py-24 lg:py-32 bg-[#0A0A0A] text-white border-t border-white/5 overflow-hidden">
+        {/* Background ambient lighting */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[350px] bg-[#D9A928]/5 rounded-full blur-[140px] pointer-events-none" />
+
+        <div className="relative max-w-7xl mx-auto px-5 lg:px-8">
+          {/* Section Header */}
           <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D9A928] mb-3">
-              DIRECTORY
-            </p>
-            <h2 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tight text-white">
-              Participating <span style={{ background: "linear-gradient(135deg, #F4C542 0%, #D9A928 60%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Franchises</span>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#D9A928]/10 border border-[#D9A928]/30 mb-4">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928] animate-pulse" />
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D9A928]">
+                OFFICIAL DIRECTORY
+              </p>
+            </div>
+
+            <h2 className="font-display font-black text-4xl sm:text-5xl lg:text-7xl uppercase tracking-tight text-white leading-none">
+              PARTICIPATING <span style={{ background: "linear-gradient(135deg, #FFE082 0%, #F4C542 50%, #D9A928 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>FRANCHISES</span>
             </h2>
-            <p className="mt-4 text-xs sm:text-sm text-white/60 leading-relaxed max-w-lg mx-auto">
-              Explore the elite teams competing in the Thunduwa Premier League 2026. Each franchise brings their own unique strategy and legacy to the tournament.
+
+            <p className="mt-4 text-xs sm:text-sm text-white/60 leading-relaxed max-w-xl mx-auto">
+              Explore the 6 elite powerhouses competing for the Thunduwa Premier League 2026 crown. Each franchise brings their own unique strategy, star roster, and heritage to the arena.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {teams.map((team) => (
-              <div
-                key={team.id}
-                onClick={() => setSelectedTeamForRoster(team)}
-                className="bg-[#141414] hover:bg-[#1A1A1A] border border-white/10 hover:border-[#D9A928]/60 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl hover:shadow-[0_12px_40px_rgba(217,169,40,0.15)] hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer"
-              >
-                {/* Team Logo with gold glow */}
-                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full p-1 border-2 border-white/15 group-hover:border-[#D9A928] bg-black/60 shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:scale-105">
-                  {team.logoUrl ? (
-                    <img
-                      src={team.logoUrl}
-                      alt={team.name}
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  ) : (
-                    <TeamLogo logoUrl={team.logoUrl} name={team.name} shortName={team.shortName} size="lg" />
-                  )}
+          {/* Franchise Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {teams.map((team) => {
+              const teamPlayers = players.filter((p) => p.teamId === team.id);
+              const previewPlayers = teamPlayers.slice(0, 4);
+
+              // Unique theme tokens per franchise
+              const nameLower = (team.name || "").toLowerCase();
+              const idLower = (team.id || "").toLowerCase();
+
+              let theme = {
+                color: "#D9A928",
+                glow: "rgba(217, 169, 40, 0.35)",
+                gradient: "from-[#D9A928]/20 via-[#9A6A05]/5 to-transparent",
+                border: "hover:border-[#D9A928]/80 hover:shadow-[0_20px_50px_rgba(217,169,40,0.22)]",
+                pill: "bg-[#D9A928]/15 text-[#F4C542] border-[#D9A928]/40",
+                slogan: "Official TPL Contender",
+                tag: "PRIDE OF TPL",
+              };
+
+              if (idLower.includes("tc") || nameLower.includes("thundu")) {
+                theme = {
+                  color: "#00D2FF",
+                  glow: "rgba(0, 210, 255, 0.35)",
+                  gradient: "from-[#00D2FF]/20 via-[#0066FF]/10 to-transparent",
+                  border: "hover:border-[#00D2FF]/80 hover:shadow-[0_20px_50px_rgba(0,210,255,0.25)]",
+                  pill: "bg-[#00D2FF]/15 text-[#38BDF8] border-[#00D2FF]/40",
+                  slogan: "Capital Might · Relentless Force",
+                  tag: "POWERHOUSE",
+                };
+              } else if (idLower.includes("du") || nameLower.includes("dainagoda")) {
+                theme = {
+                  color: "#10B981",
+                  glow: "rgba(16, 185, 129, 0.35)",
+                  gradient: "from-[#10B981]/20 via-[#059669]/10 to-transparent",
+                  border: "hover:border-[#10B981]/80 hover:shadow-[0_20px_50px_rgba(16,185,129,0.25)]",
+                  pill: "bg-[#10B981]/15 text-[#34D399] border-[#10B981]/40",
+                  slogan: "United in Strength · Bound for Glory",
+                  tag: "CHALLENGERS",
+                };
+              } else if (idLower.includes("bmr") || nameLower.includes("bary") || nameLower.includes("mawathe")) {
+                theme = {
+                  color: "#C084FC",
+                  glow: "rgba(192, 132, 252, 0.35)",
+                  gradient: "from-[#C084FC]/20 via-[#7E22CE]/10 to-transparent",
+                  border: "hover:border-[#C084FC]/80 hover:shadow-[0_20px_50px_rgba(192,132,252,0.25)]",
+                  pill: "bg-[#C084FC]/15 text-[#D8B4FE] border-[#C084FC]/40",
+                  slogan: "Royals Reign · Pure Cricket Majesty",
+                  tag: "REGAL LEGACY",
+                };
+              } else if (idLower.includes("rk") || nameLower.includes("riverside")) {
+                theme = {
+                  color: "#4ADE80",
+                  glow: "rgba(74, 222, 128, 0.35)",
+                  gradient: "from-[#4ADE80]/20 via-[#16A34A]/10 to-transparent",
+                  border: "hover:border-[#4ADE80]/80 hover:shadow-[0_20px_50px_rgba(74,222,128,0.25)]",
+                  pill: "bg-[#4ADE80]/15 text-[#86EFAC] border-[#4ADE80]/40",
+                  slogan: "Kings by the River · Rulers of Pitch",
+                  tag: "RIVER KINGS",
+                };
+              } else if (idLower.includes("ngw") || nameLower.includes("garden") || nameLower.includes("warrior")) {
+                theme = {
+                  color: "#FBBF24",
+                  glow: "rgba(251, 191, 36, 0.35)",
+                  gradient: "from-[#FBBF24]/20 via-[#D97706]/10 to-transparent",
+                  border: "hover:border-[#FBBF24]/80 hover:shadow-[0_20px_50px_rgba(251,191,36,0.25)]",
+                  pill: "bg-[#FBBF24]/15 text-[#FDE047] border-[#FBBF24]/40",
+                  slogan: "Warrior Spirit · Unconquerable Fire",
+                  tag: "FIERCE SPIRIT",
+                };
+              } else if (idLower.includes("kl") || nameLower.includes("kurunduwatte") || nameLower.includes("legend")) {
+                theme = {
+                  color: "#F87171",
+                  glow: "rgba(248, 113, 113, 0.35)",
+                  gradient: "from-[#F87171]/20 via-[#DC2626]/10 to-transparent",
+                  border: "hover:border-[#F87171]/80 hover:shadow-[0_20px_50px_rgba(248,113,113,0.25)]",
+                  pill: "bg-[#F87171]/15 text-[#FCA5A5] border-[#F87171]/40",
+                  slogan: "Living Legends · Built for Dominance",
+                  tag: "TITANS",
+                };
+              }
+
+              return (
+                <div
+                  key={team.id}
+                  onClick={() => setSelectedTeamForRoster(team)}
+                  className={`relative overflow-hidden rounded-[2rem] bg-gradient-to-b from-[#171717] via-[#121212] to-[#0D0D0D] border border-white/10 ${theme.border} p-6 sm:p-8 flex flex-col justify-between transition-all duration-300 group hover:-translate-y-2 cursor-pointer shadow-xl`}
+                >
+                  {/* Atmospheric background glow matching team color */}
+                  <div className={`absolute -top-20 -right-20 w-48 h-48 bg-gradient-to-br ${theme.gradient} rounded-full blur-3xl pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity duration-500`} />
+
+                  {/* Card Header Row: Group & Tag Pills */}
+                  <div className="relative z-10 flex items-center justify-between gap-2">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${theme.pill}`}>
+                      {team.groupName || "GROUP STAGE"}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-white/40 tracking-wider">
+                      {teamPlayers.length} {teamPlayers.length === 1 ? "PLAYER" : "PLAYERS"}
+                    </span>
+                  </div>
+
+                  {/* Centerpiece: Floating Team Crest & Info */}
+                  <div className="relative z-10 flex flex-col items-center text-center mt-6 mb-5">
+                    {/* Glowing Logo Circle */}
+                    <div className="relative mb-5 group-hover:scale-105 transition-transform duration-300">
+                      <div
+                        className="absolute inset-0 rounded-full blur-xl opacity-40 group-hover:opacity-80 transition-opacity"
+                        style={{ backgroundColor: theme.color }}
+                      />
+                      <div className="relative h-28 w-28 sm:h-32 sm:w-32 rounded-full p-1.5 bg-[#0A0A0A] border-2 border-white/20 group-hover:border-white/60 shadow-2xl flex items-center justify-center overflow-hidden">
+                        {team.logoUrl ? (
+                          <img
+                            src={team.logoUrl}
+                            alt={team.name}
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <TeamLogo logoUrl={team.logoUrl} name={team.name} shortName={team.shortName} size="lg" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Team Name */}
+                    <h3 className="font-display font-black text-2xl sm:text-3xl uppercase text-white tracking-tight leading-tight group-hover:text-white transition-colors">
+                      {team.name}
+                    </h3>
+
+                    {/* Franchise Slogan */}
+                    <p className="text-[11px] font-medium text-white/50 mt-1.5 line-clamp-1 italic">
+                      "{theme.slogan}"
+                    </p>
+                  </div>
+
+                  {/* Squad Preview: Overlapping Player Avatars */}
+                  <div className="relative z-10 border-t border-white/10 pt-4 mt-2 flex items-center justify-between">
+                    <div className="flex items-center -space-x-2">
+                      {previewPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className="h-7 w-7 rounded-full overflow-hidden border-2 border-[#121212] bg-[#1A1A1A] shrink-0 shadow-xs"
+                          title={player.name}
+                        >
+                          <img
+                            src={player.avatar || "/default-player-avatar.png"}
+                            alt={player.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      {teamPlayers.length > 4 && (
+                        <div className="h-7 px-1.5 rounded-full bg-white/10 border-2 border-[#121212] flex items-center justify-center text-[9px] font-black text-white/80">
+                          +{teamPlayers.length - 4}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interactive CTA Link */}
+                    <div className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-white/60 group-hover:text-white transition-colors">
+                      <span style={{ color: theme.color }}>VIEW SQUAD</span>
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" style={{ color: theme.color }} />
+                    </div>
+                  </div>
                 </div>
-
-                {/* Team Name */}
-                <h3 className="font-display font-black text-xl sm:text-2xl uppercase text-white mt-6 tracking-tight group-hover:text-[#D9A928] transition-colors">
-                  {team.name}
-                </h3>
-
-                {/* View Roster Link */}
-                <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-white/40 group-hover:text-[#D9A928] transition-colors">
-                  <span>VIEW ROSTER</span>
-                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* ── Team Roster Interactive Modal ─────────────────────────────────── */}
       {selectedTeamForRoster && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-2xl bg-[#141414] border border-white/15 rounded-3xl p-6 sm:p-8 flex flex-col gap-6 shadow-2xl overflow-hidden max-h-[90vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl overflow-hidden border border-[#D9A928]/40 bg-black/50 shrink-0">
+                <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-[#D9A928]/40 bg-black/50 shrink-0 p-1 flex items-center justify-center">
                   {selectedTeamForRoster.logoUrl ? (
                     <img
                       src={selectedTeamForRoster.logoUrl}
                       alt={selectedTeamForRoster.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover rounded-xl"
                     />
                   ) : (
                     <TeamLogo logoUrl={selectedTeamForRoster.logoUrl} name={selectedTeamForRoster.name} size="md" />
@@ -622,22 +764,22 @@ function LandingScreen() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] bg-[#D9A928]/10 px-2 py-0.5 rounded-md border border-[#D9A928]/30">
                       {selectedTeamForRoster.groupName || "OFFICIAL FRANCHISE"}
                     </span>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-black uppercase text-white mt-0.5">
+                  <h3 className="text-xl sm:text-2xl font-black uppercase text-white mt-1">
                     {selectedTeamForRoster.name}
                   </h3>
                   {selectedTeamForRoster.ownerName && (
-                    <p className="text-xs text-white/50 font-medium">Owner: {selectedTeamForRoster.ownerName}</p>
+                    <p className="text-xs text-white/60 font-medium">Franchise Owner: {selectedTeamForRoster.ownerName}</p>
                   )}
                 </div>
               </div>
 
               <button
                 onClick={() => setSelectedTeamForRoster(null)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -645,9 +787,12 @@ function LandingScreen() {
 
             {/* Squad Player List */}
             <div className="flex-1 overflow-y-auto pr-1">
-              <h4 className="text-xs font-black uppercase tracking-widest text-white/50 mb-3">
-                Squad Players ({players.filter((p) => p.teamId === selectedTeamForRoster.id).length})
-              </h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-black uppercase tracking-widest text-white/60">
+                  Official Squad Players ({players.filter((p) => p.teamId === selectedTeamForRoster.id).length})
+                </h4>
+                <span className="text-[10px] text-[#D9A928] font-bold">Tap player to view profile</span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {players
@@ -658,10 +803,10 @@ function LandingScreen() {
                       to="/player/$playerId"
                       params={{ playerId: player.id }}
                       onClick={() => setSelectedTeamForRoster(null)}
-                      className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D9A928]/50 hover:bg-white/10 transition-all group"
+                      className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D9A928]/60 hover:bg-white/10 transition-all group cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full overflow-hidden border border-white/15 bg-black/40 shrink-0">
+                        <div className="h-10 w-10 rounded-full overflow-hidden border border-white/15 bg-black/40 shrink-0">
                           <img
                             src={player.avatar || "/default-player-avatar.png"}
                             alt={player.name}
@@ -672,9 +817,16 @@ function LandingScreen() {
                           <p className="text-xs font-black text-white uppercase group-hover:text-[#D9A928] transition-colors line-clamp-1">
                             {player.name}
                           </p>
-                          <p className="text-[10px] text-white/50 uppercase font-bold">
-                            {player.role || "Player"}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-white/50 uppercase font-bold">
+                              {player.role || "Player"}
+                            </span>
+                            {player.referenceId && (
+                              <span className="text-[9px] font-mono text-[#D9A928]">
+                                #{player.referenceId}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-[#D9A928] transition-colors" />
@@ -684,7 +836,7 @@ function LandingScreen() {
 
               {players.filter((p) => p.teamId === selectedTeamForRoster.id).length === 0 && (
                 <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10 text-xs font-bold text-white/50">
-                  No roster players assigned yet for this franchise.
+                  No squad players registered yet for this franchise.
                 </div>
               )}
             </div>
@@ -694,14 +846,14 @@ function LandingScreen() {
               <Link
                 to="/pointables"
                 onClick={() => setSelectedTeamForRoster(null)}
-                className="text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider flex items-center gap-1"
+                className="text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider flex items-center gap-1.5"
               >
-                <span>View Tournament Standings</span>
-                <ArrowRight className="h-3 w-3" />
+                <span>Tournament Standings</span>
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
               <button
                 onClick={() => setSelectedTeamForRoster(null)}
-                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase transition-colors"
+                className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -709,6 +861,7 @@ function LandingScreen() {
           </div>
         </div>
       )}
+
 
       {/* ══════════════════════════════════════════════════════════════════════
           10. COMMUNITY HERITAGE - THE HEART OF THUNDUWA
