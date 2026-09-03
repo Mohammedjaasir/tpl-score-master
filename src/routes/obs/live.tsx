@@ -3,36 +3,40 @@ import { GraphicRenderer } from "@/components/obs/GraphicRenderer";
 import { obsStreamRepository } from "@/lib/obsStreamRepository";
 import { obsHandlerService } from "@/lib/obsHandlerService";
 import { useMatches } from "@/hooks/useCricketData";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 export const Route = createFileRoute("/obs/live")({
   component: ObsLiveMasterPage,
 });
 
 function ObsLiveMasterPage() {
-  const { data: matches = [], isLoading } = useMatches();
-  const [activeMatchId, setActiveMatchId] = useState<string>(() => {
+  const { data: matches = [] } = useMatches();
+  const [selectedMatchId, setSelectedMatchId] = useState<string>(() => {
     return obsHandlerService.getActiveMatch() || "";
   });
   const [backgroundStreamUrl, setBackgroundStreamUrl] = useState<string | undefined>(undefined);
 
-  // Auto-resolve initial live match if not set
-  useEffect(() => {
-    if (!activeMatchId && matches.length > 0 && !isLoading) {
-      const live = matches.find((m) => m.status === "LIVE") || matches.find((m) => m.status === "READY") || matches[0];
-      if (live) {
-        setActiveMatchId(live.id);
-        obsHandlerService.setActiveMatch(live.id);
-      }
+  // Single Source of Truth: Auto-resolve active match cleanly
+  const activeMatchId = useMemo(() => {
+    if (selectedMatchId && matches.some((m) => m.id === selectedMatchId)) {
+      return selectedMatchId;
     }
-  }, [activeMatchId, matches, isLoading]);
+    const live = matches.find((m) => m.status === "LIVE") || matches.find((m) => m.status === "READY") || matches[0];
+    return live?.id || selectedMatchId || "";
+  }, [selectedMatchId, matches]);
 
-  // Listen for match switching ONLY via localStorage (not BroadcastChannel, to avoid
-  // stealing messages from useObsHandlerReceiver inside GraphicRenderer)
+  // Keep obsHandlerService active match in sync
+  useEffect(() => {
+    if (activeMatchId) {
+      obsHandlerService.setActiveMatch(activeMatchId);
+    }
+  }, [activeMatchId]);
+
+  // Listen for match switching via localStorage and poll /api/obs-state
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "tpl-obs-active-match" && e.newValue && e.newValue !== activeMatchId) {
-        setActiveMatchId(e.newValue);
+      if (e.key === "tpl-obs-active-match" && e.newValue && e.newValue !== selectedMatchId) {
+        setSelectedMatchId(e.newValue);
       }
     };
 
@@ -40,19 +44,18 @@ function ObsLiveMasterPage() {
       window.addEventListener("storage", handleStorage);
     }
 
-    // Also poll /api/obs-state and localStorage every 500ms as a cross-process bridge between Chrome and OBS Studio
     const poll = setInterval(async () => {
       const current = obsHandlerService.getActiveMatch();
-      if (current && current !== activeMatchId) {
-        setActiveMatchId(current);
+      if (current && current !== selectedMatchId) {
+        setSelectedMatchId(current);
         return;
       }
       try {
         const res = await fetch(`/api/obs-state?t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
-          if (data?.activeMatchId && data.activeMatchId !== activeMatchId) {
-            setActiveMatchId(data.activeMatchId);
+          if (data?.activeMatchId && data.activeMatchId !== selectedMatchId) {
+            setSelectedMatchId(data.activeMatchId);
           }
           if (data?.streamUrl !== undefined) {
             setBackgroundStreamUrl(data.streamUrl || undefined);
@@ -67,11 +70,13 @@ function ObsLiveMasterPage() {
       }
       clearInterval(poll);
     };
-  }, [activeMatchId]);
+  }, [selectedMatchId]);
 
   useEffect(() => {
-    const url = obsStreamRepository.getStreamUrl(activeMatchId);
-    setBackgroundStreamUrl(url || undefined);
+    if (activeMatchId) {
+      const url = obsStreamRepository.getStreamUrl(activeMatchId);
+      setBackgroundStreamUrl(url || undefined);
+    }
   }, [activeMatchId]);
 
   if (!activeMatchId) {
@@ -88,4 +93,5 @@ function ObsLiveMasterPage() {
 
   return <GraphicRenderer matchId={activeMatchId} backgroundStreamUrl={backgroundStreamUrl} />;
 }
+
 
