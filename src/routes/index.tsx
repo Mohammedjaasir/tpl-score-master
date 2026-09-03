@@ -11,11 +11,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { useMatches, usePlayers, useLiveMatchState } from "@/hooks/useCricketData";
+import { useMatches, usePlayers, useTeams, useLiveMatchState } from "@/hooks/useCricketData";
 import { calculateTournamentStats } from "@/lib/scoring/statistics";
 import { lookup } from "@/lib/repositories";
 import { useMatchStore } from "@/lib/scoring/store";
-import type { Match } from "@/types/cricket";
+import { TeamLogo } from "@/components/team/TeamLogo";
+import type { Match, Team } from "@/types/cricket";
 
 export const Route = createFileRoute("/")({
   component: LandingScreen,
@@ -190,6 +191,8 @@ function LandingScreen() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: matches = [] } = useMatches();
   const { data: players = [] } = usePlayers();
+  const { data: teams = [] } = useTeams();
+  const [selectedTeamForRoster, setSelectedTeamForRoster] = useState<Team | null>(null);
   const stats = useMemo(() => calculateTournamentStats(matches), [matches]);
 
   const liveMatches = matches.filter((m) => m.status === "LIVE");
@@ -205,6 +208,7 @@ function LandingScreen() {
 
   const navLinks = [
     { label: "HERITAGE", href: "#heritage" },
+    { label: "TEAMS", href: "#franchises" },
     { label: "STARS", href: "#fixtures" },
     { label: "FIXTURES", href: "/matches" },
     { label: "STANDINGS", href: "/pointables" },
@@ -544,6 +548,167 @@ function LandingScreen() {
           </div>
         </div>
       </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          9. DIRECTORY — PARTICIPATING FRANCHISES
+          ══════════════════════════════════════════════════════════════════════ */}
+      <section id="franchises" className="py-20 lg:py-28 bg-[#0D0D0D] text-white border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#D9A928] mb-3">
+              DIRECTORY
+            </p>
+            <h2 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl uppercase tracking-tight text-white">
+              Participating <span style={{ background: "linear-gradient(135deg, #F4C542 0%, #D9A928 60%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Franchises</span>
+            </h2>
+            <p className="mt-4 text-xs sm:text-sm text-white/60 leading-relaxed max-w-lg mx-auto">
+              Explore the elite teams competing in the Thunduwa Premier League 2026. Each franchise brings their own unique strategy and legacy to the tournament.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {teams.map((team) => (
+              <div
+                key={team.id}
+                onClick={() => setSelectedTeamForRoster(team)}
+                className="bg-[#141414] hover:bg-[#1A1A1A] border border-white/10 hover:border-[#D9A928]/60 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl hover:shadow-[0_12px_40px_rgba(217,169,40,0.15)] hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer"
+              >
+                {/* Team Logo with gold glow */}
+                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full p-1 border-2 border-white/15 group-hover:border-[#D9A928] bg-black/60 shadow-2xl flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:scale-105">
+                  {team.logoUrl ? (
+                    <img
+                      src={team.logoUrl}
+                      alt={team.name}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  ) : (
+                    <TeamLogo logoUrl={team.logoUrl} name={team.name} shortName={team.shortName} size="lg" />
+                  )}
+                </div>
+
+                {/* Team Name */}
+                <h3 className="font-display font-black text-xl sm:text-2xl uppercase text-white mt-6 tracking-tight group-hover:text-[#D9A928] transition-colors">
+                  {team.name}
+                </h3>
+
+                {/* View Roster Link */}
+                <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-white/40 group-hover:text-[#D9A928] transition-colors">
+                  <span>VIEW ROSTER</span>
+                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Team Roster Interactive Modal ─────────────────────────────────── */}
+      {selectedTeamForRoster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-[#141414] border border-white/15 rounded-3xl p-6 sm:p-8 flex flex-col gap-6 shadow-2xl overflow-hidden max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-2xl overflow-hidden border border-[#D9A928]/40 bg-black/50 shrink-0">
+                  {selectedTeamForRoster.logoUrl ? (
+                    <img
+                      src={selectedTeamForRoster.logoUrl}
+                      alt={selectedTeamForRoster.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <TeamLogo logoUrl={selectedTeamForRoster.logoUrl} name={selectedTeamForRoster.name} size="md" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">
+                      {selectedTeamForRoster.groupName || "OFFICIAL FRANCHISE"}
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black uppercase text-white mt-0.5">
+                    {selectedTeamForRoster.name}
+                  </h3>
+                  {selectedTeamForRoster.ownerName && (
+                    <p className="text-xs text-white/50 font-medium">Owner: {selectedTeamForRoster.ownerName}</p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedTeamForRoster(null)}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Squad Player List */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <h4 className="text-xs font-black uppercase tracking-widest text-white/50 mb-3">
+                Squad Players ({players.filter((p) => p.teamId === selectedTeamForRoster.id).length})
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {players
+                  .filter((p) => p.teamId === selectedTeamForRoster.id)
+                  .map((player) => (
+                    <Link
+                      key={player.id}
+                      to="/player/$playerId"
+                      params={{ playerId: player.id }}
+                      onClick={() => setSelectedTeamForRoster(null)}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D9A928]/50 hover:bg-white/10 transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-full overflow-hidden border border-white/15 bg-black/40 shrink-0">
+                          <img
+                            src={player.avatar || "/default-player-avatar.png"}
+                            alt={player.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white uppercase group-hover:text-[#D9A928] transition-colors line-clamp-1">
+                            {player.name}
+                          </p>
+                          <p className="text-[10px] text-white/50 uppercase font-bold">
+                            {player.role || "Player"}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-white/30 group-hover:text-[#D9A928] transition-colors" />
+                    </Link>
+                  ))}
+              </div>
+
+              {players.filter((p) => p.teamId === selectedTeamForRoster.id).length === 0 && (
+                <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10 text-xs font-bold text-white/50">
+                  No roster players assigned yet for this franchise.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+              <Link
+                to="/pointables"
+                onClick={() => setSelectedTeamForRoster(null)}
+                className="text-xs font-black text-[#D9A928] hover:underline uppercase tracking-wider flex items-center gap-1"
+              >
+                <span>View Tournament Standings</span>
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+              <button
+                onClick={() => setSelectedTeamForRoster(null)}
+                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           10. COMMUNITY HERITAGE - THE HEART OF THUNDUWA
