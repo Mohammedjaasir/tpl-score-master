@@ -48,8 +48,8 @@ function ObsBetweenMatches() {
   };
 
   return (
-    <div className="flex gap-6 h-full font-sans">
-      <div className="w-[430px] flex flex-col gap-5 flex-shrink-0 overflow-y-auto max-h-[calc(100vh-80px)] pr-2 pb-8">
+    <div className="flex flex-col lg:flex-row gap-6 w-full font-sans pb-10">
+      <div className="w-full lg:w-[420px] xl:w-[460px] flex flex-col gap-5 flex-shrink-0">
         {/* Graphics Grid */}
         <div>
           <h3 className="text-[10px] font-black uppercase tracking-widest text-[#D9A928] mb-4">

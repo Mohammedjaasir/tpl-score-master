@@ -71,11 +71,11 @@ function ObsHandlerIndex() {
   };
 
   return (
-    <div className="flex gap-6 h-full font-sans">
+    <div className="flex flex-col lg:flex-row gap-6 w-full font-sans pb-10">
       {/* Left Column: Controls */}
-      <div className="w-[430px] flex flex-col gap-5 flex-shrink-0 overflow-y-auto max-h-[calc(100vh-80px)] pr-2 pb-8">
+      <div className="w-full lg:w-[420px] xl:w-[460px] flex flex-col gap-5 flex-shrink-0">
         {/* Match Selector */}
-        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-5 shadow-xl">
+        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-[#888888]">
               Active Broadcast Match
