@@ -976,16 +976,17 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     broadcastDoc(empty);
   }, [matchId, broadcastDoc]);
 
-  // Keep lookup cache synchronized with completed state
+  // Keep lookup cache synchronized with completed state (strictly only when match is not UPCOMING)
   useEffect(() => {
-    if (state?.phase === "complete" || doc.isCompleted) {
+    if ((state?.phase === "complete" || doc.isCompleted) && match?.status !== "UPCOMING") {
       lookup.updateMatch(matchId, {
         status: "COMPLETED",
         resultText: state?.resultText,
         manOfTheMatchId: doc.playerOfTheMatchId,
       });
     }
-  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId]);
+  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId, match?.status]);
+
 
   return {
     doc,
