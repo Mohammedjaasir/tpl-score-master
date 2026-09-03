@@ -11,7 +11,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { TeamLogo } from "@/components/team/TeamLogo";
 import { useMatches, usePlayers, useLiveMatchState } from "@/hooks/useCricketData";
 import { calculateTournamentStats } from "@/lib/scoring/statistics";
 import { lookup } from "@/lib/repositories";
@@ -33,7 +32,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Professional Live Match Card ─────────────────────────────────────────────
+// ─── Happening Now Live Match Card ───────────────────────────────────────────
 function HappeningNowCard({ match }: { match: Match }) {
   const { state } = useMatchStore(match.id, match);
 
@@ -54,7 +53,6 @@ function HappeningNowCard({ match }: { match: Match }) {
 
   const inn1 = state?.innings[0];
   const inn2 = state?.innings[1];
-  const currentInn = state?.innings[state?.currentInningsIndex ?? 0];
 
   const battingFirstId =
     state?.innings[0]?.battingTeamId ?? state?.setup?.battingFirstId;
@@ -65,6 +63,17 @@ function HappeningNowCard({ match }: { match: Match }) {
   const team1 = lookup.team(firstTeamId);
   const team2 = lookup.team(secondTeamId);
 
+  const getScoreDisplay = (
+    inn: typeof inn1 | undefined,
+    hasBatted: boolean
+  ) => {
+    if (!inn || !hasBatted) return "-";
+    const ov = inn.oversText.endsWith(".0")
+      ? inn.oversText.slice(0, -2)
+      : inn.oversText;
+    return `${inn.runs}/${inn.wickets} (${ov} Ov)`;
+  };
+
   const team1Batted =
     isLive || isDone || (inn1 && (inn1.legalBalls > 0 || inn1.runs > 0));
   const team2Batted =
@@ -72,150 +81,55 @@ function HappeningNowCard({ match }: { match: Match }) {
     (inn2 && (inn2.legalBalls > 0 || inn2.runs > 0)) ||
     state?.currentInningsIndex === 1;
 
-  // Contextual live match situation / result footer
-  let statusFooter: string | null = null;
-  if (isLive) {
-    if (state?.currentInningsIndex === 1 && inn2 && inn1) {
-      const target = inn2.target ?? inn1.runs + 1;
-      const needed = Math.max(0, target - inn2.runs);
-      const ballsRemaining = Math.max(
-        0,
-        effectiveOvers * 5 - inn2.legalBalls
-      );
-      statusFooter = `${team2?.shortName || "Batting"} need ${needed} runs in ${ballsRemaining} balls`;
-    } else if (inn1) {
-      statusFooter = `1st Innings · CRR ${inn1.crr.toFixed(1)} RR`;
-    }
-  } else if (isDone) {
-    statusFooter = match.resultText || state?.resultText || "Match Completed";
-  }
+  const team1Score = getScoreDisplay(inn1, Boolean(team1Batted));
+  const team2Score = getScoreDisplay(inn2, Boolean(team2Batted));
 
   return (
     <Link
       to="/scorecard/$matchId"
       params={{ matchId: match.id }}
-      className="group relative flex flex-col justify-between min-w-[300px] sm:min-w-[340px] max-w-[380px] flex-1 shrink-0 rounded-2xl sm:rounded-3xl bg-[#0F1015] border border-black/20 hover:border-black/50 p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+      className="group block min-w-[280px] sm:min-w-[320px] max-w-[380px] flex-1 shrink-0 rounded-2xl bg-[#111113] border border-white/[0.08] hover:border-[#D9A928]/50 p-4 sm:p-5 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5"
     >
-      {/* Top subtle live accent indicator */}
-      {isLive && (
-        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-red-500 via-[#D9A928] to-red-500" />
-      )}
-
-      {/* Header Row: Status badge + Match # + Overs */}
-      <div className="flex items-center justify-between gap-2 mb-3.5 pb-2.5 border-b border-white/[0.08]">
-        <div className="flex items-center gap-2">
-          {isLive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#E50914] text-white font-black text-[10px] tracking-widest uppercase shadow-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-              LIVE
-            </span>
-          ) : isDone ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-black text-[10px] tracking-wider uppercase">
-              COMPLETED
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/10 text-white/60 font-black text-[10px] tracking-wider uppercase">
-              UPCOMING
-            </span>
-          )}
-          <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">
-            MATCH #{String(match.matchNumber || 1).padStart(2, "0")}
+      {/* Top row: Status pill + Overs */}
+      <div className="flex items-center justify-between mb-3.5">
+        {isLive ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-[#E50914] text-white font-black text-[10px] tracking-wider uppercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+            LIVE
           </span>
-        </div>
-
-        <span className="text-[10px] font-bold text-white/50 tracking-wider uppercase bg-white/5 px-2 py-0.5 rounded border border-white/5">
-          {effectiveOvers} OV
+        ) : isDone ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/10 text-emerald-400 border border-emerald-500/30 font-black text-[10px] tracking-wider uppercase">
+            COMPLETED
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded bg-white/10 text-white/50 font-black text-[10px] tracking-wider uppercase">
+            UPCOMING
+          </span>
+        )}
+        <span className="text-[10px] sm:text-[11px] font-bold text-white/40 tracking-wider uppercase">
+          {effectiveOvers} OV MATCH
         </span>
       </div>
 
       {/* Teams & Scores */}
-      <div className="space-y-2.5 my-0.5">
-        {/* Team 1 */}
-        <div
-          className={`flex items-center justify-between gap-3 p-1.5 rounded-xl transition-colors ${
-            isLive && currentInn?.battingTeamId === firstTeamId
-              ? "bg-white/[0.06] border border-[#D9A928]/30"
-              : "border border-transparent"
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <TeamLogo
-              logoUrl={team1?.logoUrl}
-              name={team1?.name}
-              shortName={team1?.shortName}
-              size="xs"
-              isBatting={isLive && currentInn?.battingTeamId === firstTeamId}
-            />
-            <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate group-hover:text-[#D9A928] transition-colors">
-              {team1?.name || "Team 1"}
-            </span>
-          </div>
-
-          <div className="text-right shrink-0">
-            {team1Batted && inn1 ? (
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-sm sm:text-base font-black text-white font-mono tracking-tight">
-                  {inn1.runs}/{inn1.wickets}
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-bold text-white/40 font-mono">
-                  ({inn1.oversText} ov)
-                </span>
-              </div>
-            ) : (
-              <span className="text-xs font-bold text-white/30 font-mono">-</span>
-            )}
-          </div>
-        </div>
-
-        {/* Team 2 */}
-        <div
-          className={`flex items-center justify-between gap-3 p-1.5 rounded-xl transition-colors ${
-            isLive && currentInn?.battingTeamId === secondTeamId
-              ? "bg-white/[0.06] border border-[#D9A928]/30"
-              : "border border-transparent"
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <TeamLogo
-              logoUrl={team2?.logoUrl}
-              name={team2?.name}
-              shortName={team2?.shortName}
-              size="xs"
-              isBatting={isLive && currentInn?.battingTeamId === secondTeamId}
-            />
-            <span className="text-xs sm:text-sm font-bold text-white/90 tracking-wide truncate group-hover:text-[#D9A928] transition-colors">
-              {team2?.name || "Team 2"}
-            </span>
-          </div>
-
-          <div className="text-right shrink-0">
-            {team2Batted && inn2 ? (
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-sm sm:text-base font-black text-white font-mono tracking-tight">
-                  {inn2.runs}/{inn2.wickets}
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-bold text-white/40 font-mono">
-                  ({inn2.oversText} ov)
-                </span>
-              </div>
-            ) : (
-              <span className="text-xs font-bold text-white/30 font-mono">-</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Card Footer: Live Summary / Result Text */}
-      {statusFooter && (
-        <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between">
-          <p className="text-[10px] sm:text-[11px] font-extrabold text-[#D9A928] truncate max-w-[88%] tracking-wide">
-            {statusFooter}
-          </p>
-          <span className="text-[11px] text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition-all">
-            ›
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate max-w-[62%] group-hover:text-[#D9A928] transition-colors">
+            {team1?.name || "Team 1"}
+          </span>
+          <span className="text-xs sm:text-sm font-black text-white font-mono tracking-tight shrink-0">
+            {team1Score}
           </span>
         </div>
-      )}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs sm:text-sm font-bold text-white/90 tracking-wide truncate max-w-[62%] group-hover:text-[#D9A928] transition-colors">
+            {team2?.name || "Team 2"}
+          </span>
+          <span className="text-xs sm:text-sm font-black text-white/90 font-mono tracking-tight shrink-0">
+            {team2Score}
+          </span>
+        </div>
+      </div>
     </Link>
   );
 }
@@ -266,7 +180,6 @@ function HappeningNowSection({ matches }: { matches: Match[] }) {
     </section>
   );
 }
-
 
 
 
@@ -428,11 +341,11 @@ function LandingScreen() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-5 lg:px-8 w-full pt-20 pb-16 md:py-28 lg:py-36">
           <div className="max-w-3xl">
-            {/* Season badge */}
+            {/* Branding badge */}
             <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-[#D9A928]/40 bg-[#D9A928]/10">
               <span className="h-1.5 w-1.5 rounded-full bg-[#D9A928] animate-pulse" />
               <span className="text-[10px] font-extrabold tracking-[0.28em] text-[#D9A928] uppercase">
-                SEASON 2026 · CRICKET TOURNAMENT
+                POWERED BY VALGROW LABS
               </span>
             </div>
 
