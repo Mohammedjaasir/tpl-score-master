@@ -85,9 +85,17 @@ export function toTeam(row: SupabaseTeam): Team {
 }
 
 export function toPlayer(row: SupabaseRegistration): Player {
-  // Check localStorage custom override first
+  // Check localStorage custom overrides first
+  let customAvatar: string | undefined;
   let customRole: PlayerRole | undefined;
   if (typeof window !== "undefined") {
+    try {
+      const rawAvatars = window.localStorage.getItem("tpl_player_custom_avatars");
+      if (rawAvatars) {
+        const avatarsMap = JSON.parse(rawAvatars);
+        if (avatarsMap[row.id]) customAvatar = avatarsMap[row.id];
+      }
+    } catch {}
     try {
       const rawRoles = window.localStorage.getItem("tpl_player_custom_roles");
       if (rawRoles) {
@@ -112,7 +120,7 @@ export function toPlayer(row: SupabaseRegistration): Player {
     shortName: derivePlayerShortName(row.player_name || "Unknown Player"),
     role,
     teamId: row.team_id || "",
-    avatar: row.profile_photo_url || undefined,
+    avatar: customAvatar || row.profile_photo_url || undefined,
     referenceId: row.reference_id || undefined,
     slug: row.slug || (row.player_name ? row.player_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : undefined),
     soldPrice: row.sold_price || undefined,
@@ -122,6 +130,7 @@ export function toPlayer(row: SupabaseRegistration): Player {
     dateOfBirth: row.date_of_birth || undefined,
   };
 }
+
 
 /**
  * Maps a raw Supabase `match_status` enum value to the application domain MatchStatus.
@@ -317,6 +326,16 @@ class LookupCache {
             rolesMap[id] = patch.role;
             window.localStorage.setItem("tpl_player_custom_roles", JSON.stringify(rolesMap));
           }
+          if (patch.avatar !== undefined) {
+            const rawAvatars = window.localStorage.getItem("tpl_player_custom_avatars");
+            const avatarsMap = rawAvatars ? JSON.parse(rawAvatars) : {};
+            if (patch.avatar) {
+              avatarsMap[id] = patch.avatar;
+            } else {
+              delete avatarsMap[id];
+            }
+            window.localStorage.setItem("tpl_player_custom_avatars", JSON.stringify(avatarsMap));
+          }
         } catch {}
       }
       return updated;
@@ -389,7 +408,9 @@ export interface PlayerRepository {
   get(id: string): Promise<Player | undefined>;
   search(query: string): Promise<Player[]>;
   updateRole(playerId: string, role: PlayerRole): Promise<Player>;
+  updateAvatar(playerId: string, avatarUrl: string): Promise<Player>;
 }
+
 
 export interface MatchRepository {
   list(): Promise<Match[]>;
@@ -617,7 +638,29 @@ export class SupabasePlayerRepository implements PlayerRepository {
     if (!result) throw new Error(`Player ${playerId} not found`);
     return result;
   }
+
+  async updateAvatar(playerId: string, avatarUrl: string): Promise<Player> {
+    const updated = lookup.updatePlayer(playerId, { avatar: avatarUrl || undefined });
+    if (isSupabaseConfigured) {
+      try {
+        await withTimeout(
+          supabase
+            .from("registrations")
+            .update({ profile_photo_url: avatarUrl || null })
+            .eq("id", playerId),
+          REQUEST_TIMEOUT_MS,
+          "Update player avatar timed out",
+        );
+      } catch (err) {
+        console.warn("[updateAvatar] Supabase update notice:", err);
+      }
+    }
+    const result = updated || (await this.get(playerId));
+    if (!result) throw new Error(`Player ${playerId} not found`);
+    return result;
+  }
 }
+
 
 export class SupabaseMatchRepository implements MatchRepository {
   async list(): Promise<Match[]> {

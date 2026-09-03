@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Flame,
@@ -14,14 +15,59 @@ import {
   Scale,
   Users,
   X,
+  Camera,
+  Upload,
+  Trash2,
+  CheckCircle2,
+  Image as ImageIcon,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import type { Player, Team, Match } from "@/types/cricket";
-import { lookup } from "@/lib/repositories";
+import { lookup, playerRepository } from "@/lib/repositories";
 import { useMatchStore, loadMatchDoc } from "@/lib/scoring/store";
 import { calculatePlayerPerformance } from "@/lib/scoring/playerPerformance";
 import { calculateBatterWagonWheel } from "@/lib/scoring/wagon-wheel";
 import { WagonWheel } from "@/components/scoring/WagonWheel";
 import { formatMatchDate } from "@/lib/utils";
+
+function resizeImageToDataUrl(file: File, maxSize = 400): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      img.onerror = () => reject(new Error("Failed to process selected image file"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 interface PublicPlayerProfileProps {
   player: Player;
@@ -31,6 +77,61 @@ interface PublicPlayerProfileProps {
 
 export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerProfileProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentAvatar, setCurrentAvatar] = useState<string | undefined>(player.avatar);
+  const [editPhotoModalOpen, setEditPhotoModalOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>(player.avatar);
+  const [photoInputUrl, setPhotoInputUrl] = useState("");
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+  const [photoSuccessMsg, setPhotoSuccessMsg] = useState("");
+  const [photoErrorMsg, setPhotoErrorMsg] = useState("");
+
+  useEffect(() => {
+    setCurrentAvatar(player.avatar);
+    setPhotoPreview(player.avatar);
+  }, [player.avatar]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoErrorMsg("");
+    setPhotoSuccessMsg("");
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 400);
+      setPhotoPreview(dataUrl);
+    } catch (err: any) {
+      setPhotoErrorMsg(err?.message || "Failed to process image file");
+    }
+  };
+
+  const handleApplyUrl = () => {
+    if (!photoInputUrl.trim()) return;
+    setPhotoPreview(photoInputUrl.trim());
+    setPhotoErrorMsg("");
+  };
+
+  const handleSavePhoto = async () => {
+    setIsSavingPhoto(true);
+    setPhotoErrorMsg("");
+    setPhotoSuccessMsg("");
+    try {
+      const targetAvatar = photoPreview || "";
+      await playerRepository.updateAvatar(player.id, targetAvatar);
+      setCurrentAvatar(targetAvatar || undefined);
+      setPhotoSuccessMsg("Profile photo updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      setTimeout(() => {
+        setEditPhotoModalOpen(false);
+        setPhotoSuccessMsg("");
+      }, 1200);
+    } catch (err: any) {
+      setPhotoErrorMsg(err?.message || "Failed to save profile photo");
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  };
 
   // Find if there is an active live match involving this player's team
   const liveMatch = allMatches.find(
@@ -160,22 +261,40 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
       {/* ── 1. PLAYER HEADER ───────────────────────────────────────────── */}
       <div className="bg-white border border-[#E5E5E5] rounded-3xl p-5 sm:p-7 text-[#111111] shadow-sm">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5 sm:gap-6">
-          {/* Avatar / Photo */}
-          <div className="relative h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 shrink-0 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] p-1 flex items-center justify-center shadow-xs overflow-hidden">
-            {player.avatar ? (
-              <img
-                src={player.avatar}
-                alt={player.name}
-                className="h-full w-full object-cover rounded-xl"
-              />
-            ) : (
-              <User className="h-14 w-14 text-[#94A3B8]" />
-            )}
-            {teamData?.logoUrl && (
-              <div className="absolute bottom-1 right-1 h-7 w-7 rounded-lg bg-white border border-[#E5E5E5] p-0.5 shadow-xs">
-                <img src={teamData.logoUrl} alt="" className="h-full w-full object-contain" />
-              </div>
-            )}
+          {/* Avatar / Photo with direct Edit Photo Trigger */}
+          <div className="relative group/avatar shrink-0">
+            <div className="relative h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] p-1 flex items-center justify-center shadow-xs overflow-hidden">
+              {currentAvatar ? (
+                <img
+                  src={currentAvatar}
+                  alt={player.name}
+                  className="h-full w-full object-cover rounded-xl"
+                />
+              ) : (
+                <User className="h-14 w-14 text-[#94A3B8]" />
+              )}
+              {teamData?.logoUrl && (
+                <div className="absolute bottom-1 left-1 h-7 w-7 rounded-lg bg-white border border-[#E5E5E5] p-0.5 shadow-xs">
+                  <img src={teamData.logoUrl} alt="" className="h-full w-full object-contain" />
+                </div>
+              )}
+            </div>
+
+            {/* Quick Edit Photo Camera Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPhotoPreview(currentAvatar);
+                setPhotoInputUrl("");
+                setPhotoErrorMsg("");
+                setPhotoSuccessMsg("");
+                setEditPhotoModalOpen(true);
+              }}
+              className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-[#D9A928] hover:bg-[#E5B539] text-[#111111] shadow-lg border-2 border-white hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer z-10"
+              title="Change Profile Photo"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Player Identity */}
@@ -195,10 +314,28 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
               {player.name}
             </h1>
 
-            <p className="text-xs sm:text-sm font-bold text-[#5F6368] uppercase tracking-wider mt-1">
-              {teamData?.name ?? "Team TPL"}
-            </p>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mt-1.5">
+              <p className="text-xs sm:text-sm font-bold text-[#5F6368] uppercase tracking-wider">
+                {teamData?.name ?? "Team TPL"}
+              </p>
+              <span className="text-[#E5E5E5] hidden sm:inline">•</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoPreview(currentAvatar);
+                  setPhotoInputUrl("");
+                  setPhotoErrorMsg("");
+                  setPhotoSuccessMsg("");
+                  setEditPhotoModalOpen(true);
+                }}
+                className="text-[10px] font-black uppercase tracking-wider text-[#9A6A05] hover:text-[#111111] bg-[#FDF8E7] hover:bg-[#FBEFC7] border border-[#D9A928]/30 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Camera className="h-3 w-3" />
+                <span>Update Photo</span>
+              </button>
+            </div>
           </div>
+
 
           {/* Career / Tournament Summary Bar */}
           <div className="flex items-center gap-3 sm:gap-4 bg-[#F7F7F5] border border-[#E5E5E5] px-4 py-3 rounded-2xl shrink-0">
@@ -630,6 +767,174 @@ export function PublicPlayerProfile({ player, team, allMatches }: PublicPlayerPr
           </div>
         </div>
       )}
+
+      {/* ── 4. EDIT PROFILE PHOTO MODAL ─────────────────────────────────── */}
+      {editPhotoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-7 flex flex-col gap-5 shadow-2xl border border-[#E5E5E5] max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-[#FDF8E7] text-[#9A6A05] border border-[#D9A928]/30">
+                  <Camera className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black uppercase text-[#111111]">
+                    Update Profile Photo
+                  </h3>
+                  <p className="text-[11px] font-bold text-[#5F6368] uppercase">
+                    {player.name} · {teamData?.name ?? "TPL 2026"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setEditPhotoModalOpen(false)}
+                className="p-2 rounded-xl bg-[#F7F7F5] hover:bg-[#E5E5E5] text-[#5F6368] hover:text-[#111111] transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Live Preview Display */}
+            <div className="flex flex-col items-center justify-center p-6 bg-[#F7F7F5] rounded-2xl border border-[#E5E5E5] gap-3">
+              <div className="relative h-32 w-32 sm:h-36 sm:w-36 rounded-2xl bg-white border-2 border-[#D9A928] p-1 shadow-lg overflow-hidden flex items-center justify-center">
+                {photoPreview ? (
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="h-full w-full object-cover rounded-xl"
+                  />
+                ) : (
+                  <User className="h-16 w-16 text-[#94A3B8]" />
+                )}
+                {teamData?.logoUrl && (
+                  <div className="absolute bottom-1 right-1 h-7 w-7 rounded-lg bg-white border border-[#E5E5E5] p-0.5 shadow-xs">
+                    <img src={teamData.logoUrl} alt="" className="h-full w-full object-contain" />
+                  </div>
+                )}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                {photoPreview ? "LIVE PHOTO PREVIEW" : "DEFAULT AVATAR"}
+              </span>
+            </div>
+
+            {/* Error / Success Notifications */}
+            {photoErrorMsg && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-600">
+                {photoErrorMsg}
+              </div>
+            )}
+            {photoSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{photoSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Upload Method 1: Device / Camera Upload */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                Option 1: Upload from Phone / Device
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="tap w-full py-3 px-4 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+              >
+                <Upload className="h-4 w-4 text-[#D9A928]" />
+                <span>Select Image or Take Photo</span>
+              </button>
+            </div>
+
+            {/* Upload Method 2: Direct Image URL */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#5F6368]">
+                Option 2: Paste Direct Image Link (URL)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  placeholder="https://example.com/photo.jpg"
+                  value={photoInputUrl}
+                  onChange={(e) => setPhotoInputUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleApplyUrl();
+                    }
+                  }}
+                  className="flex-1 h-11 px-3.5 rounded-xl bg-[#F7F7F5] border border-[#E5E5E5] text-xs font-medium text-[#111111] focus:ring-2 focus:ring-[#D9A928] outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyUrl}
+                  disabled={!photoInputUrl.trim()}
+                  className="h-11 px-4 rounded-xl bg-[#F7F7F5] hover:bg-[#E5E5E5] disabled:opacity-50 border border-[#E5E5E5] text-xs font-black uppercase text-[#111111] transition-all cursor-pointer shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+
+            {/* Reset / Remove Photo Action */}
+            {photoPreview && (
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoPreview(undefined);
+                    setPhotoInputUrl("");
+                  }}
+                  className="text-[11px] font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Remove Photo (Use Default)</span>
+                </button>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E5E5]">
+              <button
+                type="button"
+                onClick={() => setEditPhotoModalOpen(false)}
+                disabled={isSavingPhoto}
+                className="px-4 py-2.5 rounded-xl bg-[#F7F7F5] hover:bg-[#E5E5E5] text-xs font-bold text-[#5F6368] hover:text-[#111111] transition-colors"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSavePhoto}
+                disabled={isSavingPhoto || (photoPreview === currentAvatar && !photoSuccessMsg)}
+                className="tap px-6 py-2.5 rounded-xl bg-[#D9A928] hover:bg-[#E5B539] disabled:opacity-50 text-[#111111] text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                {isSavingPhoto ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Save Photo</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
