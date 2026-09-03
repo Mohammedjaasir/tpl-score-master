@@ -20,22 +20,24 @@ export const Route = createFileRoute("/scorecards")({
 type TabType = "past" | "live" | "upcoming";
 
 function ScorecardsPage() {
-  const { data: allMatches = [], isLoading, isError, error, refetch } = useMatches();
+  const { data: allMatchesRaw = [], isLoading, isError, error, refetch } = useMatches();
   useTeams();
+
+  const allMatches = useMemo(() => (Array.isArray(allMatchesRaw) ? allMatchesRaw.filter(Boolean) : []), [allMatchesRaw]);
 
   // ── Single Source of Truth: Derive categories directly from matches ────────
   const liveMatches = useMemo(
-    () => allMatches.filter((m) => m.status === "LIVE"),
+    () => allMatches.filter((m) => m && m.status === "LIVE"),
     [allMatches],
   );
 
   const upcomingMatches = useMemo(
     () =>
       allMatches
-        .filter((m) => m.status === "UPCOMING" || m.status === "READY")
+        .filter((m) => m && (m.status === "UPCOMING" || m.status === "READY"))
         .sort((a, b) => {
-          const timeA = new Date(a.scheduledAt || "").getTime() || a.matchNumber;
-          const timeB = new Date(b.scheduledAt || "").getTime() || b.matchNumber;
+          const timeA = new Date(a?.scheduledAt || "").getTime() || (a?.matchNumber ?? 0);
+          const timeB = new Date(b?.scheduledAt || "").getTime() || (b?.matchNumber ?? 0);
           return timeA - timeB;
         }),
     [allMatches],
@@ -44,11 +46,11 @@ function ScorecardsPage() {
   const pastMatches = useMemo(
     () =>
       allMatches
-        .filter((m) => m.status === "COMPLETED")
+        .filter((m) => m && m.status === "COMPLETED")
         .sort((a, b) => {
           // Newest completed first
-          const timeA = new Date(a.scheduledAt || "").getTime() || a.matchNumber;
-          const timeB = new Date(b.scheduledAt || "").getTime() || b.matchNumber;
+          const timeA = new Date(a?.scheduledAt || "").getTime() || (a?.matchNumber ?? 0);
+          const timeB = new Date(b?.scheduledAt || "").getTime() || (b?.matchNumber ?? 0);
           return timeB - timeA;
         }),
     [allMatches],
@@ -63,6 +65,7 @@ function ScorecardsPage() {
     if (upcomingMatches.length > 0) return "upcoming";
     return "past";
   }, [selectedTab, liveMatches.length, upcomingMatches.length]);
+
 
   return (
     <AppShell title="Scorecard">

@@ -81,6 +81,7 @@ export function usePlayerSearch(query: string) {
 }
 
 function getEffectiveMatch(m: Match): Match {
+  if (!m) return {} as Match;
   if (typeof window === "undefined") return m;
   
   // If the server/authoritative match status is UPCOMING or READY, strictly respect it and do not resurrect stale local test scores
@@ -103,8 +104,8 @@ function getEffectiveMatch(m: Match): Match {
 
         let winnerId = m.winnerId;
         if (!winnerId) {
-          const inn1 = computed.innings[0];
-          const inn2 = computed.innings[1];
+          const inn1 = computed.innings?.[0];
+          const inn2 = computed.innings?.[1];
           if (inn1 && inn2) {
             const target = inn2.target ?? (inn1.runs + 1);
             if (inn2.runs >= target) {
@@ -136,8 +137,8 @@ function getEffectiveMatch(m: Match): Match {
         if (computed.phase === "complete") {
           let winnerId = m.winnerId;
           if (!winnerId) {
-            const inn1 = computed.innings[0];
-            const inn2 = computed.innings[1];
+            const inn1 = computed.innings?.[0];
+            const inn2 = computed.innings?.[1];
             if (inn1 && inn2) {
               const target = inn2.target ?? (inn1.runs + 1);
               if (inn2.runs >= target) {
@@ -168,7 +169,6 @@ function getEffectiveMatch(m: Match): Match {
 
   return m;
 }
-
 
 export function useMatches() {
   const queryClient = useQueryClient();
@@ -206,10 +206,14 @@ export function useMatches() {
         queryClient.invalidateQueries({ queryKey: ["matches"] });
       }
     };
-    window.addEventListener("storage", handleStorage);
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorage);
+    }
 
     return () => {
-      window.removeEventListener("storage", handleStorage);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorage);
+      }
       if (channel) supabase.removeChannel(channel);
       if (bc) bc.close();
     };
@@ -219,19 +223,22 @@ export function useMatches() {
     queryKey: ["matches"],
     queryFn: async () => {
       const list = await matchRepository.list();
-      return list.map(getEffectiveMatch);
+      return Array.isArray(list) ? list.filter(Boolean).map(getEffectiveMatch) : [];
     },
     initialData: () => {
       const cached = lookup.matches();
-      return (cached.length > 0 || lookup.isHydrated()) ? cached.map(getEffectiveMatch) : undefined;
+      return Array.isArray(cached) && (cached.length > 0 || lookup.isHydrated())
+        ? cached.filter(Boolean).map(getEffectiveMatch)
+        : [];
     },
-    staleTime: 0,            // always consider stale
-    refetchInterval: 3000,   // poll every 3 s — instant for viewers
+    staleTime: 0,
+    refetchInterval: 3000,
     refetchIntervalInBackground: true,
     retry: 1,
     retryDelay: 1000,
   });
 }
+
 
 /**
  * useLiveMatchState – reads live scoring state directly from localStorage
