@@ -149,20 +149,20 @@ function HappeningNowSection({ matches }: { matches: Match[] }) {
   if (displayMatches.length === 0) return null;
 
   return (
-    <section className="relative z-20 bg-[#0A0A0C] border-y border-white/[0.07] py-6 sm:py-8">
+    <section className="relative z-20 bg-[#D9A928] py-6 sm:py-8 shadow-inner border-y border-black/10">
       <div className="max-w-7xl mx-auto px-5 lg:px-8">
         <div className="flex items-center justify-between mb-4 sm:mb-5">
           <div className="flex items-center gap-2 sm:gap-2.5">
-            <span className="inline-flex items-center justify-center text-red-500 font-bold text-sm sm:text-base">
+            <span className="inline-flex items-center justify-center text-red-600 font-bold text-sm sm:text-base animate-pulse">
               ((•))
             </span>
-            <h2 className="text-xs sm:text-sm font-black tracking-[0.2em] text-white uppercase">
+            <h2 className="text-xs sm:text-sm font-black tracking-[0.2em] text-[#0A0A0A] uppercase">
               HAPPENING NOW
             </h2>
           </div>
           <Link
             to="/matches"
-            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-black tracking-wider text-[#D9A928] hover:text-white transition-colors uppercase group"
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-black tracking-wider text-[#0A0A0A] hover:text-black/70 transition-colors uppercase group"
           >
             <span>VIEW ALL</span>
             <span className="text-sm leading-none transition-transform group-hover:translate-x-0.5">
@@ -171,7 +171,7 @@ function HappeningNowSection({ matches }: { matches: Match[] }) {
           </Link>
         </div>
 
-        <div className="flex items-stretch gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+        <div className="flex items-stretch gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-black/20 scrollbar-track-transparent">
           {displayMatches.map((m) => (
             <HappeningNowCard key={m.id} match={m} />
           ))}
@@ -180,6 +180,7 @@ function HappeningNowSection({ matches }: { matches: Match[] }) {
     </section>
   );
 }
+
 
 
 
