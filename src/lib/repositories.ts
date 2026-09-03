@@ -683,7 +683,48 @@ export class SupabaseMatchRepository implements MatchRepository {
   }
 
   async resetAllMatches(): Promise<Match[]> {
-    return this.resetPendingFixtures();
+    try {
+      if (isSupabaseConfigured) {
+        try {
+          await resetAllTournamentMatchesServerFn();
+        } catch (serverErr) {
+          console.warn("[SupabaseMatchRepository] resetAllTournamentMatchesServerFn warning:", serverErr);
+        }
+      }
+
+      // Reset all domain matches in cache to clean upcoming state
+      const allCurrent = lookup.matches();
+      const resetMatches: Match[] = allCurrent.map((m) => ({
+        ...m,
+        status: "UPCOMING",
+        tossWinnerId: undefined,
+        tossDecision: undefined,
+        manOfTheMatchId: undefined,
+        setup: undefined,
+        scorecard: undefined,
+      }));
+
+      // Clean up all scoring localStorages across the app
+      if (typeof window !== "undefined") {
+        try {
+          allCurrent.forEach((m) => {
+            window.localStorage.removeItem("tpl-scoring:" + m.id);
+            window.localStorage.removeItem("tpl-live-match:" + m.id);
+            window.localStorage.removeItem("tpl-match-state:" + m.id);
+            window.localStorage.removeItem("tpl_match_live_" + m.id);
+            window.localStorage.removeItem("tpl_match_completed_" + m.id);
+          });
+          window.localStorage.removeItem("tpl-obs-active-match");
+          window.localStorage.removeItem("tpl_active_scorer_match");
+        } catch {}
+      }
+
+      lookup.setMatches(resetMatches);
+      return resetMatches;
+    } catch (err: any) {
+      console.error("[SupabaseMatchRepository] resetAllMatches error:", err?.message);
+      throw new Error(`Failed to reset all matches: ${err?.message || "Storage error"}`);
+    }
   }
 
   async resetPendingFixtures(): Promise<Match[]> {

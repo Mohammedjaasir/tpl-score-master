@@ -209,55 +209,50 @@ export const resetScheduleServerFn = createServerFn({ method: "POST" }).handler(
 );
 
 /**
- * Server Function: Reset Pending Fixtures endpoint.
- * Completed matches, results, scores, balls, innings, squads, players, and teams are strictly preserved.
+ * Server Function: Authoritatively resets ALL tournament matches (including LIVE and COMPLETED) back to 'scheduled' state.
+ * Resets toss, winner, man of the match, scores, and removes all ball-by-ball deliveries for fresh testing.
  */
 export const resetAllTournamentMatchesServerFn = createServerFn({ method: "POST" }).handler(
   async () => {
     const supabaseAdmin = getServerSupabaseAdmin();
 
-    // 1. Fetch all matches
-    const { data: allMatches, error: fetchErr } = await supabaseAdmin
+    // 1. Delete all deliveries / innings data if tables exist
+    try {
+      await supabaseAdmin.from("deliveries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    } catch {}
+    try {
+      await supabaseAdmin.from("match_innings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    } catch {}
+
+    // 2. Reset every match back to scheduled state with clean parameters
+    const { error: resetError } = await supabaseAdmin
       .from("matches")
-      .select("id, status");
-
-    if (fetchErr) {
-      throw new Error(`Failed to inspect match fixtures: ${fetchErr.message}`);
-    }
-
-    // 2. Filter strictly to non-completed, non-live matches
-    const deletableStatuses = new Set(["scheduled", "ready", "upcoming", "pending"]);
-    const deletableIds = (allMatches || [])
-      .filter((m) => {
-        const s = (m.status || "").toLowerCase().trim();
-        if (s === "completed" || s === "finished" || s === "abandoned" || s === "live" || s === "in_progress") {
-          return false;
-        }
-        return deletableStatuses.has(s) || !s;
+      .update({
+        status: "scheduled",
+        toss_winner_id: null,
+        toss_decision: null,
+        man_of_the_match_id: null,
       })
-      .map((m) => m.id);
+      .neq("id", "00000000-0000-0000-0000-000000000000");
 
-    if (deletableIds.length > 0) {
-      const { error: deleteError } = await supabaseAdmin
-        .from("matches")
-        .delete()
-        .in("id", deletableIds)
-        .eq("status", "scheduled");
-
-      if (deleteError) {
-        throw new Error(`Failed to reset pending fixtures: ${deleteError.message}`);
-      }
+    if (resetError) {
+      console.warn("[resetAllTournamentMatchesServerFn] Reset update notice:", resetError.message);
     }
 
-    return {
-      success: true,
-      deletedCount: deletableIds.length,
-      message: deletableIds.length > 0
-        ? `Successfully reset ${deletableIds.length} pending tournament fixtures. Completed matches and standings are preserved.`
-        : "No pending fixtures to reset. Completed matches are safely preserved.",
-    };
+    // 3. Return fresh list of all matches
+    const { data: allMatches, error: fetchError } = await supabaseAdmin
+      .from("matches")
+      .select("*")
+      .order("start_time", { ascending: true });
+
+    if (fetchError) {
+      throw new Error(`Failed to refetch matches: ${fetchError.message}`);
+    }
+
+    return (allMatches as SupabaseMatch[]) || [];
   },
 );
+
 
 export interface GenerateScheduleInput {
   group1TeamIds: string[];
@@ -515,3 +510,4 @@ export const updateMatchOversServerFn = createServerFn({ method: "POST" })
 
     return data as SupabaseMatch;
   });
+

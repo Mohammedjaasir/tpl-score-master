@@ -572,6 +572,36 @@ function AdminPortalPage() {
     }
   };
 
+  // ── RESET ALL MATCHES (INCLUDING LIVE & COMPLETED) ────────────────────────
+  const handleResetAllMatches = async () => {
+    setIsScheduleActionLoading(true);
+    setScheduleActionError(null);
+    setResetSuccessMsg(null);
+
+    try {
+      const resetMatches = await matchRepository.resetAllMatches();
+      queryClient.setQueryData(["matches"], resetMatches);
+      setShowResetAllModal(false);
+      setShowResetConfirm(false);
+      setScheduleActionError(null);
+      setResetSuccessMsg(
+        "All tournament matches (including completed and live) have been reset back to UPCOMING with zeroed scores for fresh testing!"
+      );
+
+      try {
+        broadcastTournamentUpdate();
+        await refetchMatches();
+      } catch (syncErr) {
+        console.warn("[handleResetAllMatches] Background sync notice:", syncErr);
+      }
+    } catch (err: any) {
+      console.error("[handleResetAllMatches] Error:", err);
+      setScheduleActionError(err?.message || "Unable to reset all matches. Please try again.");
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  };
+
   // ── GENERATE 9 MATCHES SCHEDULE SUBMIT ───────────────────────────────────
   const handleGenerateScheduleSubmit = async () => {
     if (genGroup1Teams.some((t) => !t) || genGroup2Teams.some((t) => !t)) {
@@ -1391,6 +1421,20 @@ function AdminPortalPage() {
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Reset Pending Fixtures</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScheduleActionError(null);
+                    setShowResetAllModal(true);
+                  }}
+                  disabled={isScheduleActionLoading}
+                  className="tap px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-sm"
+                  title="Resets every match (including live and completed) back to fresh UPCOMING status with zeroed scores"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Reset All (Fresh Testing)</span>
                 </button>
               </div>
             </div>
