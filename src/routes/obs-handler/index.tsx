@@ -15,30 +15,45 @@ export const Route = createFileRoute("/obs-handler/")({
 function ObsHandlerIndex() {
   const { data: matches = [], isLoading } = useMatches();
   const { data: teams = [] } = useTeams();
-  const [activeMatchId, setActiveMatchId] = useState<string>(() => {
-    return obsHandlerService.getActiveMatch() || "";
+  const [selectedMatchOverride, setSelectedMatchOverride] = useState<string>(() => {
+    const stored = obsHandlerService.getActiveMatch();
+    return stored === "auto" ? "" : (stored || "");
   });
 
+  // ── Auto-Follow Continuous Match Resolution ───────────────────────────────
+  const autoMatch = useMemo(() => {
+    return (
+      matches.find((m) => m.status === "LIVE") ||
+      matches.find((m) => m.status === "READY") ||
+      matches.find((m) => m.status === "UPCOMING") ||
+      matches[0]
+    );
+  }, [matches]);
+
+  const activeMatch = useMemo(() => {
+    if (selectedMatchOverride && matches.some((m) => m.id === selectedMatchOverride)) {
+      return matches.find((m) => m.id === selectedMatchOverride);
+    }
+    return autoMatch;
+  }, [selectedMatchOverride, autoMatch, matches]);
+
+  const activeMatchId = activeMatch?.id || "";
+
   const [inputStreamUrl, setInputStreamUrl] = useState<string>(() => {
-    return obsStreamRepository.getStreamUrl(obsHandlerService.getActiveMatch() || undefined) || "";
+    return obsStreamRepository.getStreamUrl(activeMatchId || undefined) || "";
   });
   const [isStreamSaved, setIsStreamSaved] = useState<boolean>(false);
 
   const { activeGraphic, isOverlayConnected, setGraphic, clearGraphic } = useObsHandlerMaster(activeMatchId);
 
-  const activeMatch = matches.find((m) => m.id === activeMatchId);
-  const getTeamName = (id: string) => teams.find((t) => t.id === id)?.name || id;
+  const getTeamName = (id?: string) => (id ? teams.find((t) => t.id === id)?.name || id : "TBD");
 
-  // Auto-select first live or first available match on load if nothing is selected
+  // Keep OBS global stream in sync with active auto-followed match
   useEffect(() => {
-    if (!activeMatchId && matches.length > 0 && !isLoading) {
-      const defaultMatch = matches.find((m) => m.status === "LIVE") || matches[0];
-      if (defaultMatch) {
-        setActiveMatchId(defaultMatch.id);
-        obsHandlerService.setActiveMatch(defaultMatch.id);
-      }
+    if (activeMatchId) {
+      obsHandlerService.setActiveMatch(activeMatchId);
     }
-  }, [activeMatchId, matches, isLoading]);
+  }, [activeMatchId]);
 
   useEffect(() => {
     if (activeMatchId) {
@@ -74,12 +89,15 @@ function ObsHandlerIndex() {
     <div className="flex flex-col lg:flex-row gap-6 w-full font-sans pb-10">
       {/* Left Column: Controls */}
       <div className="w-full lg:w-[420px] xl:w-[460px] flex flex-col gap-5 flex-shrink-0">
-        {/* Match Selector */}
-        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-4 sm:p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-[#888888]">
-              Active Broadcast Match
-            </h3>
+        {/* Continuous Broadcast Live Card */}
+        <div className="bg-[#111111] border border-[#222222] rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[#D9A928] animate-ping" />
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[#D9A928]">
+                Continuous Stream Broadcast
+              </h3>
+            </div>
             <div className="flex items-center gap-2">
               {isOverlayConnected ? (
                 <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
@@ -92,50 +110,82 @@ function ObsHandlerIndex() {
                   OVERLAY WAITING
                 </span>
               )}
+            </div>
+          </div>
+
+          {/* Active Auto-Tracked Match Spotlight Banner */}
+          <div className="p-4 rounded-xl bg-black/60 border border-[#D9A928]/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#D9A928] bg-[#D9A928]/15 px-2 py-0.5 rounded-md border border-[#D9A928]/40">
+                {!selectedMatchOverride ? "✨ CONTINUOUS AUTOPILOT" : "📌 PINNED MATCH"}
+              </span>
               {activeMatch && (
                 <span
                   className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
                     activeMatch.status === "LIVE"
                       ? "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse"
+                      : activeMatch.status === "COMPLETED"
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                       : "bg-white/10 text-white/70 border-white/20"
                   }`}
                 >
-                  {activeMatch.status}
+                  {activeMatch.status === "LIVE" ? "● LIVE NOW" : activeMatch.status}
                 </span>
               )}
             </div>
+
+            {activeMatch ? (
+              <div className="flex flex-col gap-0.5 mt-1">
+                <p className="text-sm font-black text-white uppercase tracking-wide truncate">
+                  MATCH #{String(activeMatch.matchNumber).padStart(2, "0")}: {getTeamName(activeMatch.teamAId)} vs {getTeamName(activeMatch.teamBId)}
+                </p>
+                <p className="text-[11px] text-white/50 font-medium">
+                  {activeMatch.overs} Overs Match · {activeMatch.venue || "TPL Cricket Ground"}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-white/60 font-bold">
+                Waiting for tournament fixtures to load...
+              </p>
+            )}
+
+            <p className="text-[10px] text-white/40 border-t border-white/10 pt-2 mt-1">
+              {!selectedMatchOverride
+                ? "Overlay automatically follows whichever match is live or next across all back-to-back matches."
+                : "Manual match pin active. Switch back to Auto Continuous to follow all fixtures."}
+            </p>
           </div>
 
-          <select
-            value={activeMatchId}
-            onChange={(e) => {
-              const newId = e.target.value;
-              setActiveMatchId(newId);
-              obsHandlerService.setActiveMatch(newId);
-            }}
-            className="w-full bg-[#1A1A1A] border border-[#333333] text-white rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:border-[#D9A928] transition-colors appearance-none cursor-pointer"
-          >
-            <option value="" disabled>
-              Select a match to broadcast...
-            </option>
-            {matches.map((m) => (
-              <option key={m.id} value={m.id} className="text-white bg-[#111111]">
-                {m.status === "LIVE" ? "● LIVE" : m.status === "COMPLETED" ? "✓ FINISHED" : "○ UPCOMING"} · MATCH #{String(m.matchNumber).padStart(2, "0")} - {getTeamName(m.teamAId)} vs {getTeamName(m.teamBId)}
+          {/* Optional Mode / Match Selector */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[9px] font-black uppercase tracking-widest text-white/50">
+              Broadcast Tracking Mode
+            </label>
+            <select
+              value={selectedMatchOverride}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedMatchOverride(val);
+                if (!val && autoMatch) {
+                  obsHandlerService.setActiveMatch(autoMatch.id);
+                } else if (val) {
+                  obsHandlerService.setActiveMatch(val);
+                }
+              }}
+              className="w-full bg-[#1A1A1A] border border-[#333333] text-white rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:border-[#D9A928] transition-colors appearance-none cursor-pointer"
+            >
+              <option value="" className="text-[#D9A928] font-black bg-[#111111]">
+                ✨ AUTO-TRACK TOURNAMENT (CONTINUOUS STREAM — DEFAULT)
               </option>
-            ))}
-          </select>
-
-          <button
-            disabled={!activeMatchId}
-            onClick={() => {
-              obsHandlerService.setActiveMatch(activeMatchId);
-            }}
-            className="tap mt-3 w-full py-2.5 rounded-xl border border-[#D9A928]/60 bg-[#D9A928]/15 hover:bg-[#D9A928]/25 text-[#D9A928] text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-40"
-          >
-            <Radio className="w-3.5 h-3.5 animate-pulse text-[#D9A928]" />
-            BROADCAST MATCH TO OVERLAY
-          </button>
+              {matches.map((m) => (
+                <option key={m.id} value={m.id} className="text-white bg-[#111111]">
+                  📌 PIN MATCH #{String(m.matchNumber).padStart(2, "0")} · {m.status === "LIVE" ? "● LIVE" : m.status === "COMPLETED" ? "✓ FINISHED" : "○ UPCOMING"} - {getTeamName(m.teamAId)} vs {getTeamName(m.teamBId)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
 
         {/* Live Stream / Video Feed Configuration */}
         <div className="bg-[#111111] border border-[#222222] rounded-2xl p-5 shadow-xl">
