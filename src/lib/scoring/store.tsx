@@ -173,6 +173,9 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
   );
   const [hydrated, setHydrated] = useState(false);
   const inningsDbIdsRef = useRef<[string | null, string | null]>([null, null]);
+  const channelRef = useRef<any>(null);
+  const bcRef = useRef<BroadcastChannel | null>(null);
+
 
   // ── Load initial local storage state on mount or matchId change ───────────
   useEffect(() => {
