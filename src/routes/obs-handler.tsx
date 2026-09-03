@@ -12,8 +12,11 @@ import {
   Image as ImageIcon,
   Settings,
   LogOut,
-  Lock
+  Lock,
+  Menu,
+  X
 } from "lucide-react";
+
 import { useState } from "react";
 
 export const Route = createFileRoute("/obs-handler")({
