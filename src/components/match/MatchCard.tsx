@@ -117,11 +117,13 @@ export function MatchCard({ match, scorerMode = false }: MatchCardProps) {
   const { state } = useMatchStore(match.id, match);
 
   // Derive unambiguous effective status
-  const isDone = match.status === "COMPLETED" || state?.phase === "complete";
-  const hasDeliveries = (state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0;
-  const isLive = !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
+  const isUpcoming = match.status === "UPCOMING" || match.status === "READY";
+  const isDone = !isUpcoming && (match.status === "COMPLETED" || state?.phase === "complete");
+  const hasDeliveries = !isUpcoming && ((state?.innings[0]?.legalBalls ?? 0) > 0 || (state?.innings[0]?.extras ?? 0) > 0 || (state?.innings[1]?.legalBalls ?? 0) > 0);
+  const isLive = !isUpcoming && !isDone && (match.status === "LIVE" || (hasDeliveries && (state?.phase === "innings1" || state?.phase === "innings2" || state?.phase === "break")));
   const effectiveStatus = isDone ? "COMPLETED" : isLive ? "LIVE" : match.status === "READY" ? "READY" : "UPCOMING";
   const effectiveMatchOvers = state?.innings[0]?.maxOvers ?? match.overs ?? 5;
+
 
   const time = formatMatchTime(match?.scheduledAt || match?.startTime);
   const dateFormatted = formatMatchDate(match?.scheduledAt || match?.startTime);

@@ -65,12 +65,21 @@ function emptyDoc(matchId: string): MatchDoc {
   };
 }
 
-export function loadMatchDoc(matchId: string): MatchDoc {
+export function loadMatchDoc(matchId: string, matchStatus?: MatchStatus): MatchDoc {
   if (typeof window === "undefined") return emptyDoc(matchId);
   try {
     const raw = window.localStorage.getItem(STORAGE_PREFIX + matchId);
     if (!raw) return emptyDoc(matchId);
-    return { ...emptyDoc(matchId), ...(JSON.parse(raw) as MatchDoc) };
+    const parsed = JSON.parse(raw) as MatchDoc;
+    if (matchStatus === "UPCOMING" || matchStatus === "READY") {
+      if (parsed.isStarted || parsed.isCompleted || (parsed.deliveries && parsed.deliveries.length > 0)) {
+        try {
+          window.localStorage.removeItem(STORAGE_PREFIX + matchId);
+        } catch {}
+        return emptyDoc(matchId);
+      }
+    }
+    return { ...emptyDoc(matchId), ...parsed };
   } catch {
     return emptyDoc(matchId);
   }
@@ -149,25 +158,40 @@ export interface DeliveryInput {
 }
 
 export function useMatchStore(matchId: string, initialMatch?: Match) {
-  const [doc, setDoc] = useState<MatchDoc>(() => emptyDoc(matchId));
-  const [hydrated, setHydrated] = useState(false);
+  const [doc, setDoc] = useState<MatchDoc>(() => {
+    const isUpcoming = initialMatch?.status === "UPCOMING" || initialMatch?.status === "READY";
+    if (isUpcoming && typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(STORAGE_PREFIX + matchId);
+      } catch {}
+      return emptyDoc(matchId);
+    }
+    return loadMatchDoc(matchId, initialMatch?.status);
+  });
   const [matchData, setMatchData] = useState<Match | undefined>(
-    () => initialMatch ?? lookup.match(matchId),
+    initialMatch ?? lookup.match(matchId),
   );
-
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const bcRef = useRef<BroadcastChannel | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const inningsDbIdsRef = useRef<[string | null, string | null]>([null, null]);
 
   // ── Load initial local storage state on mount or matchId change ───────────
   useEffect(() => {
     setHydrated(false);
-    setMatchData(initialMatch ?? lookup.match(matchId));
+    const m = initialMatch ?? lookup.match(matchId);
+    setMatchData(m);
     inningsDbIdsRef.current = [null, null];
-    const local = loadMatchDoc(matchId);
-    setDoc(local);
-    if (local.inningsDbIds) {
-      inningsDbIdsRef.current = local.inningsDbIds;
+    const isUpcoming = m?.status === "UPCOMING" || m?.status === "READY";
+    if (isUpcoming && typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(STORAGE_PREFIX + matchId);
+      } catch {}
+      setDoc(emptyDoc(matchId));
+    } else {
+      const local = loadMatchDoc(matchId, m?.status);
+      setDoc(local);
+      if (local.inningsDbIds) {
+        inningsDbIdsRef.current = local.inningsDbIds;
+      }
     }
   }, [matchId, initialMatch]);
 
@@ -976,17 +1000,16 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     broadcastDoc(empty);
   }, [matchId, broadcastDoc]);
 
-  // Keep lookup cache synchronized with completed state (strictly only when match is not UPCOMING)
+  // Keep lookup cache synchronized with completed state
   useEffect(() => {
-    if ((state?.phase === "complete" || doc.isCompleted) && match?.status !== "UPCOMING") {
+    if (state?.phase === "complete" || doc.isCompleted) {
       lookup.updateMatch(matchId, {
         status: "COMPLETED",
         resultText: state?.resultText,
         manOfTheMatchId: doc.playerOfTheMatchId,
       });
     }
-  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId, match?.status]);
-
+  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId]);
 
   return {
     doc,
