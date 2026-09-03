@@ -365,10 +365,10 @@ function LandingScreen() {
 
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link
-                to="/home"
+                to="/matches"
                 className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-[#D9A928] hover:bg-[#F4C542] text-black font-black text-xs uppercase tracking-wider transition-all shadow-[0_4px_32px_rgba(217,169,40,0.55)] active:scale-95"
               >
-                <span>ENTER SCORER CONSOLE</span>
+                <span>EXPLORE MATCH CENTRE</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
