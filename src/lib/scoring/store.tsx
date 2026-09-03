@@ -67,10 +67,6 @@ function emptyDoc(matchId: string): MatchDoc {
 
 export function loadMatchDoc(matchId: string): MatchDoc {
   if (typeof window === "undefined") return emptyDoc(matchId);
-  const match = lookup.match(matchId);
-  if (match?.status === "UPCOMING" || match?.status === "READY") {
-    return emptyDoc(matchId);
-  }
   try {
     const raw = window.localStorage.getItem(STORAGE_PREFIX + matchId);
     if (!raw) return emptyDoc(matchId);
@@ -79,7 +75,6 @@ export function loadMatchDoc(matchId: string): MatchDoc {
     return emptyDoc(matchId);
   }
 }
-
 
 export function broadcastTournamentUpdate() {
   if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -273,14 +268,6 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
             return next;
           }
 
-          // If DB has NO deliveries and match is scheduled/upcoming, purge any leftover stale local storage
-          if (deliveries.length === 0 && (initialMatch?.status === "UPCOMING" || initialMatch?.status === "READY" || !initialMatch?.status)) {
-            try {
-              window.localStorage.removeItem(STORAGE_PREFIX + matchId);
-            } catch {}
-            return emptyDoc(matchId);
-          }
-
           if (dbInningsIds[0] || dbInningsIds[1]) {
             return {
               ...curr,
@@ -290,7 +277,6 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
 
           return curr;
         });
-
       } catch (err) {
         console.warn("[useMatchStore] syncFromDb notice:", err);
       } finally {
@@ -990,21 +976,16 @@ export function useMatchStore(matchId: string, initialMatch?: Match) {
     broadcastDoc(empty);
   }, [matchId, broadcastDoc]);
 
-  // Keep lookup cache synchronized with completed state ONLY if match is not upcoming/ready
+  // Keep lookup cache synchronized with completed state
   useEffect(() => {
-    if (
-      (state?.phase === "complete" || doc.isCompleted) &&
-      match?.status !== "UPCOMING" &&
-      match?.status !== "READY"
-    ) {
+    if (state?.phase === "complete" || doc.isCompleted) {
       lookup.updateMatch(matchId, {
         status: "COMPLETED",
         resultText: state?.resultText,
         manOfTheMatchId: doc.playerOfTheMatchId,
       });
     }
-  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId, match?.status]);
-
+  }, [matchId, state?.phase, state?.resultText, doc.isCompleted, doc.playerOfTheMatchId]);
 
   return {
     doc,
