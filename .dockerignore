@@ -1,0 +1,8 @@
+node_modules
+.output
+dist
+.git
+.gemini
+scratch
+npm-debug.log*
+.DS_Store
