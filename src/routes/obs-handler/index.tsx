@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMatches, useTeams } from "@/hooks/useCricketData";
 import { useObsHandlerMaster } from "@/hooks/useObsHandlerMaster";
 import { GraphicRenderer } from "@/components/obs/GraphicRenderer";
